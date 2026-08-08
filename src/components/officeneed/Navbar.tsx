@@ -13,7 +13,7 @@ function Logo({ className }: { className?: string }) {
       className="inline-flex shrink-0 items-center rounded-sm"
     >
       <img
-        src={logoAsset.url}
+        src={logoUrl}
         alt="OfficeNeed"
         width={640}
         height={122}
