@@ -1,12 +1,5 @@
 import heroImage from "@/assets/hero-officeneed.jpg";
 
-const proofPoints = [
-  "Corporate Gifting",
-  "Office Stationery",
-  "IT Infrastructure",
-  "Printing & Branding",
-  "Fragrance & Luxury",
-];
 
 export function Hero() {
   return (
@@ -41,14 +34,6 @@ export function Hero() {
             </a>
           </div>
 
-          <ul className="mt-10 hidden flex-wrap gap-x-6 gap-y-2 text-xs tracking-wide text-muted-foreground sm:flex lg:mt-12">
-            {proofPoints.map((point) => (
-              <li key={point} className="flex items-center gap-2">
-                <span aria-hidden="true" className="size-1 rounded-full bg-accent" />
-                {point}
-              </li>
-            ))}
-          </ul>
         </div>
 
         <div className="relative mt-10 lg:mt-0">
@@ -64,9 +49,6 @@ export function Hero() {
               className="aspect-4/3 w-full object-cover"
             />
           </div>
-          <p className="mt-4 text-xs text-muted-foreground">
-            Five categories. One procurement relationship.
-          </p>
         </div>
       </div>
     </section>
