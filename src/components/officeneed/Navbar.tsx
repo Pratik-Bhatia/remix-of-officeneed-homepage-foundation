@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { Menu, Search, ShoppingBag, User, X, ChevronDown } from "lucide-react";
+import { Menu, MessageSquare, Search, ShoppingBag, User, X, ChevronDown } from "lucide-react";
 import logoAsset from "@/assets/officeneed-logo.png.asset.json";
-import { navCategories } from "@/lib/navigation";
+import { primaryNavCategories as navCategories } from "@/lib/navigation";
 import { cn } from "@/lib/utils";
 
 function Logo({ className }: { className?: string }) {
@@ -76,6 +76,12 @@ export function Navbar() {
     if (closeTimer.current) clearTimeout(closeTimer.current);
   };
 
+  const openChat = () => {
+    // Reuse an existing chatbot trigger when one is present; otherwise this is
+    // a clean hook point for connecting the OfficeNeed chatbot later.
+    window.dispatchEvent(new CustomEvent("officeneed:open-chat"));
+  };
+
   const active = navCategories.find((c) => c.id === openId) ?? null;
 
   return (
@@ -109,6 +115,9 @@ export function Navbar() {
         </nav>
 
         <div className="ml-auto flex items-center gap-0.5 lg:ml-0">
+          <IconButton label="Open chat assistant" onClick={openChat}>
+            <MessageSquare className="size-5" strokeWidth={1.6} />
+          </IconButton>
           <IconButton label="Search">
             <Search className="size-5" strokeWidth={1.6} />
           </IconButton>
