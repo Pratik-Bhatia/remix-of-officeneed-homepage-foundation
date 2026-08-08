@@ -79,6 +79,7 @@ export function Navbar() {
   const active = navCategories.find((c) => c.id === openId) ?? null;
 
   return (
+    <>
     <header className="sticky top-0 z-50 w-full border-b border-border/70 bg-background/85 backdrop-blur-xl supports-[backdrop-filter]:bg-background/70">
       <div className="mx-auto flex h-16 w-full max-w-[1440px] items-center gap-4 px-4 sm:px-6 lg:h-[72px] lg:px-10">
         <Logo />
@@ -136,7 +137,7 @@ export function Navbar() {
         {active && (
           <div
             id={`menu-${active.id}`}
-            className="absolute inset-x-0 top-full border-b border-border bg-popover/95 backdrop-blur-xl animate-rise"
+            className="absolute inset-x-0 top-full border-b border-border bg-popover shadow-[0_24px_48px_-32px_rgb(0_0_0_/_0.35)] animate-rise"
           >
             <div className="mx-auto grid w-full max-w-[1440px] grid-cols-[minmax(0,1fr)_2fr] gap-12 px-10 py-10">
               <div>
@@ -164,6 +165,7 @@ export function Navbar() {
           </div>
         )}
       </div>
+    </header>
 
       {/* Mobile drawer */}
       {mobileOpen && (
@@ -237,6 +239,6 @@ export function Navbar() {
           </nav>
         </div>
       )}
-    </header>
+    </>
   );
 }
