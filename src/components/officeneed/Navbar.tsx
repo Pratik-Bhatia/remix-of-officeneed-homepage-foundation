@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { Menu, MessageSquare, Search, ShoppingBag, User, X, ChevronDown } from "lucide-react";
-import logoAsset from "@/assets/officeneed-logo.png.asset.json";
+import logoUrl from "@/assets/officeneed-logo.png";
 import { primaryNavCategories as navCategories } from "@/lib/navigation";
 import { cn } from "@/lib/utils";
 
@@ -13,7 +13,7 @@ function Logo({ className }: { className?: string }) {
       className="inline-flex shrink-0 items-center rounded-sm"
     >
       <img
-        src={logoAsset.url}
+        src={logoUrl}
         alt="OfficeNeed"
         width={640}
         height={122}
