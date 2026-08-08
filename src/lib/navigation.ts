@@ -3,6 +3,8 @@ export type NavCategory = {
   label: string;
   blurb: string;
   featured?: boolean;
+  /** Kept in the catalogue but hidden from the primary header navigation. */
+  hiddenFromPrimaryNav?: boolean;
   items: string[];
 };
 
@@ -36,6 +38,7 @@ export const navCategories: NavCategory[] = [
     id: "printing-branding",
     label: "Printing & Branding",
     blurb: "Brand-consistent print and merchandise, produced to spec.",
+    hiddenFromPrimaryNav: true,
     items: ["Custom Printing", "Corporate Branding", "Printed Materials", "Branded Merchandise"],
   },
   {
@@ -51,3 +54,8 @@ export const navCategories: NavCategory[] = [
     items: ["Exclusive Products", "Featured Exclusives", "New Exclusives"],
   },
 ];
+
+/** Categories shown in the header navigation (desktop mega menu + mobile drawer). */
+export const primaryNavCategories: NavCategory[] = navCategories.filter(
+  (c) => !c.hiddenFromPrimaryNav,
+);
