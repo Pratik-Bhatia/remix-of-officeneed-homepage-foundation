@@ -47,7 +47,7 @@ function IconButton({
 export function Navbar() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [expanded, setExpanded] = useState<string | null>(navCategories[0].id);
+  const [expanded, setExpanded] = useState<string | null>(navCategories[0]?.id ?? null);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
