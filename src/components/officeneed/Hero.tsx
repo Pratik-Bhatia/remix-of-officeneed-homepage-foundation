@@ -1,12 +1,5 @@
 import heroImage from "@/assets/hero-officeneed.jpg";
 
-const proofPoints = [
-  "Corporate Gifting",
-  "Office Stationery",
-  "IT Infrastructure",
-  "Printing & Branding",
-  "Fragrance & Luxury",
-];
 
 export function Hero() {
   return (
