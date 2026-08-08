@@ -156,7 +156,7 @@ export function Navbar() {
           >
             <div className="mx-auto grid w-full max-w-[1440px] grid-cols-[minmax(0,1fr)_2fr] gap-12 px-10 py-10">
               <div>
-                <p className="text-eyebrow text-accent-foreground/70">{active.label}</p>
+                <p className="text-eyebrow text-muted-foreground">{active.label}</p>
                 <p className="mt-3 max-w-xs text-sm leading-relaxed text-muted-foreground">
                   {active.blurb}
                 </p>
