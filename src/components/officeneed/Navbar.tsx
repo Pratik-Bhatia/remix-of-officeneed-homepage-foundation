@@ -122,7 +122,7 @@ export function Navbar() {
             onClick={openChat}
             className="chat-pulse inline-flex size-11 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm transition-[transform,box-shadow] duration-200 hover:scale-105 hover:shadow-md"
           >
-            <MessageSquare className="size-5" strokeWidth={1.6} />
+            <MessageSquare className="chat-icon-wiggle size-5" strokeWidth={1.6} />
           </button>
           <IconButton label="Search">
             <Search className="size-5" strokeWidth={1.6} />
