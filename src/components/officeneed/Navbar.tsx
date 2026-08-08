@@ -115,9 +115,15 @@ export function Navbar() {
         </nav>
 
         <div className="ml-auto flex items-center gap-0.5 lg:ml-0">
-          <IconButton label="Open chat assistant" onClick={openChat}>
+          <button
+            type="button"
+            aria-label="Open OfficeNeed Chat"
+            title="Chat with OfficeNeed"
+            onClick={openChat}
+            className="chat-pulse inline-flex size-11 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm transition-[transform,box-shadow] duration-200 hover:scale-105 hover:shadow-md"
+          >
             <MessageSquare className="size-5" strokeWidth={1.6} />
-          </IconButton>
+          </button>
           <IconButton label="Search">
             <Search className="size-5" strokeWidth={1.6} />
           </IconButton>
