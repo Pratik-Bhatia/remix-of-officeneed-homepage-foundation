@@ -54,3 +54,8 @@ export const navCategories: NavCategory[] = [
     items: ["Exclusive Products", "Featured Exclusives", "New Exclusives"],
   },
 ];
+
+/** Categories shown in the header navigation (desktop mega menu + mobile drawer). */
+export const primaryNavCategories: NavCategory[] = navCategories.filter(
+  (c) => !c.hiddenFromPrimaryNav,
+);
