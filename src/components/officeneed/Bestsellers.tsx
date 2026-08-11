@@ -116,7 +116,7 @@ export function Bestsellers() {
               ))}
             </div>
 
-            <div className="flex shrink-0 gap-2">
+            <div className="hidden shrink-0 gap-2 sm:flex">
               <button
                 type="button"
                 aria-label="Previous products"
