@@ -83,6 +83,114 @@ const paymentMethods = [
   { label: "RuPay", asset: rupayAsset },
 ];
 
+function MobileBenefitsCarousel() {
+  const [active, setActive] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
+  const touchStartX = useRef<number | null>(null);
+
+  const next = useCallback(
+    () => setActive((prev) => (prev + 1) % benefits.length),
+    []
+  );
+
+  useEffect(() => {
+    if (isPaused) return;
+    const id = setInterval(next, 4000);
+    return () => clearInterval(id);
+  }, [isPaused, next]);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.changedTouches[0].clientX;
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    const start = touchStartX.current;
+    if (start == null) return;
+    const end = e.changedTouches[0].clientX;
+    const delta = end - start;
+    if (delta > 50) {
+      setActive((prev) => (prev === 0 ? benefits.length - 1 : prev - 1));
+    } else if (delta < -50) {
+      next();
+    }
+    touchStartX.current = null;
+  };
+
+  return (
+    <div
+      className="lg:hidden"
+      onMouseEnter={() => setIsPaused(true)}
+      onMouseLeave={() => setIsPaused(false)}
+      onTouchStart={() => setIsPaused(true)}
+      onTouchEnd={() => setIsPaused(false)}
+    >
+      <div
+        className="overflow-hidden"
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+        role="region"
+        aria-roledescription="carousel"
+        aria-label="Service benefits"
+      >
+        <div
+          className="flex transition-transform duration-500 ease-out"
+          style={{ transform: `translateX(-${active * 100}%)` }}
+        >
+          {benefits.map(({ icon: Icon, title, description }, i) => (
+            <div
+              key={title}
+              className="w-full shrink-0 px-1"
+              aria-label={`${i + 1} of ${benefits.length}`}
+              aria-hidden={i !== active}
+            >
+              <div className="flex items-start gap-4">
+                <Icon
+                  className="mt-0.5 h-7 w-7 shrink-0 text-foreground"
+                  strokeWidth={1.4}
+                  aria-hidden="true"
+                />
+                <div className="min-w-0">
+                  <p className="font-heading text-base font-semibold tracking-tight text-foreground">
+                    {title}
+                  </p>
+                  <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div
+        className="mt-5 flex justify-center gap-2"
+        role="tablist"
+        aria-label="Benefit slides"
+      >
+        {benefits.map((b, i) => (
+          <button
+            key={b.title}
+            type="button"
+            role="tab"
+            aria-selected={i === active}
+            aria-label={`Go to ${b.title}`}
+            onClick={() => {
+              setActive(i);
+              setIsPaused(true);
+            }}
+            className={[
+              "h-2 w-2 rounded-full transition-all duration-300",
+              i === active
+                ? "w-5 bg-foreground"
+                : "bg-foreground/25 hover:bg-foreground/40",
+            ].join(" ")}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+
 export function Footer() {
   return (
     <footer>
