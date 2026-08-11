@@ -11,6 +11,11 @@ import {
   Youtube,
 } from "lucide-react";
 import logoInverse from "@/assets/officeneed-logo-inverse.png.asset.json";
+import visaAsset from "@/assets/payment-visa.png.asset.json";
+import mastercardAsset from "@/assets/payment-mastercard.png.asset.json";
+import amexAsset from "@/assets/payment-amex.png.asset.json";
+import upiAsset from "@/assets/payment-upi.png.asset.json";
+import rupayAsset from "@/assets/payment-rupay.png.asset.json";
 
 const benefits = [
   {
