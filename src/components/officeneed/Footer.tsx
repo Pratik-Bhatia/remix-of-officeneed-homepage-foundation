@@ -73,7 +73,13 @@ const socials = [
   { icon: Youtube, label: "YouTube" },
 ];
 
-const paymentMethods = ["VISA", "MASTERCARD", "AMEX", "UPI", "RUPAY"];
+const paymentMethods = [
+  { label: "Visa", asset: visaAsset },
+  { label: "Mastercard", asset: mastercardAsset },
+  { label: "American Express", asset: amexAsset },
+  { label: "UPI", asset: upiAsset },
+  { label: "RuPay", asset: rupayAsset },
+];
 
 export function Footer() {
   return (
