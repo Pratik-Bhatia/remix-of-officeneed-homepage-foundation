@@ -10,7 +10,7 @@ import {
   ShieldCheck,
   Youtube,
 } from "lucide-react";
-import logoUrl from "@/assets/officeneed-logo.png";
+import logoInverse from "@/assets/officeneed-logo-inverse.png.asset.json";
 
 const benefits = [
   {
@@ -150,11 +150,9 @@ export function Footer() {
 
             <div className="md:col-span-2 lg:col-span-1 lg:border-l lg:border-background/15 lg:pl-14">
               <img
-                src={logoUrl}
-                alt="OfficeNeed"
-                width={640}
-                height={122}
-                className="h-9 w-auto brightness-0 invert sm:h-10"
+                src={logoInverse.url}
+                alt="OfficeNeed — Expect More..."
+                className="h-10 w-auto sm:h-12"
               />
               <p className="mt-6 max-w-md font-heading text-xl font-semibold leading-snug tracking-tight text-background sm:text-2xl">
                 One Vendor. Multiple Solutions.
