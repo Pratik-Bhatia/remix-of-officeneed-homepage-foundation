@@ -10,6 +10,12 @@ export type NavCategory = {
 
 export const navCategories: NavCategory[] = [
   {
+    id: "officeneed-exclusive",
+    label: "Officeneed Exclusive",
+    blurb: "Made for OfficeNeed. Available nowhere else.",
+    items: ["Exclusive Products", "Featured Exclusives", "New Exclusives"],
+  },
+  {
     id: "corporate-gifting",
     label: "Corporate Gifting",
     blurb: "Curated gifting programmes for teams, clients and milestones.",
@@ -23,16 +29,28 @@ export const navCategories: NavCategory[] = [
     ],
   },
   {
+    id: "fragrance-luxury",
+    label: "Fragrance & Luxury Gifting",
+    blurb: "Considered luxury for leadership and landmark occasions.",
+    items: [
+      "Perfumes",
+      "Eastern Perfumes",
+      "Western Perfumes",
+      "Premium Gifts",
+      "Luxury Gifting",
+    ],
+  },
+  {
     id: "office-stationery",
     label: "Office Stationery",
     blurb: "Everyday essentials, specified once and replenished on schedule.",
     items: ["Writing Instruments", "Notebooks", "Desk Accessories", "Office Supplies"],
   },
   {
-    id: "it-infrastructure",
-    label: "IT Infrastructure",
+    id: "hardware-supplies",
+    label: "Hardware Supplies",
     blurb: "Workstation hardware and peripherals for growing teams.",
-    items: ["Mouse", "Keyboards", "Mousepads", "Printers", "Computer Accessories"],
+    items: ["Mouse", "Keyboards", "Printers", "Computer Accessories"],
   },
   {
     id: "printing-branding",
@@ -40,18 +58,6 @@ export const navCategories: NavCategory[] = [
     blurb: "Brand-consistent print and merchandise, produced to spec.",
     hiddenFromPrimaryNav: true,
     items: ["Custom Printing", "Corporate Branding", "Printed Materials", "Branded Merchandise"],
-  },
-  {
-    id: "fragrance-luxury",
-    label: "Fragrance & Luxury Gifting",
-    blurb: "Considered luxury for leadership and landmark occasions.",
-    items: ["Perfumes", "Fragrances", "Premium Gifts", "Luxury Gifting"],
-  },
-  {
-    id: "officeneed-exclusive",
-    label: "Officeneed Exclusive",
-    blurb: "Made for OfficeNeed. Available nowhere else.",
-    items: ["Exclusive Products", "Featured Exclusives", "New Exclusives"],
   },
 ];
 
