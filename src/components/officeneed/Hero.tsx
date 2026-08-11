@@ -40,13 +40,13 @@ export function Hero() {
           <div className="overflow-hidden rounded-xl bg-surface">
             <img
               src={heroImage}
-              alt="A navy corporate gift box with a brass nameplate, surrounded by a notebook and pen, printed cards, a keyboard and mouse, and a glass perfume bottle."
-              width={1600}
-              height={1200}
+              alt="A matte black corporate gift box with a metal nameplate, surrounded by a leather notebook and pen, a printed card, a wireless mouse, a keyboard on a felt mousepad, and a glass perfume bottle."
+              width={1920}
+              height={1088}
               fetchPriority="high"
               decoding="async"
               sizes="(min-width: 1024px) 55vw, 100vw"
-              className="aspect-4/3 w-full object-cover"
+              className="aspect-16/10 w-full object-cover"
             />
           </div>
         </div>
