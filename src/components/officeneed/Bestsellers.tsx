@@ -88,7 +88,8 @@ export function Bestsellers() {
       className="w-full bg-background py-16 sm:py-20 lg:py-28"
     >
       <div className="mx-auto w-full max-w-[1440px]">
-        <div className="px-5 sm:px-8 lg:px-12">
+      <div className="pl-[30px] pr-5 sm:pl-[42px] sm:pr-8 lg:pl-[58px] lg:pr-12">
+
           <h2
             id="bestsellers-heading"
             className="text-3xl font-semibold tracking-tight sm:text-4xl lg:text-5xl"
