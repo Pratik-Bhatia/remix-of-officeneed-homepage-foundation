@@ -36,49 +36,28 @@ function HeroContent() {
 
 export function Hero() {
   return (
-    <section
-      aria-labelledby="hero-heading"
-      className="relative w-full overflow-hidden bg-background"
-    >
-      {/* Desktop background image: scaled down ~15% and anchored right */}
-      <div className="absolute inset-0 hidden lg:flex lg:justify-end">
-        <div className="h-full w-[85%] xl:w-[82%]">
-          <img
-            src={heroImage}
-            alt="OfficeNeed branded corporate gift set: a black ribboned gift box, insulated bottle, notebooks, pens, perfume, leather organiser, tech pouch, mouse, keyboard and cufflinks arranged on a warm neutral surface."
-            width={1672}
-            height={941}
-            fetchPriority="high"
-            decoding="async"
-            sizes="86vw"
-            className="h-full w-full object-cover object-center"
-          />
-        </div>
+    <section aria-labelledby="hero-heading" className="w-full overflow-hidden bg-background">
+      {/* Announcement strip */}
+      <div className="w-full border-b border-border bg-secondary/60">
+        <p className="mx-auto max-w-[1440px] px-5 py-3 text-center text-sm text-foreground sm:px-8">
+          Try out the AI recommendation for the best results
+        </p>
       </div>
 
-      {/* Reduced gradient wash — localized behind the text area only */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 hidden bg-gradient-to-r from-background/80 via-background/35 to-transparent lg:block lg:w-[55%]"
-      />
-
-      {/* Content layer */}
-      <div className="relative z-10 mx-auto w-full max-w-[1440px] px-5 py-16 sm:px-8 lg:px-12 lg:py-28">
-        <div className="lg:flex lg:min-h-[78vh] lg:items-center">
-          <div className="animate-rise mx-auto max-w-xl lg:mx-0">
-            <HeroContent />
-          </div>
+      <div className="mx-auto grid w-full max-w-[1440px] items-center gap-10 px-5 py-14 sm:px-8 lg:grid-cols-2 lg:gap-8 lg:px-12 lg:py-20">
+        <div className="animate-rise max-w-xl">
+          <HeroContent />
         </div>
 
-        {/* Mobile/tablet product visual — scaled down and placed below content */}
-        <div className="mx-auto mt-10 w-[80%] sm:w-[70%] lg:hidden">
+        <div className="mx-auto w-[88%] sm:w-[72%] lg:w-full">
           <img
             src={heroImage}
-            alt="OfficeNeed branded corporate gift set: a black ribboned gift box, insulated bottle, notebooks, pens, perfume, leather organiser, tech pouch, mouse, keyboard and cufflinks arranged on a warm neutral surface."
-            width={1672}
-            height={941}
+            alt="Stack of OfficeNeed branded gift boxes and shopping bags in ivory white with black rope handles."
+            width={940}
+            height={790}
+            fetchPriority="high"
             decoding="async"
-            sizes="80vw"
+            sizes="(min-width: 1024px) 50vw, 80vw"
             className="h-auto w-full object-contain"
           />
         </div>
