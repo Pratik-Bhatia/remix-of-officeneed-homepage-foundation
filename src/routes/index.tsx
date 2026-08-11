@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Navbar } from "@/components/officeneed/Navbar";
 import { Hero } from "@/components/officeneed/Hero";
+import { InteractiveGiftShowcase } from "@/components/officeneed/InteractiveGiftShowcase";
 
 export const Route = createFileRoute("/")({
   head: () => ({
