@@ -143,7 +143,8 @@ export function Bestsellers() {
         <div
           ref={trackRef}
           onScroll={sync}
-          className="mt-8 flex snap-x snap-mandatory gap-6 overflow-x-auto scroll-smooth px-5 pb-2 [scrollbar-width:none] sm:mt-10 sm:px-8 lg:px-12 [&::-webkit-scrollbar]:hidden"
+          className="mt-8 flex snap-x snap-mandatory gap-6 overflow-x-auto scroll-smooth pl-[30px] pr-5 pb-2 [scrollbar-width:none] sm:mt-10 sm:pl-[42px] sm:pr-8 lg:pl-[58px] lg:pr-12 [&::-webkit-scrollbar]:hidden"
+
         >
           {products.map((p) => (
             <ProductCard key={p.id} product={p} />
