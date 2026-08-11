@@ -198,7 +198,7 @@ export function Footer() {
         </div>
 
         {/* Bottom bar */}
-        <div className="border-t border-background/10 bg-foreground/95">
+        <div className="border-t border-background/10 bg-[#171717]/95">
           <div className="mx-auto flex max-w-[1400px] flex-col gap-6 px-5 py-7 sm:px-8 lg:flex-row lg:items-center lg:justify-between lg:px-12">
             <div className="space-y-3">
               <p className="text-sm text-background/75">
