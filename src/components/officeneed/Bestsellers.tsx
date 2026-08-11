@@ -88,8 +88,7 @@ export function Bestsellers() {
       className="w-full bg-background py-16 sm:py-20 lg:py-28"
     >
       <div className="mx-auto w-full max-w-[1440px]">
-      <div className="pl-[30px] pr-5 sm:pl-[42px] sm:pr-8 lg:pl-[58px] lg:pr-12">
-
+        <div className="pl-[30px] pr-5 sm:pl-[42px] sm:pr-8 lg:pl-[58px] lg:pr-12">
           <h2
             id="bestsellers-heading"
             className="text-3xl font-semibold tracking-tight sm:text-4xl lg:text-5xl"
@@ -140,16 +139,17 @@ export function Bestsellers() {
           </div>
         </div>
 
-        <div
-          ref={trackRef}
-          onScroll={sync}
-          className="mt-8 flex snap-x snap-mandatory gap-6 overflow-x-auto scroll-smooth pl-[30px] pr-5 pb-2 [scrollbar-width:none] sm:mt-10 sm:pl-[42px] sm:pr-8 lg:pl-[58px] lg:pr-12 [&::-webkit-scrollbar]:hidden"
-
-        >
-          {products.map((p) => (
-            <ProductCard key={p.id} product={p} />
-          ))}
-          <div aria-hidden className="w-1 shrink-0 sm:w-2" />
+        <div className="pl-[30px] pr-5 sm:pl-[42px] sm:pr-8 lg:pl-[58px] lg:pr-12">
+          <div
+            ref={trackRef}
+            onScroll={sync}
+            className="mt-8 flex snap-x snap-mandatory gap-6 overflow-x-auto scroll-smooth pb-2 [scrollbar-width:none] sm:mt-10 [&::-webkit-scrollbar]:hidden"
+          >
+            {products.map((p) => (
+              <ProductCard key={p.id} product={p} />
+            ))}
+            <div aria-hidden className="w-1 shrink-0 sm:w-2" />
+          </div>
         </div>
       </div>
     </section>
