@@ -12,7 +12,7 @@ function ProductCard({ product }: { product: BestsellerProduct }) {
     <a
       href={product.productUrl}
       data-shopify-handle={product.shopifyHandle}
-      className="group block w-[74vw] shrink-0 snap-start first:ml-4 sm:w-[46vw] sm:first:ml-6 md:w-[34vw] lg:w-[calc((100%-4.5rem)/4)] lg:first:ml-8"
+      className="group block w-[74vw] shrink-0 snap-start sm:w-[46vw] md:w-[34vw] lg:w-[calc((100%-4.5rem)/4)]"
     >
       <div className="relative aspect-4/5 w-full overflow-hidden rounded-2xl bg-secondary">
         <img
