@@ -10,9 +10,9 @@ export function Hero() {
       <div className="absolute inset-0">
         <img
           src={heroImage}
-          alt="A matte black corporate gift box with a metal nameplate, surrounded by a leather notebook and pen, a printed card, a wireless mouse, a keyboard on a felt mousepad, and a glass perfume bottle."
-          width={1920}
-          height={1088}
+          alt="OfficeNeed branded corporate gift set: a black ribboned gift box, insulated bottle, notebooks, pens, perfume, leather organiser, tech pouch, mouse, keyboard and cufflinks arranged on a warm neutral surface."
+          width={1672}
+          height={941}
           fetchPriority="high"
           decoding="async"
           sizes="100vw"
