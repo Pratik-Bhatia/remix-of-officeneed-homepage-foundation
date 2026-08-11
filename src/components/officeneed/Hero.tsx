@@ -59,7 +59,7 @@ export function Hero() {
       {/* Reduced gradient wash — localized behind the text area only */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 hidden bg-gradient-to-r from-background/80 via-background/42 to-transparent lg:block lg:w-[60%]"
+        className="pointer-events-none absolute inset-0 hidden bg-gradient-to-r from-background/80 via-background/35 to-transparent lg:block lg:w-[55%]"
       />
 
       {/* Content layer */}
