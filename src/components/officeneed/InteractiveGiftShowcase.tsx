@@ -109,14 +109,14 @@ function ProductDetailCard({
         </div>
       </div>
 
-      <div className="mt-3 flex items-center justify-between border-t border-border pt-3">
+      <div className="mt-3 flex items-center justify-between gap-3 border-t border-border pt-3">
         <div>
-          <p className="text-sm font-medium">{product.price}</p>
+          <p className="whitespace-nowrap text-sm font-medium">{product.price}</p>
           <p className="text-xs text-muted-foreground">{product.availability}</p>
         </div>
         <a
           href={product.href}
-          className="inline-flex min-h-9 items-center rounded-full bg-primary px-4 text-xs font-medium text-primary-foreground transition-opacity duration-200 hover:opacity-90"
+          className="inline-flex min-h-9 shrink-0 items-center whitespace-nowrap rounded-full bg-primary px-4 text-xs font-medium text-primary-foreground transition-opacity duration-200 hover:opacity-90"
         >
           View Product →
         </a>
