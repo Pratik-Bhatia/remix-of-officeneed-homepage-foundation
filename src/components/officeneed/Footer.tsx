@@ -89,7 +89,8 @@ export function Footer() {
       {/* Benefits strip */}
       <section className="border-t border-border bg-background">
         <div className="mx-auto max-w-[1400px] px-5 py-6 sm:px-8 lg:px-12 lg:py-8">
-          <ul className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-4 lg:gap-0">
+          {/* Desktop grid */}
+          <ul className="hidden grid-cols-2 gap-8 lg:grid lg:grid-cols-4 lg:gap-0">
             {benefits.map(({ icon: Icon, title, description }, i) => (
               <li
                 key={title}
@@ -112,8 +113,12 @@ export function Footer() {
               </li>
             ))}
           </ul>
+
+          {/* Mobile carousel */}
+          <MobileBenefitsCarousel />
         </div>
       </section>
+
 
       {/* Main footer */}
       <section className="bg-foreground text-background">
