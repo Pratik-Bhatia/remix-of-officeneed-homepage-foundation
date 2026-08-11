@@ -10,12 +10,12 @@ import {
   ShieldCheck,
   Youtube,
 } from "lucide-react";
-import logoInverse from "@/assets/officeneed-logo-inverse.png.asset.json";
-import visaAsset from "@/assets/payment-visa.png.asset.json";
-import mastercardAsset from "@/assets/payment-mastercard.png.asset.json";
-import amexAsset from "@/assets/payment-amex.png.asset.json";
-import upiAsset from "@/assets/payment-upi.png.asset.json";
-import rupayAsset from "@/assets/payment-rupay.png.asset.json";
+import logoInverse from "@/assets/officeneed-logo-inverse.png";
+import visaAsset from "@/assets/payment-visa.png";
+import mastercardAsset from "@/assets/payment-mastercard.png";
+import amexAsset from "@/assets/payment-amex.png";
+import upiAsset from "@/assets/payment-upi.png";
+import rupayAsset from "@/assets/payment-rupay.png";
 
 const benefits = [
   {
@@ -233,7 +233,7 @@ export function Footer() {
               {paymentMethods.map(({ label, asset }) => (
                 <li key={label} className="shrink-0">
                   <img
-                    src={asset.url}
+                    src={asset}
                     alt={label}
                     loading="lazy"
                     className="h-8 w-auto min-w-[40px] rounded-md border border-background/20 object-contain"
