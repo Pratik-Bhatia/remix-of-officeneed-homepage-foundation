@@ -103,7 +103,7 @@ export function Footer() {
       </section>
 
       {/* Main footer */}
-      <section className="bg-foreground text-background">
+      <section className="bg-[#171717] text-background">
         <div className="mx-auto max-w-[1400px] px-5 py-14 sm:px-8 lg:px-12 lg:py-20">
           <div className="grid gap-12 md:grid-cols-2 lg:grid-cols-[1fr_1fr_1.4fr] lg:gap-0">
             <nav aria-labelledby="footer-shop" className="lg:pr-10">
