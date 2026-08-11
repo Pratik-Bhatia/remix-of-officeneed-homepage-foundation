@@ -1,10 +1,32 @@
 import heroImage from "@/assets/hero-officeneed.jpg";
 
-
 export function Hero() {
   return (
-    <section aria-labelledby="hero-heading" className="relative overflow-hidden bg-background">
-      <div className="mx-auto w-full max-w-[1440px] px-4 pt-12 pb-14 sm:px-6 sm:pt-16 lg:grid lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:items-center lg:gap-16 lg:px-10 lg:pt-20 lg:pb-24">
+    <section
+      aria-labelledby="hero-heading"
+      className="relative w-full overflow-hidden bg-background"
+    >
+      {/* Full-bleed visual layer */}
+      <div className="absolute inset-0">
+        <img
+          src={heroImage}
+          alt="A matte black corporate gift box with a metal nameplate, surrounded by a leather notebook and pen, a printed card, a wireless mouse, a keyboard on a felt mousepad, and a glass perfume bottle."
+          width={1920}
+          height={1088}
+          fetchPriority="high"
+          decoding="async"
+          sizes="100vw"
+          className="h-full w-full object-cover object-[72%_center] sm:object-[65%_center] lg:object-center"
+        />
+        {/* Subtle readability treatment toward the text side */}
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 bg-gradient-to-b from-background/90 via-background/70 to-background/35 lg:bg-gradient-to-r lg:from-background/92 lg:via-background/70 lg:to-transparent"
+        />
+      </div>
+
+      {/* Content layer */}
+      <div className="relative mx-auto flex min-h-[78vh] w-full max-w-[1440px] items-end px-5 pt-24 pb-14 sm:min-h-[80vh] sm:px-8 lg:min-h-[82vh] lg:items-center lg:px-12 lg:py-28">
         <div className="animate-rise max-w-xl">
           <p className="text-eyebrow text-muted-foreground">Corporate Procurement Partner</p>
 
@@ -28,26 +50,10 @@ export function Hero() {
             </a>
             <a
               href="#products"
-              className="inline-flex min-h-12 items-center justify-center rounded-full border border-border px-7 text-sm font-medium text-foreground transition-colors duration-200 hover:border-foreground/40 hover:bg-secondary"
+              className="inline-flex min-h-12 items-center justify-center rounded-full border border-foreground/20 bg-background/70 px-7 text-sm font-medium text-foreground backdrop-blur-[2px] transition-colors duration-200 hover:border-foreground/40 hover:bg-secondary"
             >
               Shop Products
             </a>
-          </div>
-
-        </div>
-
-        <div className="relative mt-10 lg:mt-0">
-          <div className="overflow-hidden rounded-xl bg-surface">
-            <img
-              src={heroImage}
-              alt="A matte black corporate gift box with a metal nameplate, surrounded by a leather notebook and pen, a printed card, a wireless mouse, a keyboard on a felt mousepad, and a glass perfume bottle."
-              width={1920}
-              height={1088}
-              fetchPriority="high"
-              decoding="async"
-              sizes="(min-width: 1024px) 55vw, 100vw"
-              className="aspect-16/10 w-full object-cover"
-            />
           </div>
         </div>
       </div>
