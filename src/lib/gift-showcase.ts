@@ -436,4 +436,4 @@ export const giftHampers: GiftHamper[] = [
 ];
 
 /** Backwards-compatible export: products of the signature hamper. */
-export const giftShowcaseProducts: GiftShowcaseProduct[] = giftHampers[0].products;
+export const giftShowcaseProducts: GiftShowcaseProduct[] = giftHampers[0]?.products ?? [];
