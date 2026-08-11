@@ -100,13 +100,17 @@ function MobileBenefitsCarousel() {
   }, [isPaused, next]);
 
   const handleTouchStart = (e: React.TouchEvent) => {
-    touchStartX.current = e.changedTouches[0].clientX;
+    const touch = e.changedTouches[0];
+    if (!touch) return;
+    touchStartX.current = touch.clientX;
   };
 
   const handleTouchEnd = (e: React.TouchEvent) => {
     const start = touchStartX.current;
     if (start == null) return;
-    const end = e.changedTouches[0].clientX;
+    const touch = e.changedTouches[0];
+    if (!touch) return;
+    const end = touch.clientX;
     const delta = end - start;
     if (delta > 50) {
       setActive((prev) => (prev === 0 ? benefits.length - 1 : prev - 1));
