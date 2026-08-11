@@ -161,7 +161,7 @@ export function Footer() {
 
             <div className="md:col-span-2 lg:col-span-1 lg:border-l lg:border-background/15 lg:pl-14">
               <img
-                src={logoInverse.url}
+                src={logoInverse}
                 alt="OfficeNeed — Expect More..."
                 className="h-10 w-auto sm:h-12"
               />
