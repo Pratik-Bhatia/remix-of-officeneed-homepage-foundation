@@ -36,6 +36,8 @@ function Index() {
         <InteractiveGiftShowcase />
         <Bestsellers />
       </main>
+      <Footer />
     </div>
+
   );
 }
