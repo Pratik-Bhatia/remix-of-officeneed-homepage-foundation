@@ -230,12 +230,14 @@ export function Footer() {
             </div>
 
             <ul className="flex flex-wrap items-center gap-3">
-              {paymentMethods.map((method) => (
-                <li
-                  key={method}
-                  className="flex h-8 items-center rounded-md border border-background/20 px-3 text-[10px] font-semibold tracking-[0.12em] text-background/70"
-                >
-                  {method}
+              {paymentMethods.map(({ label, asset }) => (
+                <li key={label}>
+                  <img
+                    src={asset.url}
+                    alt={label}
+                    loading="lazy"
+                    className="h-8 w-auto rounded-md border border-background/20 object-contain"
+                  />
                 </li>
               ))}
             </ul>
