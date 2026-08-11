@@ -11,12 +11,8 @@ function HeroContent() {
         Multiple Solutions.
       </h1>
 
-      <p className="text-lede mt-5 max-w-md text-pretty sm:mt-6">
-        Corporate procurement made simpler — gifting, stationery, IT, print and luxury,
-        sourced and delivered under a single accountable partner.
-      </p>
-
       <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+
         <a
           href="#solutions"
           className="inline-flex min-h-12 items-center justify-center rounded-full bg-primary px-7 text-sm font-medium text-primary-foreground transition-[transform,opacity] duration-200 hover:opacity-90 active:scale-[0.99]"
