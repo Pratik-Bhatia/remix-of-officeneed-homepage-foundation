@@ -103,7 +103,7 @@ export function Footer() {
       </section>
 
       {/* Main footer */}
-      <section className="bg-foreground text-background">
+      <section className="bg-[#171717] text-background">
         <div className="mx-auto max-w-[1400px] px-5 py-14 sm:px-8 lg:px-12 lg:py-20">
           <div className="grid gap-12 md:grid-cols-2 lg:grid-cols-[1fr_1fr_1.4fr] lg:gap-0">
             <nav aria-labelledby="footer-shop" className="lg:pr-10">
@@ -198,7 +198,7 @@ export function Footer() {
         </div>
 
         {/* Bottom bar */}
-        <div className="border-t border-background/10 bg-foreground/95">
+        <div className="border-t border-background/10 bg-[#171717]/95">
           <div className="mx-auto flex max-w-[1400px] flex-col gap-6 px-5 py-7 sm:px-8 lg:flex-row lg:items-center lg:justify-between lg:px-12">
             <div className="space-y-3">
               <p className="text-sm text-background/75">
