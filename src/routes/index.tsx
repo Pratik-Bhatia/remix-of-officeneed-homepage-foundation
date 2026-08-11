@@ -3,6 +3,7 @@ import { Navbar } from "@/components/officeneed/Navbar";
 import { Hero } from "@/components/officeneed/Hero";
 import { InteractiveGiftShowcase } from "@/components/officeneed/InteractiveGiftShowcase";
 import { Bestsellers } from "@/components/officeneed/Bestsellers";
+import { Footer } from "@/components/officeneed/Footer";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -35,6 +36,8 @@ function Index() {
         <InteractiveGiftShowcase />
         <Bestsellers />
       </main>
+      <Footer />
     </div>
+
   );
 }
