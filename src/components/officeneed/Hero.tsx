@@ -42,7 +42,7 @@ export function Hero() {
       </div>
 
       <div className="mx-auto grid w-full max-w-[1440px] items-center gap-10 px-5 py-14 sm:px-8 lg:grid-cols-2 lg:gap-8 lg:px-12 lg:py-20">
-        <div className="animate-rise max-w-xl">
+        <div className="animate-rise mx-auto max-w-xl text-center">
           <HeroContent />
         </div>
 
