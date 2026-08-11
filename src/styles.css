@@ -213,6 +213,20 @@
   border-bottom: 1px solid color-mix(in oklab, var(--color-border) 100%, transparent);
 }
 
+/* Interactive hotspot marker */
+@utility hotspot-dot {
+  &::before {
+    content: "";
+    position: absolute;
+    inset: -6px;
+    border-radius: 50%;
+    border: 1px solid color-mix(in oklab, var(--color-foreground) 45%, transparent);
+    opacity: 0;
+    animation: chat-pulse-ring 3.2s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+  }
+}
+
+
 /* Motion */
 @utility animate-rise {
   animation: on-rise 900ms cubic-bezier(0.22, 1, 0.36, 1) both;
