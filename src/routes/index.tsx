@@ -31,6 +31,7 @@ function Index() {
       <Navbar />
       <main>
         <Hero />
+        <InteractiveGiftShowcase />
       </main>
     </div>
   );
