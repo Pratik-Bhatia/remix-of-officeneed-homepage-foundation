@@ -231,12 +231,12 @@ export function Footer() {
 
             <ul className="flex flex-wrap items-center gap-3">
               {paymentMethods.map(({ label, asset }) => (
-                <li key={label}>
+                <li key={label} className="shrink-0">
                   <img
                     src={asset.url}
                     alt={label}
                     loading="lazy"
-                    className="h-8 w-auto rounded-md border border-background/20 object-contain"
+                    className="h-8 w-auto min-w-[40px] rounded-md border border-background/20 object-contain"
                   />
                 </li>
               ))}
