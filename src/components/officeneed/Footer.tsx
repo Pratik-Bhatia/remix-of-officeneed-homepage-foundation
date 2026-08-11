@@ -10,12 +10,14 @@ import {
   ShieldCheck,
   Youtube,
 } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import logoInverse from "@/assets/officeneed-logo-inverse.png";
 import visaAsset from "@/assets/payment-visa.png";
 import mastercardAsset from "@/assets/payment-mastercard.png";
 import amexAsset from "@/assets/payment-amex.png";
 import upiAsset from "@/assets/payment-upi.png";
 import rupayAsset from "@/assets/payment-rupay.png";
+
 
 const benefits = [
   {
