@@ -92,8 +92,8 @@ export function Navbar() {
         <Logo />
 
         {/* Desktop navigation */}
-        <nav aria-label="Primary" className="hidden flex-1 justify-center lg:flex">
-          <ul className="flex items-center gap-7 xl:gap-9">
+        <nav aria-label="Primary" className="hidden flex-1 justify-center xl:flex">
+          <ul className="flex items-center gap-5 xl:gap-8">
             {navCategories.map((cat) => (
               <li key={cat.id} onMouseEnter={() => { cancelClose(); setOpenId(cat.id); }} onMouseLeave={scheduleClose}>
                 <button
@@ -129,7 +129,7 @@ export function Navbar() {
           <IconButton label="Search">
             <Search className="size-5" strokeWidth={1.6} />
           </IconButton>
-          <span className="hidden lg:inline-flex">
+          <span className="hidden xl:inline-flex">
             <IconButton label="Account">
               <User className="size-5" strokeWidth={1.6} />
             </IconButton>
@@ -137,7 +137,7 @@ export function Navbar() {
           <IconButton label="Cart">
             <ShoppingBag className="size-5" strokeWidth={1.6} />
           </IconButton>
-          <span className="lg:hidden">
+          <span className="xl:hidden">
             <IconButton label="Open menu" onClick={() => setMobileOpen(true)}>
               <Menu className="size-6" strokeWidth={1.6} />
             </IconButton>
@@ -147,7 +147,7 @@ export function Navbar() {
 
       {/* Mega menu */}
       <div
-        className="hidden lg:block"
+        className="hidden xl:block"
         onMouseEnter={cancelClose}
         onMouseLeave={scheduleClose}
       >
@@ -191,7 +191,7 @@ export function Navbar() {
           role="dialog"
           aria-modal="true"
           aria-label="Menu"
-          className="fixed inset-0 z-50 flex flex-col bg-background lg:hidden"
+          className="fixed inset-0 z-50 flex flex-col bg-background xl:hidden"
         >
           <div className="flex h-16 items-center justify-between border-b border-border px-4 sm:px-6">
             <Logo />
