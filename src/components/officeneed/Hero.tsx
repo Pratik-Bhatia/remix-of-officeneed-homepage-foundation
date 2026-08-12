@@ -30,26 +30,26 @@ export function Hero() {
       aria-labelledby="hero-heading"
       className="relative w-full overflow-x-clip bg-background"
     >
-      <div className="mx-auto grid w-full max-w-[1600px] grid-cols-1 items-center gap-8 px-5 pb-12 pt-10 sm:px-8 lg:min-h-[calc(100svh-80px)] lg:grid-cols-[minmax(0,0.86fr)_minmax(0,1.14fr)] lg:gap-12 lg:px-12 lg:py-10 xl:gap-16">
+      <div className="mx-auto grid w-full max-w-[1600px] grid-cols-1 items-center gap-8 px-5 pb-12 pt-10 sm:px-8 lg:px-12 xl:min-h-[calc(100svh-80px)] xl:grid-cols-[minmax(0,0.86fr)_minmax(0,1.14fr)] xl:gap-16 xl:py-10">
         {/* Copy */}
-        <div className="mx-auto w-full max-w-[700px] text-center lg:mx-0 lg:max-w-[680px] lg:pr-2 lg:text-left">
+        <div className="mx-auto w-full max-w-[700px] text-center xl:mx-0 xl:max-w-[680px] xl:pr-2 xl:text-left">
           <p className="text-eyebrow text-muted-foreground">CORPORATE PROCUREMENT, SIMPLIFIED</p>
 
           <h1
             id="hero-heading"
-            className="text-display mx-auto mt-5 w-full max-w-full lg:mx-0"
+            className="text-display mx-auto mt-5 w-full max-w-full xl:mx-0"
           >
             One Partner.
             <br />
             Every Business Need.
           </h1>
 
-          <p className="text-lede mx-auto mt-6 w-full max-w-[520px] md:max-w-[640px] lg:mx-0 lg:max-w-[540px]">
+          <p className="text-lede mx-auto mt-6 w-full max-w-[520px] md:max-w-[640px] xl:mx-0 xl:max-w-[560px]">
             From corporate gifting and office essentials to IT, printing and luxury solutions —
             everything your business needs, sourced and delivered through one trusted partner.
           </p>
 
-          <div className="mx-auto mt-9 flex w-full max-w-[360px] flex-col items-center gap-3 sm:max-w-none sm:flex-row sm:justify-center sm:gap-4 lg:mx-0 lg:justify-start">
+          <div className="mx-auto mt-9 flex w-full max-w-[360px] flex-col items-center gap-3 sm:max-w-none sm:flex-row sm:justify-center sm:gap-4 xl:mx-0 xl:justify-start">
             <a href="#solutions" className="btn-primary w-full sm:w-auto">
               Explore Solutions
             </a>
@@ -60,7 +60,7 @@ export function Hero() {
         </div>
 
         {/* Visual */}
-        <div className="relative mx-auto w-full max-w-[420px] md:max-w-[85%] lg:max-w-none">
+        <div className="relative mx-auto w-full max-w-[420px] md:max-w-[85%] xl:max-w-none">
           <div
             ref={trackRef}
             className="flex snap-x snap-mandatory overflow-x-auto scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
@@ -76,13 +76,13 @@ export function Hero() {
                   loading={i === 0 ? "eager" : "lazy"}
                   decoding="async"
                   sizes="(min-width: 1024px) 58vw, 100vw"
-                  className="mx-auto h-auto max-h-[46vh] w-full object-contain sm:max-h-[54vh] lg:h-[min(74vh,720px)] lg:max-h-none"
+                  className="mx-auto h-auto max-h-[46vh] w-full object-contain sm:max-h-[54vh] xl:h-[min(74vh,720px)] xl:max-h-none"
                 />
               </div>
             ))}
           </div>
 
-          <div className="mt-5 flex items-center justify-center gap-2 lg:justify-start lg:pl-2">
+          <div className="mt-5 flex items-center justify-center gap-2 xl:justify-start xl:pl-2">
             {SLIDES.map((i) => (
               <button
                 key={i}
