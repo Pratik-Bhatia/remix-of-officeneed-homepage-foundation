@@ -30,7 +30,7 @@ function FeedCard({ item, index }: { item: SocialFeedItem; index: number }) {
       style={{ transitionDelay: `${index * 90}ms` }}
       onClick={() => setOpen((v) => !v)}
       className={cn(
-        "group relative w-[78vw] shrink-0 snap-start overflow-hidden rounded-[18px] bg-secondary sm:w-[46vw] md:w-[34vw] lg:w-auto",
+        "group relative w-[78vw] shrink-0 snap-start overflow-hidden rounded-[18px] bg-secondary pl-[10px] sm:w-[46vw] md:w-[34vw] lg:w-auto",
         "motion-safe:translate-y-6 motion-safe:opacity-0 motion-safe:transition-all motion-safe:duration-700 motion-safe:ease-out",
         visible && "motion-safe:translate-y-0 motion-safe:opacity-100",
       )}
