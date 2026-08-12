@@ -34,6 +34,7 @@ function Index() {
       <Navbar />
       <main>
         <Hero />
+        <InteractiveGiftShowcase />
         <Bestsellers />
         <ShopTheFeed />
       </main>
