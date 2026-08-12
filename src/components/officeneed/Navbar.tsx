@@ -17,7 +17,7 @@ function Logo({ className }: { className?: string }) {
         alt="OfficeNeed"
         width={640}
         height={122}
-        className={cn("h-5 w-auto xs:h-6 sm:h-7", className)}
+        className={cn("h-5 w-auto sm:h-7", className)}
       />
     </Link>
   );
