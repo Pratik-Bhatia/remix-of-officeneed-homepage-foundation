@@ -27,22 +27,28 @@ function IconButton({
   label,
   onClick,
   children,
+  className,
 }: {
   label: string;
   onClick?: () => void;
   children: React.ReactNode;
+  className?: string;
 }) {
   return (
     <button
       type="button"
       aria-label={label}
       onClick={onClick}
-      className="inline-flex size-10 shrink-0 items-center justify-center rounded-full text-foreground/75 sm:size-11 transition-colors duration-200 hover:bg-secondary hover:text-foreground"
+      className={cn(
+        "inline-flex shrink-0 items-center justify-center rounded-full text-foreground/75 transition-colors duration-200 hover:bg-secondary hover:text-foreground",
+        className,
+      )}
     >
       {children}
     </button>
   );
 }
+
 
 export function Navbar() {
   const [openId, setOpenId] = useState<string | null>(null);
