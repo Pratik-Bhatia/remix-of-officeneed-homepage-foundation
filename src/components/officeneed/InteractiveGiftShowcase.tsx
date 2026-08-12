@@ -9,14 +9,14 @@ import { cn } from "@/lib/utils";
 
 function SectionHeader() {
   return (
-    <div className="max-w-2xl">
+    <div className="mx-auto w-full max-w-2xl text-center lg:mx-0 lg:text-left">
       <p className="text-eyebrow text-muted-foreground">Corporate Gifting</p>
       <h2 className="text-section mt-4 text-balance">
         Designed to Gift.
         <br />
         Built to Impress.
       </h2>
-      <p className="mt-4 text-pretty text-sm leading-relaxed text-muted-foreground sm:text-base">
+      <p className="mx-auto mt-4 max-w-[640px] text-pretty text-sm leading-relaxed text-muted-foreground sm:text-base lg:mx-0">
         Explore thoughtfully curated corporate gifts — from complete hampers to the
         individual products inside them.
       </p>

@@ -17,7 +17,7 @@ function Logo({ className }: { className?: string }) {
         alt="OfficeNeed"
         width={640}
         height={122}
-        className={cn("h-6 w-auto sm:h-7", className)}
+        className={cn("h-5 w-auto sm:h-7", className)}
       />
     </Link>
   );
@@ -37,7 +37,7 @@ function IconButton({
       type="button"
       aria-label={label}
       onClick={onClick}
-      className="inline-flex size-11 items-center justify-center rounded-full text-foreground/75 transition-colors duration-200 hover:bg-secondary hover:text-foreground"
+      className="inline-flex size-10 shrink-0 items-center justify-center rounded-full text-foreground/75 sm:size-11 transition-colors duration-200 hover:bg-secondary hover:text-foreground"
     >
       {children}
     </button>
@@ -92,8 +92,8 @@ export function Navbar() {
         <Logo />
 
         {/* Desktop navigation */}
-        <nav aria-label="Primary" className="hidden flex-1 justify-center lg:flex">
-          <ul className="flex items-center gap-7 xl:gap-9">
+        <nav aria-label="Primary" className="hidden min-w-0 flex-1 justify-center xl:flex">
+          <ul className="flex min-w-0 items-center gap-4 xl:gap-8">
             {navCategories.map((cat) => (
               <li key={cat.id} onMouseEnter={() => { cancelClose(); setOpenId(cat.id); }} onMouseLeave={scheduleClose}>
                 <button
@@ -104,7 +104,7 @@ export function Navbar() {
                   onClick={() => setOpenId(openId === cat.id ? null : cat.id)}
                   onFocus={() => setOpenId(cat.id)}
                   className={cn(
-                    "nav-link h-16 lg:h-20",
+                    "nav-link h-16 xl:h-20",
                     cat.featured && "font-semibold text-foreground",
                   )}
 
@@ -116,20 +116,20 @@ export function Navbar() {
           </ul>
         </nav>
 
-        <div className="ml-auto flex items-center gap-0.5 lg:ml-0">
+        <div className="ml-auto flex items-center gap-0.5 xl:ml-0">
           <button
             type="button"
             aria-label="Open OfficeNeed Chat"
             title="Chat with OfficeNeed"
             onClick={openChat}
-            className="chat-pulse inline-flex size-11 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm transition-[transform,box-shadow] duration-200 hover:scale-105 hover:shadow-md"
+            className="chat-pulse inline-flex size-10 shrink-0 items-center sm:size-11 justify-center rounded-full bg-primary text-primary-foreground shadow-sm transition-[transform,box-shadow] duration-200 hover:scale-105 hover:shadow-md"
           >
             <MessageSquare className="chat-icon-wiggle size-5" strokeWidth={1.6} />
           </button>
           <IconButton label="Search">
             <Search className="size-5" strokeWidth={1.6} />
           </IconButton>
-          <span className="hidden lg:inline-flex">
+          <span className="hidden xl:inline-flex">
             <IconButton label="Account">
               <User className="size-5" strokeWidth={1.6} />
             </IconButton>
@@ -137,7 +137,7 @@ export function Navbar() {
           <IconButton label="Cart">
             <ShoppingBag className="size-5" strokeWidth={1.6} />
           </IconButton>
-          <span className="lg:hidden">
+          <span className="xl:hidden">
             <IconButton label="Open menu" onClick={() => setMobileOpen(true)}>
               <Menu className="size-6" strokeWidth={1.6} />
             </IconButton>
@@ -147,7 +147,7 @@ export function Navbar() {
 
       {/* Mega menu */}
       <div
-        className="hidden lg:block"
+        className="hidden xl:block"
         onMouseEnter={cancelClose}
         onMouseLeave={scheduleClose}
       >
@@ -191,7 +191,7 @@ export function Navbar() {
           role="dialog"
           aria-modal="true"
           aria-label="Menu"
-          className="fixed inset-0 z-50 flex flex-col bg-background lg:hidden"
+          className="fixed inset-0 z-50 flex flex-col bg-background xl:hidden"
         >
           <div className="flex h-16 items-center justify-between border-b border-border px-4 sm:px-6">
             <Logo />
