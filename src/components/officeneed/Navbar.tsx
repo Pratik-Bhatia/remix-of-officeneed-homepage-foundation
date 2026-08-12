@@ -37,7 +37,7 @@ function IconButton({
       type="button"
       aria-label={label}
       onClick={onClick}
-      className="inline-flex size-11 items-center justify-center rounded-full text-foreground/75 transition-colors duration-200 hover:bg-secondary hover:text-foreground"
+      className="inline-flex size-10 items-center justify-center rounded-full text-foreground/75 sm:size-11 transition-colors duration-200 hover:bg-secondary hover:text-foreground"
     >
       {children}
     </button>
@@ -87,7 +87,7 @@ export function Navbar() {
   return (
     <>
     <header className="sticky top-0 z-50 w-full border-b border-border bg-background">
-      <div className="mx-auto flex h-16 w-full max-w-[1600px] items-center gap-4 px-4 sm:px-6 lg:h-20 lg:px-12">
+      <div className="mx-auto flex h-16 w-full max-w-[1600px] items-center gap-3 px-4 sm:gap-4 sm:px-6 lg:h-20 lg:px-12">
 
         <Logo />
 
@@ -122,7 +122,7 @@ export function Navbar() {
             aria-label="Open OfficeNeed Chat"
             title="Chat with OfficeNeed"
             onClick={openChat}
-            className="chat-pulse inline-flex size-11 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm transition-[transform,box-shadow] duration-200 hover:scale-105 hover:shadow-md"
+            className="chat-pulse inline-flex size-10 sm:size-11 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm transition-[transform,box-shadow] duration-200 hover:scale-105 hover:shadow-md"
           >
             <MessageSquare className="chat-icon-wiggle size-5" strokeWidth={1.6} />
           </button>
