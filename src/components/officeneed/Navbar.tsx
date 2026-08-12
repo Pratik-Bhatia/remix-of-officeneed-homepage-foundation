@@ -87,9 +87,18 @@ export function Navbar() {
   return (
     <>
     <header className="sticky top-0 z-50 w-full border-b border-border bg-background">
-      <div className="mx-auto flex h-16 w-full max-w-[1600px] items-center gap-4 px-4 sm:px-6 lg:h-20 lg:px-12">
+      <div className="mx-auto grid h-16 w-full max-w-[1600px] grid-cols-[auto_1fr_auto] items-center gap-4 px-4 sm:px-6 lg:h-20 lg:px-12 xl:flex">
+        {/* Mobile menu toggle — left on mobile/tablet, hidden on desktop */}
+        <div className="xl:hidden">
+          <IconButton label="Open menu" onClick={() => setMobileOpen(true)}>
+            <Menu className="size-6" strokeWidth={1.6} />
+          </IconButton>
+        </div>
 
-        <Logo />
+        {/* Logo — centered on mobile/tablet, left on desktop */}
+        <div className="flex justify-center xl:justify-start">
+          <Logo />
+        </div>
 
         {/* Desktop navigation */}
         <nav aria-label="Primary" className="hidden min-w-0 flex-1 justify-center xl:flex">
@@ -116,7 +125,8 @@ export function Navbar() {
           </ul>
         </nav>
 
-        <div className="ml-auto flex items-center gap-0.5 xl:ml-0">
+        {/* Utility icons */}
+        <div className="flex items-center justify-end gap-0.5">
           <button
             type="button"
             aria-label="Open OfficeNeed Chat"
@@ -137,11 +147,6 @@ export function Navbar() {
           <IconButton label="Cart">
             <ShoppingBag className="size-5" strokeWidth={1.6} />
           </IconButton>
-          <span className="xl:hidden">
-            <IconButton label="Open menu" onClick={() => setMobileOpen(true)}>
-              <Menu className="size-6" strokeWidth={1.6} />
-            </IconButton>
-          </span>
         </div>
       </div>
 
