@@ -27,88 +27,91 @@ export function Hero() {
   };
 
   return (
-    <section aria-labelledby="hero-heading" className="w-full overflow-hidden bg-background">
-      <div className="mx-auto w-full max-w-[1440px] px-5 pt-10 sm:px-8 sm:pt-14 lg:px-12">
-        <div className="animate-rise mx-auto max-w-3xl text-center">
-          <p className="text-sm text-muted-foreground sm:text-base">Corporate Procurement Partner</p>
+    <section aria-labelledby="hero-heading" className="relative h-[80vh] w-full overflow-hidden bg-background">
+      <div className="h-full overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="mx-auto flex h-full min-h-0 w-full max-w-[1440px] flex-col px-5 sm:px-8 lg:px-12">
+          {/* Text */}
+          <div className="shrink-0 pt-10 text-center sm:pt-14">
+            <p className="text-sm text-muted-foreground sm:text-base">Corporate Procurement Partner</p>
 
-          <h1 id="hero-heading" className="text-display mt-4 text-balance">
-            One Vendor.
-            <br />
-            Multiple Solutions.
-          </h1>
+            <h1 id="hero-heading" className="text-display mt-4 text-balance">
+              One Vendor.
+              <br />
+              Multiple Solutions.
+            </h1>
 
-          <div className="mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row sm:gap-4">
-            <a
-              href="#solutions"
-              className="inline-flex min-h-12 w-full items-center justify-center rounded-full bg-primary px-8 text-base font-medium text-primary-foreground transition-[transform,opacity] duration-200 hover:opacity-90 active:scale-[0.99] sm:w-auto"
-            >
-              Explore Solutions
-            </a>
-            <a
-              href="#products"
-              className="inline-flex min-h-12 w-full items-center justify-center rounded-full border border-foreground/25 px-8 text-base font-medium text-foreground transition-colors duration-200 hover:border-foreground/50 hover:bg-secondary sm:w-auto"
-            >
-              Shop Products
-            </a>
-          </div>
-        </div>
-
-        {/* Visual carousel */}
-        <div
-          ref={trackRef}
-          className="mt-8 flex snap-x snap-mandatory overflow-x-auto scroll-smooth sm:mt-10 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-        >
-          {SLIDES.map((i) => (
-            <div key={i} className="w-full shrink-0 snap-center">
-              <img
-                src={heroImage}
-                alt="OfficeNeed branded gift boxes and shopping bags in ivory white with black rope handles."
-                width={1200}
-                height={800}
-                fetchPriority={i === 0 ? "high" : "low"}
-                loading={i === 0 ? "eager" : "lazy"}
-                decoding="async"
-                sizes="(min-width: 1024px) 70vw, 92vw"
-                className="mx-auto h-auto w-full max-w-3xl object-contain"
-              />
+            <div className="mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row sm:gap-4">
+              <a
+                href="#solutions"
+                className="inline-flex min-h-12 w-full items-center justify-center rounded-full bg-primary px-8 text-base font-medium text-primary-foreground transition-[transform,opacity] duration-200 hover:opacity-90 active:scale-[0.99] sm:w-auto"
+              >
+                Explore Solutions
+              </a>
+              <a
+                href="#products"
+                className="inline-flex min-h-12 w-full items-center justify-center rounded-full border border-foreground/25 px-8 text-base font-medium text-foreground transition-colors duration-200 hover:border-foreground/50 hover:bg-secondary sm:w-auto"
+              >
+                Shop Products
+              </a>
             </div>
-          ))}
-        </div>
+          </div>
 
-        <div className="mt-4 flex items-center justify-center gap-2.5">
-          {SLIDES.map((i) => (
-            <button
-              key={i}
-              type="button"
-              onClick={() => goTo(i)}
-              aria-label={`Go to slide ${i + 1}`}
-              aria-current={active === i}
-              className={`h-2.5 w-2.5 rounded-full transition-colors duration-200 ${
-                active === i ? "bg-foreground" : "bg-border"
-              }`}
-            />
-          ))}
-        </div>
-      </div>
+          {/* Visual carousel */}
+          <div
+            ref={trackRef}
+            className="mt-6 flex min-h-0 flex-1 snap-x snap-mandatory overflow-x-auto scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          >
+            {SLIDES.map((i) => (
+              <div key={i} className="flex h-full w-full shrink-0 snap-center items-center justify-center">
+                <img
+                  src={heroImage}
+                  alt="OfficeNeed branded gift boxes and shopping bags in ivory white with black rope handles."
+                  width={1200}
+                  height={800}
+                  fetchPriority={i === 0 ? "high" : "low"}
+                  loading={i === 0 ? "eager" : "lazy"}
+                  decoding="async"
+                  sizes="(min-width: 1024px) 70vw, 92vw"
+                  className="h-full w-auto max-w-full object-contain"
+                />
+              </div>
+            ))}
+          </div>
 
-      {/* Action bar */}
-      <div className="mt-8 w-full bg-secondary/60">
-        <div className="mx-auto grid w-full max-w-[1440px] gap-3 px-5 py-4 sm:grid-cols-2 sm:px-8 lg:px-12">
-          <a
-            href="#custom-requirement"
-            className="inline-flex min-h-12 items-center justify-center gap-2 rounded-md border border-foreground/25 bg-background px-6 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-secondary sm:text-base"
-          >
-            <ScanLine className="h-5 w-5 shrink-0" aria-hidden="true" />
-            Send custom Requirement
-          </a>
-          <a
-            href="#ai-recommendation"
-            className="inline-flex min-h-12 items-center justify-center gap-2 rounded-md bg-primary px-6 text-sm font-medium text-primary-foreground transition-opacity duration-200 hover:opacity-90 sm:text-base"
-          >
-            <LayoutGrid className="h-5 w-5 shrink-0" aria-hidden="true" />
-            AI Recommendation
-          </a>
+          <div className="mt-4 shrink-0 flex items-center justify-center gap-2.5">
+            {SLIDES.map((i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => goTo(i)}
+                aria-label={`Go to slide ${i + 1}`}
+                aria-current={active === i}
+                className={`h-2.5 w-2.5 rounded-full transition-colors duration-200 ${
+                  active === i ? "bg-foreground" : "bg-border"
+                }`}
+              />
+            ))}
+          </div>
+
+          {/* Floating sticky action bar */}
+          <div className="sticky bottom-0 z-10 shrink-0 pb-4 pt-2">
+            <div className="mx-auto grid w-full max-w-[1440px] gap-3 rounded-2xl border border-foreground/10 bg-background/95 p-3 shadow-2xl backdrop-blur-sm sm:grid-cols-2">
+              <a
+                href="#custom-requirement"
+                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-md border border-foreground/25 bg-background px-6 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-secondary sm:text-base"
+              >
+                <ScanLine className="h-5 w-5 shrink-0" aria-hidden="true" />
+                Send custom Requirement
+              </a>
+              <a
+                href="#ai-recommendation"
+                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-md bg-primary px-6 text-sm font-medium text-primary-foreground transition-opacity duration-200 hover:opacity-90 sm:text-base"
+              >
+                <LayoutGrid className="h-5 w-5 shrink-0" aria-hidden="true" />
+                AI Recommendation
+              </a>
+            </div>
+          </div>
         </div>
       </div>
     </section>
