@@ -17,7 +17,7 @@ function Logo({ className }: { className?: string }) {
         alt="OfficeNeed"
         width={640}
         height={122}
-        className={cn("h-6 w-auto sm:h-7", className)}
+        className={cn("h-5 w-auto xs:h-6 sm:h-7", className)}
       />
     </Link>
   );
@@ -37,7 +37,7 @@ function IconButton({
       type="button"
       aria-label={label}
       onClick={onClick}
-      className="inline-flex size-11 items-center justify-center rounded-full text-foreground/75 transition-colors duration-200 hover:bg-secondary hover:text-foreground"
+      className="inline-flex size-10 shrink-0 items-center justify-center rounded-full text-foreground/75 sm:size-11 transition-colors duration-200 hover:bg-secondary hover:text-foreground"
     >
       {children}
     </button>
@@ -92,8 +92,8 @@ export function Navbar() {
         <Logo />
 
         {/* Desktop navigation */}
-        <nav aria-label="Primary" className="hidden flex-1 justify-center lg:flex">
-          <ul className="flex items-center gap-7 xl:gap-9">
+        <nav aria-label="Primary" className="hidden min-w-0 flex-1 justify-center lg:flex">
+          <ul className="flex min-w-0 items-center gap-4 xl:gap-8">
             {navCategories.map((cat) => (
               <li key={cat.id} onMouseEnter={() => { cancelClose(); setOpenId(cat.id); }} onMouseLeave={scheduleClose}>
                 <button
@@ -122,7 +122,7 @@ export function Navbar() {
             aria-label="Open OfficeNeed Chat"
             title="Chat with OfficeNeed"
             onClick={openChat}
-            className="chat-pulse inline-flex size-11 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm transition-[transform,box-shadow] duration-200 hover:scale-105 hover:shadow-md"
+            className="chat-pulse inline-flex size-10 shrink-0 items-center sm:size-11 justify-center rounded-full bg-primary text-primary-foreground shadow-sm transition-[transform,box-shadow] duration-200 hover:scale-105 hover:shadow-md"
           >
             <MessageSquare className="chat-icon-wiggle size-5" strokeWidth={1.6} />
           </button>
