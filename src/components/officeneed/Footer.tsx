@@ -239,7 +239,7 @@ export function Footer() {
             <nav aria-labelledby="footer-shop" className="lg:pr-10">
               <h2
                 id="footer-shop"
-                className="font-heading text-xl font-semibold tracking-tight"
+                className="font-heading text-lg font-semibold tracking-tight"
               >
                 Shop
               </h2>
@@ -248,7 +248,7 @@ export function Footer() {
                   <li key={label}>
                     <Link
                       to="/"
-                      className="text-sm text-background/80 transition-colors hover:text-background"
+                      className="text-xs text-background/80 transition-colors hover:text-background sm:text-sm"
                     >
                       {label}
                     </Link>
@@ -260,7 +260,7 @@ export function Footer() {
             <nav aria-labelledby="footer-quick" className="lg:px-10">
               <h2
                 id="footer-quick"
-                className="font-heading text-xl font-semibold tracking-tight"
+                className="font-heading text-lg font-semibold tracking-tight"
               >
                 Quick Links
               </h2>
@@ -269,7 +269,7 @@ export function Footer() {
                   <li key={label}>
                     <Link
                       to="/"
-                      className="text-sm text-background/80 transition-colors hover:text-background"
+                      className="text-xs text-background/80 transition-colors hover:text-background sm:text-sm"
                     >
                       {label}
                     </Link>
@@ -284,7 +284,7 @@ export function Footer() {
                 alt="OfficeNeed — Expect More..."
                 className="h-10 w-auto sm:h-12"
               />
-              <p className="mt-6 max-w-md font-heading text-xl font-semibold leading-snug tracking-tight text-background sm:text-2xl">
+              <p className="mt-6 max-w-md font-heading text-lg font-semibold leading-snug tracking-tight text-background sm:text-xl">
                 One Vendor. Multiple Solutions.
               </p>
 
@@ -299,7 +299,7 @@ export function Footer() {
                   id="footer-email"
                   type="email"
                   placeholder="Enter your email"
-                  className="h-10 min-w-0 flex-1 bg-transparent text-sm text-background outline-none placeholder:text-background/50"
+                  className="h-10 min-w-0 flex-1 bg-transparent text-xs text-background outline-none placeholder:text-background/50 sm:text-sm"
                 />
                 <button
                   type="submit"
@@ -331,7 +331,7 @@ export function Footer() {
         <div className="border-t border-background/10 bg-[#171717]/95">
           <div className="mx-auto flex max-w-[1400px] flex-col gap-6 px-5 py-7 sm:px-8 lg:flex-row lg:items-center lg:justify-between lg:px-12">
             <div className="space-y-3">
-              <p className="text-sm text-background/75">
+              <p className="text-xs text-background/75 sm:text-sm">
                 © 2026 OfficeNeed. All rights reserved.
               </p>
               <ul className="flex flex-wrap gap-x-6 gap-y-2">
@@ -339,7 +339,7 @@ export function Footer() {
                   <li key={label}>
                     <Link
                       to="/"
-                      className="text-xs text-background/60 underline-offset-4 transition-colors hover:text-background hover:underline"
+                      className="text-[0.7rem] text-background/60 underline-offset-4 transition-colors hover:text-background hover:underline sm:text-xs"
                     >
                       {label}
                     </Link>

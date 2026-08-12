@@ -16,7 +16,7 @@ function SectionHeader() {
         <br />
         Built to Impress.
       </h2>
-      <p className="mt-4 text-pretty text-base leading-relaxed text-muted-foreground">
+      <p className="mt-4 text-pretty text-sm leading-relaxed text-muted-foreground sm:text-base">
         Explore thoughtfully curated corporate gifts — from complete hampers to the
         individual products inside them.
       </p>
@@ -221,16 +221,16 @@ function HamperCard({
 
       <div className="mt-5 flex items-start justify-between gap-6">
         <div className="min-w-0">
-          <h3 className="font-display text-lg font-semibold tracking-tight">
+          <h3 className="font-display text-base font-semibold tracking-tight">
             {hamper.title}
           </h3>
-          <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground sm:text-sm">
             {hamper.description}
           </p>
         </div>
         <a
           href={hamper.href}
-          className="mt-1 shrink-0 whitespace-nowrap border-b border-foreground/25 pb-0.5 text-sm transition-colors duration-200 hover:border-foreground"
+          className="mt-1 shrink-0 whitespace-nowrap border-b border-foreground/25 pb-0.5 text-xs transition-colors duration-200 hover:border-foreground sm:text-sm"
         >
           View hamper →
         </a>
@@ -373,16 +373,16 @@ function HamperCarousel() {
 function SectionCTA() {
   return (
     <div className="mx-auto mt-14 max-w-xl border-t border-border pt-10 text-center sm:mt-16">
-      <h3 className="font-display text-xl font-semibold tracking-tight">
+      <h3 className="font-display text-lg font-semibold tracking-tight">
         Explore Corporate Gifting
       </h3>
-      <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+      <p className="mt-3 text-xs leading-relaxed text-muted-foreground sm:text-sm">
         Discover curated gifts and custom gifting solutions for your team, clients and
         business partners.
       </p>
       <a
         href="#corporate-gifting"
-        className="mt-6 inline-flex min-h-12 items-center justify-center rounded-full border border-foreground/20 px-7 text-sm font-medium transition-colors duration-200 hover:border-foreground/40 hover:bg-secondary"
+        className="mt-6 inline-flex min-h-11 items-center justify-center rounded-full border border-foreground/20 px-6 text-xs font-medium transition-colors duration-200 hover:border-foreground/40 hover:bg-secondary sm:text-sm"
       >
         Explore Corporate Gifting →
       </a>

@@ -31,10 +31,10 @@ function ProductCard({ product }: { product: BestsellerProduct }) {
 
       <div className="mt-4 space-y-1.5">
         <p className="text-eyebrow text-muted-foreground">{product.collection}</p>
-        <h3 className="text-base font-medium leading-snug text-foreground transition-opacity duration-300 group-hover:opacity-70 sm:text-lg">
+        <h3 className="text-sm font-medium leading-snug text-foreground transition-opacity duration-300 group-hover:opacity-70 sm:text-base">
           {product.name}
         </h3>
-        <p className="text-sm text-foreground/80 tabular-nums">{product.price}</p>
+        <p className="text-xs text-foreground/80 tabular-nums">{product.price}</p>
       </div>
     </a>
   );

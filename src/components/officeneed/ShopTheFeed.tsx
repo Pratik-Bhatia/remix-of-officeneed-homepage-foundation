@@ -60,7 +60,7 @@ function FeedCard({ item, index }: { item: SocialFeedItem; index: number }) {
             href={item.shopTheLookUrl}
             onClick={(e) => e.stopPropagation()}
             className={cn(
-              "absolute bottom-24 left-1/2 w-[min(280px,80%)] -translate-x-1/2 rounded-full bg-white px-5 py-2.5 text-center text-sm font-medium text-foreground shadow-lg",
+              "absolute bottom-24 left-1/2 w-[min(280px,80%)] -translate-x-1/2 rounded-full bg-white px-5 py-2.5 text-center text-xs font-medium text-foreground shadow-lg sm:text-sm",
               "pointer-events-none translate-y-2 opacity-0 transition-all duration-300 ease-out",
               "group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100",
               open && "pointer-events-auto translate-y-0 opacity-100",
@@ -112,7 +112,7 @@ export function ShopTheFeed() {
             href="https://instagram.com/officeneed"
             target="_blank"
             rel="noreferrer noopener"
-            className="shrink-0 rounded-full border border-border px-5 py-2 text-sm font-medium text-foreground transition-colors hover:bg-secondary"
+            className="shrink-0 rounded-full border border-border px-5 py-2 text-xs font-medium text-foreground transition-colors hover:bg-secondary sm:text-sm"
           >
             Follow
           </a>
