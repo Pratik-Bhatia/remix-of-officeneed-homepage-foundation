@@ -32,7 +32,7 @@ function Index() {
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
-      <main className="pb-14">
+      <main>
 
         <Hero />
         <InteractiveGiftShowcase />
