@@ -13,7 +13,7 @@ function FeedCard({ item, index }: { item: SocialFeedItem; index: number }) {
     if (!el) return;
     const io = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting) {
+        if (entry?.isIntersecting) {
           setVisible(true);
           io.disconnect();
         }
