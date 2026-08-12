@@ -2,21 +2,21 @@ import { ScanLine, Sparkles } from "lucide-react";
 
 export function FloatingActionBar() {
   return (
-    <div className="fixed inset-x-0 bottom-0 z-50 w-full max-w-full border-t border-border bg-background pb-[env(safe-area-inset-bottom)]">
-      <div className="grid w-full grid-cols-2 divide-x divide-border">
+    <div className="fixed inset-x-0 bottom-0 z-50 border-t border-border bg-background">
+      <div className="grid h-14 w-full grid-cols-2 divide-x divide-border">
         <a
           href="#custom-requirement"
-          className="inline-flex h-14 min-w-0 items-center justify-center gap-1.5 bg-background px-2 text-center text-[12px] font-medium leading-tight text-foreground transition-colors duration-200 hover:bg-secondary sm:gap-2 sm:px-4 sm:text-[14px]"
+          className="inline-flex h-full items-center justify-center gap-2 bg-background px-4 text-[14px] font-medium text-foreground transition-colors duration-200 hover:bg-secondary"
         >
           <ScanLine className="h-[14px] w-[14px] shrink-0" strokeWidth={1.6} aria-hidden="true" />
-          <span className="truncate">Send Custom Requirement</span>
+          Send Custom Requirement
         </a>
         <a
           href="#ai-recommendation"
-          className="inline-flex h-14 min-w-0 items-center justify-center gap-1.5 bg-primary px-2 text-center text-[12px] font-medium leading-tight text-primary-foreground transition-opacity duration-200 hover:opacity-90 sm:gap-2 sm:px-4 sm:text-[14px]"
+          className="inline-flex h-full items-center justify-center gap-2 bg-primary px-4 text-[14px] font-medium text-primary-foreground transition-opacity duration-200 hover:opacity-90"
         >
           <Sparkles className="h-[14px] w-[14px] shrink-0" strokeWidth={1.6} aria-hidden="true" />
-          <span className="truncate">AI Recommendation</span>
+          AI Recommendation
         </a>
       </div>
     </div>
