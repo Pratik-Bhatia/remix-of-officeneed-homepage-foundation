@@ -31,7 +31,7 @@ function Index() {
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
-      <main className="pb-24">
+      <main className="pb-14">
 
         <Hero />
         <InteractiveGiftShowcase />
