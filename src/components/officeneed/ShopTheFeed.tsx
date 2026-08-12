@@ -103,8 +103,8 @@ export function ShopTheFeed() {
       aria-labelledby="shop-the-feed-heading"
       className="bg-background px-0 py-14 sm:py-16 lg:py-20"
     >
-      <div className="mx-auto w-full max-w-[1600px]">
-        <div className="flex items-end justify-between gap-6 px-5 sm:px-8 lg:px-12">
+      <div className="mx-auto w-full max-w-[1600px] px-5 sm:px-8 lg:px-12">
+        <div className="flex items-end justify-between gap-6">
           <h2 id="shop-the-feed-heading" className="text-section">
             Shop the Feed
           </h2>
@@ -118,12 +118,13 @@ export function ShopTheFeed() {
           </a>
         </div>
 
-        <div className="mt-8 flex snap-x snap-mandatory gap-4 overflow-x-auto px-5 pb-2 [scrollbar-width:none] sm:px-8 lg:grid lg:grid-cols-4 lg:gap-6 lg:overflow-visible lg:px-12">
+        <div className="mt-8 flex snap-x snap-mandatory gap-4 overflow-x-auto pb-2 [scrollbar-width:none] lg:grid lg:grid-cols-4 lg:gap-6 lg:overflow-visible">
           {socialFeedItems.map((item, i) => (
             <FeedCard key={item.id} item={item} index={i} />
           ))}
         </div>
       </div>
+
     </section>
   );
 }
