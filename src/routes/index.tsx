@@ -32,7 +32,7 @@ function Index() {
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
-      <main className="pb-14">
+      <main className="w-full max-w-full overflow-x-clip pb-20">
 
         <Hero />
         <InteractiveGiftShowcase />

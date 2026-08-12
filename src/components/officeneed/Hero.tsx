@@ -30,23 +30,26 @@ export function Hero() {
       aria-labelledby="hero-heading"
       className="relative w-full bg-background"
     >
-      <div className="mx-auto grid w-full max-w-[1600px] grid-cols-1 items-center gap-8 px-5 pb-12 pt-10 sm:px-8 lg:min-h-[calc(100svh-80px)] lg:grid-cols-[minmax(0,0.86fr)_minmax(0,1.14fr)] lg:gap-12 lg:px-12 lg:py-10 xl:gap-16">
+      <div className="mx-auto grid w-full max-w-[1600px] grid-cols-1 items-center gap-8 px-4 pb-10 pt-8 sm:px-8 sm:pb-12 sm:pt-10 lg:min-h-[calc(100svh-80px)] lg:grid-cols-[minmax(0,0.86fr)_minmax(0,1.14fr)] lg:gap-12 lg:px-12 lg:py-10 xl:gap-16">
         {/* Copy */}
-        <div className="max-w-[560px] lg:max-w-[640px] lg:pr-4">
+        <div className="min-w-0 max-w-full sm:max-w-[560px] lg:max-w-[640px] lg:pr-4">
           <p className="text-eyebrow text-muted-foreground">CORPORATE PROCUREMENT, SIMPLIFIED</p>
 
-          <h1 id="hero-heading" className="text-display mt-5 whitespace-nowrap">
+          <h1
+            id="hero-heading"
+            className="text-display mt-4 text-[clamp(2rem,9vw,2.75rem)] leading-[1.08] sm:mt-5 sm:text-[clamp(2.5rem,4.2vw,4rem)] sm:leading-none lg:whitespace-nowrap"
+          >
             One Partner.
             <br />
             Every Business Need.
           </h1>
 
-          <p className="text-lede mt-6 max-w-[540px]">
+          <p className="text-lede mt-5 max-w-full sm:mt-6 sm:max-w-[540px]">
             From corporate gifting and office essentials to IT, printing and luxury solutions —
             everything your business needs, sourced and delivered through one trusted partner.
           </p>
 
-          <div className="mt-9 flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+          <div className="mt-7 flex w-full flex-col gap-3 sm:mt-9 sm:flex-row sm:items-center sm:gap-4">
             <a href="#solutions" className="btn-primary w-full sm:w-auto">
               Explore Solutions
             </a>
@@ -57,7 +60,8 @@ export function Hero() {
         </div>
 
         {/* Visual */}
-        <div className="relative w-full">
+        <div className="relative w-full min-w-0 max-w-full">
+
           <div
             ref={trackRef}
             className="flex snap-x snap-mandatory overflow-x-auto scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
