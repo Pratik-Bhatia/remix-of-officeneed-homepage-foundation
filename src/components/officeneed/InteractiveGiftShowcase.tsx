@@ -16,10 +16,6 @@ function SectionHeader() {
         <br />
         Built to Impress.
       </h2>
-      <p className="mx-auto mt-4 max-w-[640px] text-pretty text-sm leading-relaxed text-muted-foreground sm:text-base lg:mx-0">
-        Explore thoughtfully curated corporate gifts — from complete hampers to the
-        individual products inside them.
-      </p>
     </div>
   );
 }
