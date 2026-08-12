@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import { ScanLine, LayoutGrid } from "lucide-react";
 import heroImage from "@/assets/hero-officeneed.jpg";
 
 const SLIDES = [0, 1, 2];
