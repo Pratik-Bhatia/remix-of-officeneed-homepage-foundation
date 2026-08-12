@@ -169,7 +169,7 @@ export function Navbar() {
                   <li key={item}>
                     <a
                       href="#"
-                      className="group flex items-center justify-between rounded-md py-2.5 text-[0.95rem] text-foreground/80 transition-colors duration-200 hover:text-foreground"
+                      className="group flex items-center justify-between rounded-md py-2.5 text-[0.875rem] text-foreground/80 transition-colors duration-200 hover:text-foreground"
                     >
                       <span>{item}</span>
                       <span className="translate-x-[-4px] text-accent opacity-0 transition-all duration-200 group-hover:translate-x-0 group-hover:opacity-100">
@@ -214,7 +214,7 @@ export function Navbar() {
                     >
                       <span
                         className={cn(
-                          "font-display text-lg tracking-tight",
+                          "font-display text-base tracking-tight",
                           cat.featured && "font-semibold",
                         )}
                       >
@@ -234,7 +234,7 @@ export function Navbar() {
                           <li key={item}>
                             <a
                               href="#"
-                              className="flex min-h-12 items-center text-[0.95rem] text-muted-foreground transition-colors hover:text-foreground"
+                              className="flex min-h-12 items-center text-[0.875rem] text-muted-foreground transition-colors hover:text-foreground"
                             >
                               {item}
                             </a>
