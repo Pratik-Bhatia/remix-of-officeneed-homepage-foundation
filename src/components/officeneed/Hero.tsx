@@ -49,7 +49,7 @@ export function Hero() {
             everything your business needs, sourced and delivered through one trusted partner.
           </p>
 
-          <div className="mt-9 flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+          <div className="mt-7 flex w-full flex-col gap-3 sm:mt-9 sm:flex-row sm:items-center sm:gap-4">
             <a href="#solutions" className="btn-primary w-full sm:w-auto">
               Explore Solutions
             </a>
@@ -60,7 +60,8 @@ export function Hero() {
         </div>
 
         {/* Visual */}
-        <div className="relative w-full">
+        <div className="relative w-full min-w-0 max-w-full">
+
           <div
             ref={trackRef}
             className="flex snap-x snap-mandatory overflow-x-auto scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
