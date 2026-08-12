@@ -93,16 +93,20 @@ export function Navbar() {
   return (
     <>
     <header className="sticky top-0 z-50 w-full border-b border-border bg-background">
-      <div className="relative mx-auto flex h-16 w-full max-w-[1600px] items-center justify-between px-4 sm:px-6 lg:h-20 lg:px-12 xl:flex">
-        {/* Mobile menu toggle — left on mobile/tablet, hidden on desktop */}
-        <div className="shrink-0 xl:hidden">
-          <IconButton label="Open menu" onClick={() => setMobileOpen(true)}>
-            <Menu className="size-5 sm:size-[22px]" strokeWidth={1.6} />
+      <div className="mx-auto grid h-16 w-full max-w-[1600px] grid-cols-[1fr_auto_1fr] items-center px-3 sm:px-6 lg:h-20 lg:px-12 xl:flex">
+        {/* Left zone: hamburger on mobile/tablet, hidden on desktop */}
+        <div className="flex justify-start xl:hidden">
+          <IconButton
+            label="Open menu"
+            onClick={() => setMobileOpen(true)}
+            className="size-[26px] md:size-10"
+          >
+            <Menu className="size-5 md:size-[22px]" strokeWidth={1.6} />
           </IconButton>
         </div>
 
-        {/* Logo — absolutely centered on mobile/tablet, left on desktop */}
-        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 shrink-0 xl:static xl:transform-none">
+        {/* Center zone: OfficeNeed logo — viewport-centered on mobile/tablet, left on desktop */}
+        <div className="flex justify-center px-2 md:px-6 xl:justify-start xl:px-0">
           <Logo />
         </div>
 
@@ -131,30 +135,31 @@ export function Navbar() {
           </ul>
         </nav>
 
-        {/* Utility icons */}
-        <div className="flex shrink-0 items-center justify-end gap-0.5">
+        {/* Right zone: utility icons */}
+        <div className="flex items-center justify-end gap-0.5 md:gap-2 xl:gap-0.5">
           <button
             type="button"
             aria-label="Open OfficeNeed Chat"
             title="Chat with OfficeNeed"
             onClick={openChat}
-            className="chat-pulse inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm transition-[transform,box-shadow] duration-200 hover:scale-105 hover:shadow-md sm:size-11"
+            className="chat-pulse inline-flex size-[26px] shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm transition-[transform,box-shadow] duration-200 hover:scale-105 hover:shadow-md md:size-10 xl:size-11"
           >
-            <MessageSquare className="chat-icon-wiggle size-5 sm:size-[22px]" strokeWidth={1.6} />
+            <MessageSquare className="chat-icon-wiggle size-5 md:size-[22px] xl:size-5" strokeWidth={1.6} />
           </button>
-          <IconButton label="Search">
-            <Search className="size-5 sm:size-[22px]" strokeWidth={1.6} />
+          <IconButton label="Search" className="size-[26px] md:size-10 xl:size-11">
+            <Search className="size-5 md:size-[22px] xl:size-5" strokeWidth={1.6} />
           </IconButton>
           <span className="hidden xl:inline-flex">
-            <IconButton label="Account">
-              <User className="size-5 sm:size-[22px]" strokeWidth={1.6} />
+            <IconButton label="Account" className="size-[26px] md:size-10 xl:size-11">
+              <User className="size-5 md:size-[22px] xl:size-5" strokeWidth={1.6} />
             </IconButton>
           </span>
-          <IconButton label="Cart">
-            <ShoppingBag className="size-5 sm:size-[22px]" strokeWidth={1.6} />
+          <IconButton label="Cart" className="size-[26px] md:size-10 xl:size-11">
+            <ShoppingBag className="size-5 md:size-[22px] xl:size-5" strokeWidth={1.6} />
           </IconButton>
         </div>
       </div>
+
 
 
       {/* Mega menu */}
