@@ -11,7 +11,7 @@ function SectionHeader() {
   return (
     <div className="max-w-2xl">
       <p className="text-eyebrow text-muted-foreground">Corporate Gifting</p>
-      <h2 className="mt-4 font-display text-3xl font-semibold tracking-tight text-balance sm:text-4xl lg:text-5xl">
+      <h2 className="text-section mt-4 text-balance">
         Designed to Gift.
         <br />
         Built to Impress.
@@ -395,9 +395,9 @@ export function InteractiveGiftShowcase() {
     <section
       id="corporate-gifting"
       aria-labelledby="corporate-gifting-heading"
-      className="w-full overflow-hidden bg-background py-16 sm:py-20 lg:py-28"
+      className="w-full overflow-hidden bg-background py-14 sm:py-16 lg:py-20"
     >
-      <div className="mx-auto w-full max-w-[1440px] px-5 sm:px-8 lg:px-12">
+      <div className="mx-auto w-full max-w-[1600px] px-5 sm:px-8 lg:px-12">
         <div id="corporate-gifting-heading">
           <SectionHeader />
         </div>

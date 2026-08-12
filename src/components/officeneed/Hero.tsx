@@ -26,58 +26,60 @@ export function Hero() {
   };
 
   return (
-    <section aria-labelledby="hero-heading" className="relative h-[80vh] w-full overflow-hidden bg-background">
-      <div className="h-full overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        <div className="mx-auto flex h-full min-h-0 w-full max-w-[1440px] flex-col px-5 sm:px-8 lg:px-12">
-          {/* Text */}
-          <div className="shrink-0 pt-10 text-center sm:pt-14">
-            <p className="text-sm text-muted-foreground sm:text-base">Corporate Procurement Partner</p>
+    <section
+      aria-labelledby="hero-heading"
+      className="relative w-full bg-background"
+    >
+      <div className="mx-auto grid w-full max-w-[1600px] grid-cols-1 items-center gap-8 px-5 pb-12 pt-10 sm:px-8 lg:min-h-[calc(100svh-80px)] lg:grid-cols-[minmax(0,0.86fr)_minmax(0,1.14fr)] lg:gap-12 lg:px-12 lg:py-10 xl:gap-16">
+        {/* Copy */}
+        <div className="max-w-[560px] lg:max-w-[640px] lg:pr-4">
+          <p className="text-eyebrow text-muted-foreground">Corporate Procurement Partner</p>
 
-            <h1 id="hero-heading" className="text-display mt-4 text-balance">
-              One Vendor.
-              <br />
-              Multiple Solutions.
-            </h1>
+          <h1 id="hero-heading" className="text-display mt-5 whitespace-nowrap">
+            One Vendor.
+            <br />
+            Multiple Solutions.
+          </h1>
 
-            <div className="mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row sm:gap-4">
-              <a
-                href="#solutions"
-                className="inline-flex min-h-12 w-full items-center justify-center rounded-full bg-primary px-8 text-base font-medium text-primary-foreground transition-[transform,opacity] duration-200 hover:opacity-90 active:scale-[0.99] sm:w-auto"
-              >
-                Explore Solutions
-              </a>
-              <a
-                href="#products"
-                className="inline-flex min-h-12 w-full items-center justify-center rounded-full border border-foreground/25 px-8 text-base font-medium text-foreground transition-colors duration-200 hover:border-foreground/50 hover:bg-secondary sm:w-auto"
-              >
-                Shop Products
-              </a>
-            </div>
+          <p className="text-lede mt-6 max-w-[540px]">
+            Corporate procurement made simpler — gifting, stationery, IT, print and luxury,
+            sourced and delivered under a single accountable partner.
+          </p>
+
+          <div className="mt-9 flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+            <a href="#solutions" className="btn-primary w-full sm:w-auto">
+              Explore Solutions
+            </a>
+            <a href="#bestsellers" className="btn-secondary w-full sm:w-auto">
+              Shop Products
+            </a>
           </div>
+        </div>
 
-          {/* Visual carousel */}
+        {/* Visual */}
+        <div className="relative w-full">
           <div
             ref={trackRef}
-            className="mt-6 flex min-h-0 flex-1 snap-x snap-mandatory overflow-x-auto scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            className="flex snap-x snap-mandatory overflow-x-auto scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
           >
             {SLIDES.map((i) => (
-              <div key={i} className="flex h-full w-full shrink-0 snap-center items-center justify-center">
+              <div key={i} className="w-full shrink-0 snap-center">
                 <img
                   src={heroImage}
-                  alt="OfficeNeed branded gift boxes and shopping bags in ivory white with black rope handles."
-                  width={1200}
-                  height={800}
+                  alt="OfficeNeed corporate gifting composition: ivory gift boxes and branded shopping bags."
+                  width={1600}
+                  height={1100}
                   fetchPriority={i === 0 ? "high" : "low"}
                   loading={i === 0 ? "eager" : "lazy"}
                   decoding="async"
-                  sizes="(min-width: 1024px) 70vw, 92vw"
-                  className="h-full w-auto max-w-full object-contain"
+                  sizes="(min-width: 1024px) 58vw, 100vw"
+                  className="h-[46vh] w-full object-contain sm:h-[54vh] lg:h-[min(74vh,720px)]"
                 />
               </div>
             ))}
           </div>
 
-          <div className="mt-4 shrink-0 flex items-center justify-center gap-2.5">
+          <div className="mt-5 flex items-center justify-center gap-2 lg:justify-start lg:pl-2">
             {SLIDES.map((i) => (
               <button
                 key={i}
@@ -85,13 +87,12 @@ export function Hero() {
                 onClick={() => goTo(i)}
                 aria-label={`Go to slide ${i + 1}`}
                 aria-current={active === i}
-                className={`h-2.5 w-2.5 rounded-full transition-colors duration-200 ${
-                  active === i ? "bg-foreground" : "bg-border"
+                className={`h-1.5 rounded-full transition-all duration-300 ${
+                  active === i ? "w-6 bg-foreground" : "w-1.5 bg-foreground/25"
                 }`}
               />
             ))}
           </div>
-
         </div>
       </div>
     </section>
