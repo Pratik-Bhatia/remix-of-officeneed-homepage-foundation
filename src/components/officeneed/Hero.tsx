@@ -33,17 +33,17 @@ export function Hero() {
       <div className="mx-auto grid w-full max-w-[1600px] grid-cols-1 items-center gap-8 px-5 pb-12 pt-10 sm:px-8 lg:min-h-[calc(100svh-80px)] lg:grid-cols-[minmax(0,0.86fr)_minmax(0,1.14fr)] lg:gap-12 lg:px-12 lg:py-10 xl:gap-16">
         {/* Copy */}
         <div className="max-w-[560px] lg:max-w-[640px] lg:pr-4">
-          <p className="text-eyebrow text-muted-foreground">Corporate Procurement Partner</p>
+          <p className="text-eyebrow text-muted-foreground">CORPORATE PROCUREMENT, SIMPLIFIED</p>
 
           <h1 id="hero-heading" className="text-display mt-5 whitespace-nowrap">
-            One Vendor.
+            One Partner.
             <br />
-            Multiple Solutions.
+            Every Business Need.
           </h1>
 
           <p className="text-lede mt-6 max-w-[540px]">
-            Corporate procurement made simpler — gifting, stationery, IT, print and luxury,
-            sourced and delivered under a single accountable partner.
+            From corporate gifting and office essentials to IT, printing and luxury solutions —
+            everything your business needs, sourced and delivered through one trusted partner.
           </p>
 
           <div className="mt-9 flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
