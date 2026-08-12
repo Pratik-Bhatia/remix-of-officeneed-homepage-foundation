@@ -32,7 +32,7 @@ export function Hero() {
     >
       <div className="mx-auto grid w-full max-w-[1600px] grid-cols-1 items-center gap-8 px-5 pb-12 pt-10 sm:px-8 lg:min-h-[calc(100svh-80px)] lg:grid-cols-[minmax(0,0.86fr)_minmax(0,1.14fr)] lg:gap-12 lg:px-12 lg:py-10 xl:gap-16">
         {/* Copy */}
-        <div className="mx-auto w-full max-w-[700px] text-center lg:mx-0 lg:max-w-[640px] lg:pr-4 lg:text-left">
+        <div className="mx-auto w-full max-w-[700px] text-center lg:mx-0 lg:max-w-[680px] lg:pr-2 lg:text-left">
           <p className="text-eyebrow text-muted-foreground">CORPORATE PROCUREMENT, SIMPLIFIED</p>
 
           <h1

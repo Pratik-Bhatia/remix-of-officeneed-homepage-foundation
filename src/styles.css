@@ -193,7 +193,7 @@
 
 @media (min-width: 1024px) {
   .text-display {
-    font-size: clamp(3.25rem, 4.2vw, 4rem);
+    font-size: clamp(3rem, 3.55vw, 3.75rem);
     line-height: 1;
   }
 }
