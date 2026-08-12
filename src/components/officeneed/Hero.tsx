@@ -44,10 +44,6 @@ export function Hero() {
             Every Business Need.
           </h1>
 
-          <p className="text-lede mx-auto mt-6 w-full max-w-[520px] md:max-w-[640px] xl:mx-0 xl:max-w-[560px]">
-            From corporate gifting and office essentials to IT, printing and luxury solutions —
-            everything your business needs, sourced and delivered through one trusted partner.
-          </p>
 
           <div className="mx-auto mt-9 flex w-full max-w-[360px] flex-col items-center gap-3 sm:max-w-none sm:flex-row sm:justify-center sm:gap-4 xl:mx-0 xl:justify-start">
             <a href="#solutions" className="btn-primary w-full sm:w-auto">

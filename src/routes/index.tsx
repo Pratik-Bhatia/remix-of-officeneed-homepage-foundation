@@ -1,7 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Navbar } from "@/components/officeneed/Navbar";
 import { Hero } from "@/components/officeneed/Hero";
-import { InteractiveGiftShowcase } from "@/components/officeneed/InteractiveGiftShowcase";
 import { Bestsellers } from "@/components/officeneed/Bestsellers";
 import { ShopTheFeed } from "@/components/officeneed/ShopTheFeed";
 import { Footer } from "@/components/officeneed/Footer";
@@ -33,9 +32,7 @@ function Index() {
     <div className="min-h-screen bg-background">
       <Navbar />
       <main>
-
         <Hero />
-        <InteractiveGiftShowcase />
         <Bestsellers />
         <ShopTheFeed />
       </main>
