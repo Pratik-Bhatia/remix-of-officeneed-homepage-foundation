@@ -85,16 +85,14 @@ export function Bestsellers() {
     <section
       id="bestsellers"
       aria-labelledby="bestsellers-heading"
-      className="w-full bg-background py-16 sm:py-20 lg:py-28"
+      className="w-full bg-background py-14 sm:py-16 lg:py-20"
     >
-      <div className="mx-auto w-full max-w-[1440px]">
+      <div className="mx-auto w-full max-w-[1600px]">
         <div className="pl-[30px] pr-5 sm:pl-[42px] sm:pr-8 lg:pl-[58px] lg:pr-12">
-          <h2
-            id="bestsellers-heading"
-            className="text-3xl font-semibold tracking-tight sm:text-4xl lg:text-5xl"
-          >
+          <h2 id="bestsellers-heading" className="text-section">
             Bestsellers
           </h2>
+
 
           <div className="mt-6 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 sm:mt-8">
             <div className="-mx-1 flex min-w-0 gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
