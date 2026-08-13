@@ -39,7 +39,7 @@ export function EnquiryDialog({
   trigger,
 }: {
   product: Product;
-  quantity?: number;
+  quantity?: number | undefined;
   trigger: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
