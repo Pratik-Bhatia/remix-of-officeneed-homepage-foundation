@@ -104,6 +104,8 @@ export function Hero() {
               style={{
                 opacity: isActive ? 1 : 0,
                 pointerEvents: isActive ? "auto" : "none",
+                transform: isActive && dx ? `translateX(${dx * 0.25}px)` : undefined,
+                transition: dragging ? "opacity 700ms ease-out" : "opacity 700ms ease-out, transform 300ms ease-out",
               }}
             >
               <h1 id={isActive ? "hero-heading" : undefined} className="text-display">
