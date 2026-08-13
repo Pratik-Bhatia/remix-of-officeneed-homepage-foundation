@@ -10,9 +10,9 @@ import { cn } from "@/lib/utils";
 
 function SectionHeader() {
   return (
-    <div className="mx-auto w-full max-w-2xl text-center lg:mx-0 lg:text-left">
+    <div className="w-full max-w-2xl text-left">
       <p className="text-eyebrow text-muted-foreground">Corporate Gifting</p>
-      <h2 className="text-section mt-4 text-balance">
+      <h2 className="text-section mt-3 text-balance sm:mt-4">
         Designed to Gift.
         <br />
         Built to Impress.
