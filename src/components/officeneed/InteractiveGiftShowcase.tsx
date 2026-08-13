@@ -319,13 +319,10 @@ function HamperCarousel() {
         </div>
       </div>
 
-      <div className="mt-8 sm:mt-10">
-
-
       <div
         ref={scrollerRef}
         onScroll={onScroll}
-        className="-mx-5 flex snap-x snap-mandatory gap-6 overflow-x-auto px-5 pb-4 sm:-mx-8 sm:gap-8 sm:px-8 lg:-mx-12 lg:px-12 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="-mx-5 mt-8 flex snap-x snap-mandatory gap-6 overflow-x-auto px-5 pb-4 sm:-mx-8 sm:mt-10 sm:gap-8 sm:px-8 lg:-mx-12 lg:px-12 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         {giftHampers.map((hamper, i) => (
           <HamperCard
