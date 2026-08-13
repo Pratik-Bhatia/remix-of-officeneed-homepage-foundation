@@ -138,7 +138,7 @@ export function Hero() {
           );
         })}
 
-        <div className="relative z-10 mt-4 flex items-center justify-center gap-2">
+        <div className="absolute bottom-3 left-1/2 z-10 flex -translate-x-1/2 items-center justify-center gap-2">
           {slides.map((s, i) => (
             <button
               key={s.id}
