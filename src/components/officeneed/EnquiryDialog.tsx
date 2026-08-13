@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import type { Product } from "@/lib/products";
+import { submitEnquiry } from "@/lib/enquiries.functions";
 
 export type EnquiryPayload = {
   productSlug: string;
@@ -24,13 +25,11 @@ export type EnquiryPayload = {
   message: string;
 };
 
-/**
- * INTEGRATION POINT — replace this with a real submission (server function,
- * CRM webhook or email service) when a backend is available. The payload
- * already carries the full product context.
- */
-async function submitEnquiry(payload: EnquiryPayload) {
-  console.info("[OfficeNeed] Product enquiry", payload);
+async function submitEnquiryToBackend(payload: EnquiryPayload) {
+  const result = await submitEnquiry({ data: payload });
+  if (!result.ok) {
+    throw new Error(result.error);
+  }
 }
 
 export function EnquiryDialog({
