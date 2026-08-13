@@ -205,80 +205,95 @@ export function Navbar() {
     </header>
 
       {/* Mobile drawer */}
-      {mobileOpen && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label="Menu"
-          className="fixed inset-0 z-50 flex flex-col bg-background xl:hidden"
-        >
-          <div className="flex h-16 items-center justify-between border-b border-border px-4 sm:px-6">
-            <Logo />
-            <IconButton label="Close menu" onClick={() => setMobileOpen(false)}>
-              <X className="size-6" strokeWidth={1.6} />
-            </IconButton>
-          </div>
-
-          <nav aria-label="Mobile" className="flex-1 overflow-y-auto overscroll-contain px-4 pb-10 sm:px-6">
-            <ul className="divide-y divide-border">
-              {navCategories.map((cat) => {
-                const isOpen = expanded === cat.id;
-                return (
-                  <li key={cat.id}>
-                    <button
-                      type="button"
-                      aria-expanded={isOpen}
-                      onClick={() => setExpanded(isOpen ? null : cat.id)}
-                      className="flex min-h-14 w-full items-center justify-between gap-4 py-4 text-left"
-                    >
-                      <span
-                        className={cn(
-                          "font-display text-base tracking-tight",
-                          cat.featured && "font-semibold",
-                        )}
-                      >
-                        {cat.label}
-                      </span>
-                      <ChevronDown
-                        className={cn(
-                          "size-5 shrink-0 text-muted-foreground transition-transform duration-300",
-                          isOpen && "rotate-180",
-                        )}
-                        strokeWidth={1.6}
-                      />
-                    </button>
-                    {isOpen && (
-                      <ul className="pb-4 pl-1">
-                        {cat.items.map((item) => (
-                          <li key={item}>
-                            <Link
-                              to="/products"
-                              search={navItemTarget(cat.id, item)}
-                              onClick={() => setMobileOpen(false)}
-                              className="flex min-h-12 items-center text-[0.875rem] text-muted-foreground transition-colors hover:text-foreground"
-                            >
-                              {item}
-                            </Link>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-
-            <button
-              type="button"
-              aria-label="Account"
-              className="mt-8 flex min-h-12 items-center gap-3 text-sm text-foreground/80"
-            >
-              <User className="size-5" strokeWidth={1.6} />
-              Account
-            </button>
-          </nav>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Menu"
+        aria-hidden={!mobileOpen}
+        className={cn(
+          "fixed inset-0 z-50 flex flex-col bg-background transition-[opacity,transform] duration-[380ms] ease-[cubic-bezier(0.22,1,0.36,1)] xl:hidden",
+          mobileOpen
+            ? "pointer-events-auto translate-x-0 opacity-100"
+            : "pointer-events-none translate-x-full opacity-0",
+        )}
+      >
+        <div className="flex h-16 items-center justify-between border-b border-border px-4 sm:px-6">
+          <Logo />
+          <IconButton label="Close menu" onClick={() => setMobileOpen(false)}>
+            <X className="size-6" strokeWidth={1.6} />
+          </IconButton>
         </div>
-      )}
+
+        <nav aria-label="Mobile" className="flex-1 overflow-y-auto overscroll-contain px-4 pb-10 sm:px-6">
+          <ul className="divide-y divide-border">
+            {navCategories.map((cat, i) => {
+              const isOpen = expanded === cat.id;
+              return (
+                <li
+                  key={cat.id}
+                  className={cn(
+                    "transition-[opacity,transform] duration-[420ms] ease-[cubic-bezier(0.22,1,0.36,1)]",
+                    mobileOpen ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0",
+                  )}
+                  style={{ transitionDelay: mobileOpen ? `${120 + i * 60}ms` : "0ms" }}
+                >
+                  <button
+                    type="button"
+                    aria-expanded={isOpen}
+                    onClick={() => setExpanded(isOpen ? null : cat.id)}
+                    className="flex min-h-14 w-full items-center justify-between gap-4 py-4 text-left"
+                  >
+                    <span
+                      className={cn(
+                        "font-display text-base tracking-tight",
+                        cat.featured && "font-semibold",
+                      )}
+                    >
+                      {cat.label}
+                    </span>
+                    <ChevronDown
+                      className={cn(
+                        "size-5 shrink-0 text-muted-foreground transition-transform duration-300",
+                        isOpen && "rotate-180",
+                      )}
+                      strokeWidth={1.6}
+                    />
+                  </button>
+                  {isOpen && (
+                    <ul className="pb-4 pl-1">
+                      {cat.items.map((item) => (
+                        <li key={item}>
+                          <Link
+                            to="/products"
+                            search={navItemTarget(cat.id, item)}
+                            onClick={() => setMobileOpen(false)}
+                            className="flex min-h-12 items-center text-[0.875rem] text-muted-foreground transition-colors hover:text-foreground"
+                          >
+                            {item}
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+
+          <button
+            type="button"
+            aria-label="Account"
+            className={cn(
+              "mt-8 flex min-h-12 items-center gap-3 text-sm text-foreground/80 transition-[opacity,transform] duration-[420ms] ease-[cubic-bezier(0.22,1,0.36,1)]",
+              mobileOpen ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0",
+            )}
+            style={{ transitionDelay: mobileOpen ? `${120 + navCategories.length * 60}ms` : "0ms" }}
+          >
+            <User className="size-5" strokeWidth={1.6} />
+            Account
+          </button>
+        </nav>
+      </div>
     </>
   );
 }
