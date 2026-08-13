@@ -65,3 +65,46 @@ export const navCategories: NavCategory[] = [
 export const primaryNavCategories: NavCategory[] = navCategories.filter(
   (c) => !c.hiddenFromPrimaryNav,
 );
+
+/**
+ * Destination for a header/footer navigation entry on the /products listing.
+ * `category` maps to the listing's category filter, `sort` to its sort control.
+ */
+export type ProductsLinkTarget = {
+  category?: string;
+  sort?: string;
+};
+
+/** Nav category id -> product listing category filter. */
+export const navCategoryToProductCategory: Record<string, string> = {
+  "officeneed-exclusive": "All Products",
+  "corporate-gifting": "Corporate Gifting",
+  "fragrance-luxury": "Fragrance & Luxury Gifting",
+  "office-stationery": "Office Supplies",
+  "hardware-supplies": "Hardware & IT",
+  "printing-branding": "Printing & Branding",
+};
+
+/** Individual mega-menu / drawer items that need a target other than their category. */
+const navItemOverrides: Record<string, ProductsLinkTarget> = {
+  "Exclusive Products": { category: "All Products", sort: "Featured" },
+  "Featured Exclusives": { category: "All Products", sort: "Featured" },
+  "New Exclusives": { category: "All Products", sort: "Newest" },
+};
+
+/** Resolves the /products search params for a nav item inside a nav category. */
+export function navItemTarget(categoryId: string, item: string): ProductsLinkTarget {
+  const override = navItemOverrides[item];
+  if (override) return override;
+  return { category: navCategoryToProductCategory[categoryId] ?? "All Products" };
+}
+
+/** Footer "Shop" labels -> /products search params. */
+export const footerShopTargets: Record<string, ProductsLinkTarget> = {
+  "Shop All": { category: "All Products" },
+  Bestsellers: { category: "All Products", sort: "Featured" },
+  "Corporate Gifting": { category: "Corporate Gifting" },
+  "Office Stationery": { category: "Office Supplies" },
+  "Hardware Supplies": { category: "Hardware & IT" },
+  "Fragrance & Luxury Gifting": { category: "Fragrance & Luxury Gifting" },
+};
