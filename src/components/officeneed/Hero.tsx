@@ -21,6 +21,15 @@ const slides = [
     image: heroExclusive.url,
     alt: "Officeneed exclusive desk essentials, gift boxes and premium stationery set.",
   },
+  {
+    id: "gifting",
+    heading: "Corporate Gifting",
+    text: "Build lasting business relationships with curated, premium gift sets.",
+    primary: { label: "View Catalogue", href: "#solutions" },
+    secondary: { label: "Plan Your Gifts", href: "#bestsellers" },
+    image: heroExclusive.url, // placeholder — swapped for the Corporate Gifting image once uploaded
+    alt: "Premium corporate gift sets and curated gifting hampers.",
+  },
 ];
 
 export function Hero() {
