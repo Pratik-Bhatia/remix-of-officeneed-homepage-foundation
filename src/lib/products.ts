@@ -429,7 +429,7 @@ export const products: Product[] = [
     price: "₹8,900",
     sku: "ON-FL-5088",
     availability: "Limited stock",
-    images: [img("photo-1615634260167-c8cdede054de"), img("photo-1602874801006-e26c4c5b5e8a")],
+    images: [img("photo-1615634260167-c8cdede054de"), img("photo-1608571423902-eed4a5ad8108")],
     badge: "New",
     featuredRank: 16,
     addedOn: "2026-07-28",
