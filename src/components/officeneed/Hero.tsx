@@ -32,7 +32,7 @@ export function Hero() {
           fetchPriority="high"
           decoding="async"
           sizes="(min-width: 1024px) 90vw, 100vw"
-          className="mt-6 h-auto max-h-[40vh] w-full max-w-[1100px] object-contain sm:mt-8"
+          className="mt-6 min-h-0 w-full max-w-[1100px] flex-1 basis-auto object-contain sm:mt-8 lg:mt-10"
         />
       </div>
     </section>
