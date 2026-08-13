@@ -82,7 +82,7 @@ export const products: Product[] = [
     images: [
       img("photo-1513201099705-a9746e1e201f"),
       img("photo-1607083206968-13611e3d76db"),
-      img("photo-1607083206968-13611e3d76db"),
+      img("photo-1544816155-12df9643f363"),
     ],
     badge: "Featured",
     featuredRank: 1,
@@ -384,7 +384,7 @@ export const products: Product[] = [
     price: "₹6,750",
     sku: "ON-FL-5011",
     availability: "In stock",
-    images: [img("photo-1592945403244-b3fbafd7f539"), img("photo-1592945403244-b3fbafd7f539")],
+    images: [img("photo-1592945403244-b3fbafd7f539"), img("photo-1615634260167-c8cdede054de")],
     badge: "Featured",
     featuredRank: 4,
     addedOn: "2026-06-25",
