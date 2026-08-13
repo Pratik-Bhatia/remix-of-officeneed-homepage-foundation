@@ -19,25 +19,25 @@ const DESCRIPTION =
   "Explore business essentials, gifting solutions, technology, office supplies and more — sourced through one trusted partner.";
 
 type ProductsSearch = {
-  category: (typeof productCategories)[number];
-  sort: ProductSort;
+  category?: (typeof productCategories)[number];
+  sort?: ProductSort;
   q?: string;
 };
 
 export const Route = createFileRoute("/products/")({
   validateSearch: (search: Record<string, unknown>): ProductsSearch => {
-    const rawCategory = String(search.category ?? "");
-    const rawSort = String(search.sort ?? "");
-    const rawQuery = typeof search.q === "string" ? search.q : "";
-    return {
-      category: (productCategories as readonly string[]).includes(rawCategory)
-        ? (rawCategory as (typeof productCategories)[number])
-        : "All Products",
-      sort: (productSortOptions as readonly string[]).includes(rawSort)
-        ? (rawSort as ProductSort)
-        : "Featured",
-      ...(rawQuery ? { q: rawQuery } : {}),
-    };
+    const rawCategory = String(search["category"] ?? "");
+    const rawSort = String(search["sort"] ?? "");
+    const rawQuery = typeof search["q"] === "string" ? (search["q"] as string) : "";
+    const result: ProductsSearch = {};
+    if ((productCategories as readonly string[]).includes(rawCategory)) {
+      result.category = rawCategory as (typeof productCategories)[number];
+    }
+    if ((productSortOptions as readonly string[]).includes(rawSort)) {
+      result.sort = rawSort as ProductSort;
+    }
+    if (rawQuery) result.q = rawQuery;
+    return result;
   },
   head: () => ({
     meta: [
@@ -57,18 +57,23 @@ export const Route = createFileRoute("/products/")({
 });
 
 function ProductsPage() {
-  const { category, sort, q } = Route.useSearch();
-  const navigate = useNavigate({ from: "/products" });
-  const query = q ?? "";
+  const search = Route.useSearch();
+  const category = search.category ?? "All Products";
+  const sort = search.sort ?? "Featured";
+  const navigate = useNavigate({ from: "/products/" });
+  const query = search.q ?? "";
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   const setCategory = (next: (typeof productCategories)[number]) =>
-    navigate({ search: (prev) => ({ ...prev, category: next }), replace: true });
+    navigate({
+      search: (prev: ProductsSearch) => ({ ...prev, category: next }),
+      replace: true,
+    });
   const setSort = (next: ProductSort) =>
-    navigate({ search: (prev) => ({ ...prev, sort: next }), replace: true });
+    navigate({ search: (prev: ProductsSearch) => ({ ...prev, sort: next }), replace: true });
   const setQuery = (next: string) =>
     navigate({
-      search: (prev) => ({ ...prev, q: next || undefined }),
+      search: (prev: ProductsSearch) => ({ ...prev, q: next || undefined }),
       replace: true,
     });
 

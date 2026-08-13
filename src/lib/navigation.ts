@@ -70,13 +70,28 @@ export const primaryNavCategories: NavCategory[] = navCategories.filter(
  * Destination for a header/footer navigation entry on the /products listing.
  * `category` maps to the listing's category filter, `sort` to its sort control.
  */
+export type ProductsCategoryFilter =
+  | "All Products"
+  | "Corporate Gifting"
+  | "Office Supplies"
+  | "Hardware & IT"
+  | "Printing & Branding"
+  | "Fragrance & Luxury Gifting";
+
+export type ProductsSortOption =
+  | "Featured"
+  | "Newest"
+  | "Price: Low to High"
+  | "Price: High to Low"
+  | "Name: A–Z";
+
 export type ProductsLinkTarget = {
-  category?: string;
-  sort?: string;
+  category?: ProductsCategoryFilter;
+  sort?: ProductsSortOption;
 };
 
 /** Nav category id -> product listing category filter. */
-export const navCategoryToProductCategory: Record<string, string> = {
+export const navCategoryToProductCategory: Record<string, ProductsCategoryFilter> = {
   "officeneed-exclusive": "All Products",
   "corporate-gifting": "Corporate Gifting",
   "fragrance-luxury": "Fragrance & Luxury Gifting",
