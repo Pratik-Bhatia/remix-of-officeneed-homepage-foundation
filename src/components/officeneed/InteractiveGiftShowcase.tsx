@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import {
@@ -376,12 +377,13 @@ function SectionCTA() {
         Discover curated gifts and custom gifting solutions for your team, clients and
         business partners.
       </p>
-      <a
-        href="#corporate-gifting"
+      <Link
+        to="/products"
+        search={{ category: "Corporate Gifting" }}
         className="mt-6 inline-flex min-h-11 items-center justify-center rounded-full border border-foreground/20 px-6 text-xs font-medium transition-colors duration-200 hover:border-foreground/40 hover:bg-secondary sm:text-sm"
       >
         Explore Corporate Gifting →
-      </a>
+      </Link>
     </div>
   );
 }
