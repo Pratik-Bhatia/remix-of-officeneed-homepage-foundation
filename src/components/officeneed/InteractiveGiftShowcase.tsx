@@ -294,25 +294,33 @@ function HamperCarousel() {
     null;
 
   return (
-    <div ref={sectionRef} className="mt-12 sm:mt-16">
-      <div className="mb-6 hidden items-center justify-end gap-3 lg:flex">
-        <button
-          type="button"
-          onClick={() => scrollBy(-1)}
-          aria-label="Previous hamper"
-          className="grid size-11 place-items-center rounded-full border border-border transition-colors duration-200 hover:bg-secondary"
-        >
-          <ChevronLeft className="size-4" aria-hidden="true" />
-        </button>
-        <button
-          type="button"
-          onClick={() => scrollBy(1)}
-          aria-label="Next hamper"
-          className="grid size-11 place-items-center rounded-full border border-border transition-colors duration-200 hover:bg-secondary"
-        >
-          <ChevronRight className="size-4" aria-hidden="true" />
-        </button>
+    <div ref={sectionRef}>
+      <div className="flex items-end justify-between gap-6">
+        <div id="corporate-gifting-heading">
+          <SectionHeader />
+        </div>
+        <div className="hidden shrink-0 items-center gap-3 sm:flex">
+          <button
+            type="button"
+            onClick={() => scrollBy(-1)}
+            aria-label="Previous hamper"
+            className="grid size-11 place-items-center rounded-full border border-border transition-colors duration-200 hover:bg-secondary"
+          >
+            <ChevronLeft className="size-4" aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            onClick={() => scrollBy(1)}
+            aria-label="Next hamper"
+            className="grid size-11 place-items-center rounded-full border border-border transition-colors duration-200 hover:bg-secondary"
+          >
+            <ChevronRight className="size-4" aria-hidden="true" />
+          </button>
+        </div>
       </div>
+
+      <div className="mt-8 sm:mt-10">
+
 
       <div
         ref={scrollerRef}
