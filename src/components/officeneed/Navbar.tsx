@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { Menu, MessageSquare, Search, ShoppingBag, User, X, ChevronDown } from "lucide-react";
 import logoUrl from "@/assets/officeneed-logo.png";
-import { primaryNavCategories as navCategories } from "@/lib/navigation";
+import { primaryNavCategories as navCategories, navItemTarget } from "@/lib/navigation";
 import { cn } from "@/lib/utils";
 
 function Logo({ className }: { className?: string }) {
@@ -184,15 +184,17 @@ export function Navbar() {
               <ul className="grid grid-cols-2 gap-x-10 gap-y-1 xl:grid-cols-3">
                 {active.items.map((item) => (
                   <li key={item}>
-                    <a
-                      href="#"
+                    <Link
+                      to="/products"
+                      search={navItemTarget(active.id, item)}
+                      onClick={() => setOpenId(null)}
                       className="group flex items-center justify-between rounded-md py-2.5 text-[0.875rem] text-foreground/80 transition-colors duration-200 hover:text-foreground"
                     >
                       <span>{item}</span>
                       <span className="translate-x-[-4px] text-accent opacity-0 transition-all duration-200 group-hover:translate-x-0 group-hover:opacity-100">
                         →
                       </span>
-                    </a>
+                    </Link>
                   </li>
                 ))}
               </ul>
@@ -249,12 +251,14 @@ export function Navbar() {
                       <ul className="pb-4 pl-1">
                         {cat.items.map((item) => (
                           <li key={item}>
-                            <a
-                              href="#"
+                            <Link
+                              to="/products"
+                              search={navItemTarget(cat.id, item)}
+                              onClick={() => setMobileOpen(false)}
                               className="flex min-h-12 items-center text-[0.875rem] text-muted-foreground transition-colors hover:text-foreground"
                             >
                               {item}
-                            </a>
+                            </Link>
                           </li>
                         ))}
                       </ul>
@@ -264,13 +268,14 @@ export function Navbar() {
               })}
             </ul>
 
-            <a
-              href="#"
+            <button
+              type="button"
+              aria-label="Account"
               className="mt-8 flex min-h-12 items-center gap-3 text-sm text-foreground/80"
             >
               <User className="size-5" strokeWidth={1.6} />
               Account
-            </a>
+            </button>
           </nav>
         </div>
       )}

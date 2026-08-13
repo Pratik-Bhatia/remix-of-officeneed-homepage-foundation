@@ -39,7 +39,7 @@ export const bestsellerProducts: BestsellerProduct[] = [
     price: "₹4,999",
     bestseller: true,
     shopifyHandle: "signature-executive-gift-hamper",
-    productUrl: "#corporate-gifting",
+    productUrl: "/products/signature-executive-gift-hamper",
   },
   {
     id: "bs-insulated-bottle",
@@ -50,7 +50,7 @@ export const bestsellerProducts: BestsellerProduct[] = [
     price: "₹1,299",
     bestseller: true,
     shopifyHandle: "matte-insulated-steel-bottle",
-    productUrl: "#corporate-gifting",
+    productUrl: "/products/matte-insulated-steel-bottle",
   },
   {
     id: "bs-leather-organiser",
@@ -61,7 +61,7 @@ export const bestsellerProducts: BestsellerProduct[] = [
     price: "₹3,450",
     bestseller: false,
     shopifyHandle: "leather-document-organiser",
-    productUrl: "#corporate-gifting",
+    productUrl: "/products/leather-document-organiser",
   },
   {
     id: "bs-hardbound-notebook",
@@ -72,7 +72,7 @@ export const bestsellerProducts: BestsellerProduct[] = [
     price: "₹899",
     bestseller: true,
     shopifyHandle: "hardbound-executive-notebook",
-    productUrl: "#corporate-gifting",
+    productUrl: "/products/hardbound-executive-notebook",
   },
   {
     id: "bs-rollerball-pen",
@@ -83,7 +83,7 @@ export const bestsellerProducts: BestsellerProduct[] = [
     price: "₹1,150",
     bestseller: true,
     shopifyHandle: "brushed-metal-rollerball-pen",
-    productUrl: "#corporate-gifting",
+    productUrl: "/products/brushed-metal-rollerball-pen",
   },
   {
     id: "bs-desk-set",
@@ -94,7 +94,7 @@ export const bestsellerProducts: BestsellerProduct[] = [
     price: "₹2,250",
     bestseller: false,
     shopifyHandle: "minimal-desk-accessory-set",
-    productUrl: "#corporate-gifting",
+    productUrl: "/products/minimal-desk-accessory-set",
   },
   {
     id: "bs-wireless-mouse",
@@ -105,7 +105,7 @@ export const bestsellerProducts: BestsellerProduct[] = [
     price: "₹1,799",
     bestseller: true,
     shopifyHandle: "silent-wireless-mouse",
-    productUrl: "#corporate-gifting",
+    productUrl: "/products/silent-wireless-mouse",
   },
   {
     id: "bs-mech-keyboard",
@@ -116,7 +116,7 @@ export const bestsellerProducts: BestsellerProduct[] = [
     price: "₹4,299",
     bestseller: false,
     shopifyHandle: "low-profile-wireless-keyboard",
-    productUrl: "#corporate-gifting",
+    productUrl: "/products/low-profile-wireless-keyboard",
   },
   {
     id: "bs-desk-printer",
@@ -127,7 +127,7 @@ export const bestsellerProducts: BestsellerProduct[] = [
     price: "₹12,499",
     bestseller: true,
     shopifyHandle: "compact-workgroup-printer",
-    productUrl: "#corporate-gifting",
+    productUrl: "/products/compact-workgroup-printer",
   },
   {
     id: "bs-eastern-perfume",
@@ -138,7 +138,7 @@ export const bestsellerProducts: BestsellerProduct[] = [
     price: "₹6,750",
     bestseller: true,
     shopifyHandle: "eastern-oud-perfume-100ml",
-    productUrl: "#corporate-gifting",
+    productUrl: "/products/eastern-oud-perfume-100ml",
   },
   {
     id: "bs-western-perfume",
@@ -149,7 +149,7 @@ export const bestsellerProducts: BestsellerProduct[] = [
     price: "₹5,499",
     bestseller: false,
     shopifyHandle: "western-signature-eau-de-parfum",
-    productUrl: "#corporate-gifting",
+    productUrl: "/products/western-signature-eau-de-parfum",
   },
   {
     id: "bs-luxury-set",
@@ -160,6 +160,6 @@ export const bestsellerProducts: BestsellerProduct[] = [
     price: "₹8,900",
     bestseller: true,
     shopifyHandle: "luxury-fragrance-gift-set",
-    productUrl: "#corporate-gifting",
+    productUrl: "/products/luxury-fragrance-gift-set",
   },
 ];

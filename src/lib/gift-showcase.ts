@@ -93,7 +93,7 @@ export const giftHampers: GiftHamper[] = [
     imageAlt:
       "OfficeNeed signature corporate gift hamper: an ivory gift box with black ribbon surrounded by a notebook, metal pen, leather card holder, insulated bottle, fragrance and a wireless mouse.",
     shopifyCollectionHandle: "signature-hamper",
-    href: "#corporate-gifting",
+    href: "/products?category=Corporate+Gifting",
     products: [
       {
         productId: "placeholder-notebook",
@@ -104,7 +104,7 @@ export const giftHampers: GiftHamper[] = [
         price: PRICE,
         availability: "In stock",
         image: THUMB.notebook,
-        href: "#corporate-gifting",
+        href: "/products?category=Corporate+Gifting",
         position: { x: 13, y: 52 },
       },
       {
@@ -116,7 +116,7 @@ export const giftHampers: GiftHamper[] = [
         price: PRICE,
         availability: "In stock",
         image: THUMB.pen,
-        href: "#corporate-gifting",
+        href: "/products?category=Corporate+Gifting",
         position: { x: 21, y: 71 },
       },
       {
@@ -128,7 +128,7 @@ export const giftHampers: GiftHamper[] = [
         price: PRICE,
         availability: "Made to order",
         image: THUMB.wallet,
-        href: "#corporate-gifting",
+        href: "/products?category=Corporate+Gifting",
         position: { x: 24, y: 86 },
       },
       {
@@ -140,7 +140,7 @@ export const giftHampers: GiftHamper[] = [
         price: PRICE,
         availability: "In stock",
         image: THUMB.bottle,
-        href: "#corporate-gifting",
+        href: "/products?category=Corporate+Gifting",
         position: { x: 80, y: 38 },
       },
       {
@@ -152,7 +152,7 @@ export const giftHampers: GiftHamper[] = [
         price: PRICE,
         availability: "Limited stock",
         image: THUMB.fragrance,
-        href: "#corporate-gifting",
+        href: "/products?category=Corporate+Gifting",
         position: { x: 91, y: 56 },
       },
       {
@@ -164,7 +164,7 @@ export const giftHampers: GiftHamper[] = [
         price: PRICE,
         availability: "In stock",
         image: THUMB.mouse,
-        href: "#corporate-gifting",
+        href: "/products?category=Corporate+Gifting",
         position: { x: 76, y: 84 },
       },
     ],
@@ -177,7 +177,7 @@ export const giftHampers: GiftHamper[] = [
     imageAlt:
       "Executive onboarding gift kit: an ivory gift box with a black notebook, gold-trim pen and dark chocolate bar, beside a scented candle, leather passport holder, matte black bottle and wireless earbuds.",
     shopifyCollectionHandle: "executive-onboarding-kit",
-    href: "#corporate-gifting",
+    href: "/products?category=Corporate+Gifting",
     products: [
       {
         productId: "placeholder-onboarding-candle",
@@ -188,7 +188,7 @@ export const giftHampers: GiftHamper[] = [
         price: PRICE,
         availability: "In stock",
         image: THUMB.candle,
-        href: "#corporate-gifting",
+        href: "/products?category=Corporate+Gifting",
         position: { x: 14, y: 25 },
       },
       {
@@ -200,7 +200,7 @@ export const giftHampers: GiftHamper[] = [
         price: PRICE,
         availability: "In stock",
         image: THUMB.notebook,
-        href: "#corporate-gifting",
+        href: "/products?category=Corporate+Gifting",
         position: { x: 39, y: 55 },
       },
       {
@@ -212,7 +212,7 @@ export const giftHampers: GiftHamper[] = [
         price: PRICE,
         availability: "In stock",
         image: THUMB.pen,
-        href: "#corporate-gifting",
+        href: "/products?category=Corporate+Gifting",
         position: { x: 52, y: 50 },
       },
       {
@@ -224,7 +224,7 @@ export const giftHampers: GiftHamper[] = [
         price: PRICE,
         availability: "In stock",
         image: THUMB.chocolate,
-        href: "#corporate-gifting",
+        href: "/products?category=Corporate+Gifting",
         position: { x: 63, y: 48 },
       },
       {
@@ -236,7 +236,7 @@ export const giftHampers: GiftHamper[] = [
         price: PRICE,
         availability: "Made to order",
         image: THUMB.passport,
-        href: "#corporate-gifting",
+        href: "/products?category=Corporate+Gifting",
         position: { x: 19, y: 78 },
       },
       {
@@ -248,7 +248,7 @@ export const giftHampers: GiftHamper[] = [
         price: PRICE,
         availability: "In stock",
         image: THUMB.bottle,
-        href: "#corporate-gifting",
+        href: "/products?category=Corporate+Gifting",
         position: { x: 83, y: 32 },
       },
       {
@@ -260,7 +260,7 @@ export const giftHampers: GiftHamper[] = [
         price: PRICE,
         availability: "Limited stock",
         image: THUMB.earbuds,
-        href: "#corporate-gifting",
+        href: "/products?category=Corporate+Gifting",
         position: { x: 70, y: 89 },
       },
     ],
@@ -273,7 +273,7 @@ export const giftHampers: GiftHamper[] = [
     imageAlt:
       "Festive luxury gift hamper: a woven tray with green tea canister, sandalwood candle and diffuser, beside a crystal perfume flacon, brass lotus tea light holder, assorted chocolates and a satin pouch of dry fruits.",
     shopifyCollectionHandle: "festive-luxury-hamper",
-    href: "#corporate-gifting",
+    href: "/products?category=Corporate+Gifting",
     products: [
       {
         productId: "placeholder-festive-perfume",
@@ -284,7 +284,7 @@ export const giftHampers: GiftHamper[] = [
         price: PRICE,
         availability: "Limited stock",
         image: THUMB.fragrance,
-        href: "#corporate-gifting",
+        href: "/products?category=Corporate+Gifting",
         position: { x: 14, y: 33 },
       },
       {
@@ -296,7 +296,7 @@ export const giftHampers: GiftHamper[] = [
         price: PRICE,
         availability: "In stock",
         image: THUMB.tea,
-        href: "#corporate-gifting",
+        href: "/products?category=Corporate+Gifting",
         position: { x: 39, y: 44 },
       },
       {
@@ -308,7 +308,7 @@ export const giftHampers: GiftHamper[] = [
         price: PRICE,
         availability: "In stock",
         image: THUMB.candle,
-        href: "#corporate-gifting",
+        href: "/products?category=Corporate+Gifting",
         position: { x: 58, y: 46 },
       },
       {
@@ -320,7 +320,7 @@ export const giftHampers: GiftHamper[] = [
         price: PRICE,
         availability: "In stock",
         image: THUMB.candle,
-        href: "#corporate-gifting",
+        href: "/products?category=Corporate+Gifting",
         position: { x: 56, y: 67 },
       },
       {
@@ -332,7 +332,7 @@ export const giftHampers: GiftHamper[] = [
         price: PRICE,
         availability: "In stock",
         image: THUMB.diya,
-        href: "#corporate-gifting",
+        href: "/products?category=Corporate+Gifting",
         position: { x: 12, y: 75 },
       },
       {
@@ -344,7 +344,7 @@ export const giftHampers: GiftHamper[] = [
         price: PRICE,
         availability: "In stock",
         image: THUMB.chocolate,
-        href: "#corporate-gifting",
+        href: "/products?category=Corporate+Gifting",
         position: { x: 86, y: 20 },
       },
       {
@@ -356,7 +356,7 @@ export const giftHampers: GiftHamper[] = [
         price: PRICE,
         availability: "In stock",
         image: THUMB.nuts,
-        href: "#corporate-gifting",
+        href: "/products?category=Corporate+Gifting",
         position: { x: 85, y: 72 },
       },
     ],
@@ -369,7 +369,7 @@ export const giftHampers: GiftHamper[] = [
     imageAlt:
       "Tech and desk essentials gift set: a matte black power bank, wireless charging pad, over-ear headphones, braided USB-C cable and a mechanical keyboard on a warm off-white surface.",
     shopifyCollectionHandle: "tech-desk-essentials",
-    href: "#corporate-gifting",
+    href: "/products?category=Corporate+Gifting",
     products: [
       {
         productId: "placeholder-tech-powerbank",
@@ -380,7 +380,7 @@ export const giftHampers: GiftHamper[] = [
         price: PRICE,
         availability: "In stock",
         image: THUMB.powerbank,
-        href: "#corporate-gifting",
+        href: "/products?category=Corporate+Gifting",
         position: { x: 19, y: 29 },
       },
       {
@@ -392,7 +392,7 @@ export const giftHampers: GiftHamper[] = [
         price: PRICE,
         availability: "In stock",
         image: THUMB.charger,
-        href: "#corporate-gifting",
+        href: "/products?category=Corporate+Gifting",
         position: { x: 44, y: 53 },
       },
       {
@@ -404,7 +404,7 @@ export const giftHampers: GiftHamper[] = [
         price: PRICE,
         availability: "Limited stock",
         image: THUMB.headphones,
-        href: "#corporate-gifting",
+        href: "/products?category=Corporate+Gifting",
         position: { x: 76, y: 26 },
       },
       {
@@ -416,7 +416,7 @@ export const giftHampers: GiftHamper[] = [
         price: PRICE,
         availability: "In stock",
         image: THUMB.cable,
-        href: "#corporate-gifting",
+        href: "/products?category=Corporate+Gifting",
         position: { x: 22, y: 77 },
       },
       {
@@ -428,7 +428,7 @@ export const giftHampers: GiftHamper[] = [
         price: PRICE,
         availability: "Made to order",
         image: THUMB.keyboard,
-        href: "#corporate-gifting",
+        href: "/products?category=Corporate+Gifting",
         position: { x: 82, y: 82 },
       },
     ],
