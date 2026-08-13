@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import type { Product } from "@/lib/products";
+import { submitEnquiry } from "@/lib/enquiries.functions";
 
 export type EnquiryPayload = {
   productSlug: string;
@@ -24,13 +25,11 @@ export type EnquiryPayload = {
   message: string;
 };
 
-/**
- * INTEGRATION POINT — replace this with a real submission (server function,
- * CRM webhook or email service) when a backend is available. The payload
- * already carries the full product context.
- */
-async function submitEnquiry(payload: EnquiryPayload) {
-  console.info("[OfficeNeed] Product enquiry", payload);
+async function submitEnquiryToBackend(payload: EnquiryPayload) {
+  const result = await submitEnquiry({ data: payload });
+  if (!result.ok) {
+    throw new Error(result.error);
+  }
 }
 
 export function EnquiryDialog({
@@ -44,21 +43,31 @@ export function EnquiryDialog({
 }) {
   const [open, setOpen] = useState(false);
   const [sent, setSent] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const data = new FormData(e.currentTarget);
-    await submitEnquiry({
-      productSlug: product.slug,
-      productName: product.name,
-      category: product.category,
-      quantity,
-      name: String(data.get("name") ?? ""),
-      company: String(data.get("company") ?? ""),
-      email: String(data.get("email") ?? ""),
-      message: String(data.get("message") ?? ""),
-    });
-    setSent(true);
+    setSubmitting(true);
+    setError(null);
+    try {
+      await submitEnquiryToBackend({
+        productSlug: product.slug,
+        productName: product.name,
+        category: product.category,
+        quantity,
+        name: String(data.get("name") ?? ""),
+        company: String(data.get("company") ?? ""),
+        email: String(data.get("email") ?? ""),
+        message: String(data.get("message") ?? ""),
+      });
+      setSent(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -116,8 +125,13 @@ export function EnquiryDialog({
                 placeholder={`Quantities, customization and delivery needs for ${product.name}`}
               />
             </div>
-            <Button type="submit" className="w-full sm:w-auto">
-              Send Enquiry
+            {error && (
+              <p className="text-sm text-destructive" role="alert">
+                {error}
+              </p>
+            )}
+            <Button type="submit" className="w-full sm:w-auto" disabled={submitting}>
+              {submitting ? "Sending…" : "Send Enquiry"}
             </Button>
           </form>
         )}
