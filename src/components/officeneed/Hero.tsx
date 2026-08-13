@@ -43,8 +43,6 @@ export function Hero() {
     return () => clearInterval(id);
   }, []);
 
-  const slide = slides[active]!;
-
   return (
     <section
       aria-labelledby="hero-heading"
