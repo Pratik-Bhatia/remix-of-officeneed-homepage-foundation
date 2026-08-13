@@ -43,21 +43,31 @@ export function EnquiryDialog({
 }) {
   const [open, setOpen] = useState(false);
   const [sent, setSent] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const data = new FormData(e.currentTarget);
-    await submitEnquiry({
-      productSlug: product.slug,
-      productName: product.name,
-      category: product.category,
-      quantity,
-      name: String(data.get("name") ?? ""),
-      company: String(data.get("company") ?? ""),
-      email: String(data.get("email") ?? ""),
-      message: String(data.get("message") ?? ""),
-    });
-    setSent(true);
+    setSubmitting(true);
+    setError(null);
+    try {
+      await submitEnquiryToBackend({
+        productSlug: product.slug,
+        productName: product.name,
+        category: product.category,
+        quantity,
+        name: String(data.get("name") ?? ""),
+        company: String(data.get("company") ?? ""),
+        email: String(data.get("email") ?? ""),
+        message: String(data.get("message") ?? ""),
+      });
+      setSent(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
