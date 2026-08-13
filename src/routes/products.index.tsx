@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { Search, SlidersHorizontal } from "lucide-react";
 import { Navbar } from "@/components/officeneed/Navbar";
 import { Footer } from "@/components/officeneed/Footer";
@@ -18,7 +18,27 @@ const TITLE = "Products — OfficeNeed";
 const DESCRIPTION =
   "Explore business essentials, gifting solutions, technology, office supplies and more — sourced through one trusted partner.";
 
+type ProductsSearch = {
+  category: (typeof productCategories)[number];
+  sort: ProductSort;
+  q?: string;
+};
+
 export const Route = createFileRoute("/products/")({
+  validateSearch: (search: Record<string, unknown>): ProductsSearch => {
+    const rawCategory = String(search.category ?? "");
+    const rawSort = String(search.sort ?? "");
+    const rawQuery = typeof search.q === "string" ? search.q : "";
+    return {
+      category: (productCategories as readonly string[]).includes(rawCategory)
+        ? (rawCategory as (typeof productCategories)[number])
+        : "All Products",
+      sort: (productSortOptions as readonly string[]).includes(rawSort)
+        ? (rawSort as ProductSort)
+        : "Featured",
+      ...(rawQuery ? { q: rawQuery } : {}),
+    };
+  },
   head: () => ({
     meta: [
       { title: TITLE },
@@ -37,10 +57,20 @@ export const Route = createFileRoute("/products/")({
 });
 
 function ProductsPage() {
-  const [category, setCategory] = useState<(typeof productCategories)[number]>("All Products");
-  const [query, setQuery] = useState("");
-  const [sort, setSort] = useState<ProductSort>("Featured");
+  const { category, sort, q } = Route.useSearch();
+  const navigate = useNavigate({ from: "/products" });
+  const query = q ?? "";
   const [filtersOpen, setFiltersOpen] = useState(false);
+
+  const setCategory = (next: (typeof productCategories)[number]) =>
+    navigate({ search: (prev) => ({ ...prev, category: next }), replace: true });
+  const setSort = (next: ProductSort) =>
+    navigate({ search: (prev) => ({ ...prev, sort: next }), replace: true });
+  const setQuery = (next: string) =>
+    navigate({
+      search: (prev) => ({ ...prev, q: next || undefined }),
+      replace: true,
+    });
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
