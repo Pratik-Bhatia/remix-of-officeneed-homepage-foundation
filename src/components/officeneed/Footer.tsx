@@ -247,7 +247,8 @@ export function Footer() {
                 {shopLinks.map((label) => (
                   <li key={label}>
                     <Link
-                      to="/"
+                      to="/products"
+                      search={footerShopTargets[label] ?? { category: "All Products" }}
                       className="text-xs text-background/80 transition-colors hover:text-background sm:text-sm"
                     >
                       {label}
