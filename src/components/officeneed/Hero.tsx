@@ -1,10 +1,12 @@
+import heroPerfumes from "@/assets/hero-perfumes.png.asset.json";
+
 export function Hero() {
   return (
     <section
       aria-labelledby="hero-heading"
       className="relative w-full overflow-x-clip bg-background"
     >
-      <div className="mx-auto flex w-full max-w-[1600px] flex-col items-center px-5 pb-24 pt-24 text-center sm:px-8 lg:px-12">
+      <div className="mx-auto flex w-full max-w-[1400px] flex-col items-center px-5 pb-12 pt-14 text-center sm:px-8 sm:pt-20 lg:px-12">
         <h1 id="hero-heading" className="text-display">
           Signature Scents
         </h1>
@@ -21,6 +23,17 @@ export function Hero() {
             Shop Perfumes
           </a>
         </div>
+
+        <img
+          src={heroPerfumes.url}
+          alt="Luxury designer perfume bottles and gift boxes arranged with flowers and botanicals."
+          width={1366}
+          height={768}
+          fetchPriority="high"
+          decoding="async"
+          sizes="(min-width: 1024px) 90vw, 100vw"
+          className="mt-10 h-auto w-full max-w-[1100px] object-contain sm:mt-12"
+        />
       </div>
     </section>
   );
