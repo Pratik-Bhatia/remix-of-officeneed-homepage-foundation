@@ -50,35 +50,49 @@ export function Hero() {
       aria-labelledby="hero-heading"
       className="relative w-full overflow-x-clip bg-background"
     >
-      <div className="mx-auto flex min-h-[min(78svh,520px)] w-full max-w-[1400px] flex-col items-center justify-center px-5 pb-8 pt-8 text-center sm:min-h-[600px] sm:px-8 lg:h-[80vh] lg:min-h-[620px] lg:px-12 lg:pt-10">
-        <h1 id="hero-heading" className="text-display">
-          {slide.heading}
-        </h1>
+      <div className="relative mx-auto flex min-h-[min(78svh,520px)] w-full max-w-[1400px] flex-col items-center justify-center px-5 pb-8 pt-8 text-center sm:min-h-[600px] sm:px-8 lg:h-[80vh] lg:min-h-[620px] lg:px-12 lg:pt-10">
+        {slides.map((s, i) => {
+          const isActive = i === active;
+          return (
+            <div
+              key={s.id}
+              aria-hidden={!isActive}
+              className="absolute inset-0 flex flex-col items-center justify-center px-5 pb-8 pt-8 text-center transition-opacity duration-700 ease-out sm:px-8 lg:px-12 lg:pt-10"
+              style={{
+                opacity: isActive ? 1 : 0,
+                pointerEvents: isActive ? "auto" : "none",
+              }}
+            >
+              <h1 id={isActive ? "hero-heading" : undefined} className="text-display">
+                {s.heading}
+              </h1>
 
-        <p className="text-lede mt-4 max-w-[46ch] sm:mt-5">{slide.text}</p>
+              <p className="text-lede mt-4 max-w-[46ch] sm:mt-5">{s.text}</p>
 
-        <div className="mt-6 flex w-full max-w-[360px] flex-col items-center gap-3 sm:mt-8 sm:max-w-none sm:flex-row sm:justify-center sm:gap-4">
-          <a href={slide.primary.href} className="btn-primary w-full rounded-full sm:w-auto">
-            {slide.primary.label}
-          </a>
-          <a href={slide.secondary.href} className="btn-secondary w-full rounded-full sm:w-auto">
-            {slide.secondary.label}
-          </a>
-        </div>
+              <div className="mt-6 flex w-full max-w-[360px] flex-col items-center gap-3 sm:mt-8 sm:max-w-none sm:flex-row sm:justify-center sm:gap-4">
+                <a href={s.primary.href} className="btn-primary w-full rounded-full sm:w-auto">
+                  {s.primary.label}
+                </a>
+                <a href={s.secondary.href} className="btn-secondary w-full rounded-full sm:w-auto">
+                  {s.secondary.label}
+                </a>
+              </div>
 
-        <img
-          key={slide.id}
-          src={slide.image}
-          alt={slide.alt}
-          width={1366}
-          height={768}
-          fetchPriority="high"
-          decoding="async"
-          sizes="(min-width: 1024px) 90vw, 100vw"
-          className="mt-6 min-h-0 w-full max-w-[1100px] flex-1 basis-auto object-contain sm:mt-8 lg:mt-10"
-        />
+              <img
+                src={s.image}
+                alt={s.alt}
+                width={1366}
+                height={768}
+                fetchPriority="high"
+                decoding="async"
+                sizes="(min-width: 1024px) 90vw, 100vw"
+                className="mt-6 min-h-0 w-full max-w-[1100px] flex-1 basis-auto object-contain sm:mt-8 lg:mt-10"
+              />
+            </div>
+          );
+        })}
 
-        <div className="mt-4 flex items-center justify-center gap-2">
+        <div className="relative z-10 mt-4 flex items-center justify-center gap-2">
           {slides.map((s, i) => (
             <button
               key={s.id}
