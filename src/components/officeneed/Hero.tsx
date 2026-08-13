@@ -6,16 +6,16 @@ export function Hero() {
       aria-labelledby="hero-heading"
       className="relative w-full overflow-x-clip bg-background"
     >
-      <div className="mx-auto flex h-[80vh] w-full max-w-[1400px] flex-col items-center justify-center px-5 pb-8 pt-10 text-center sm:px-8 lg:px-12">
+      <div className="mx-auto flex min-h-[560px] w-full max-w-[1400px] flex-col items-center justify-center px-5 pb-8 pt-8 text-center sm:min-h-[600px] sm:px-8 lg:h-[80vh] lg:min-h-[620px] lg:px-12 lg:pt-10">
         <h1 id="hero-heading" className="text-display">
           Signature Scents
         </h1>
 
-        <p className="text-lede mt-5 max-w-[46ch]">
+        <p className="text-lede mt-4 max-w-[46ch] sm:mt-5">
           Elevate your professional presence with our premium fragrance collection.
         </p>
 
-        <div className="mt-8 flex w-full max-w-[360px] flex-col items-center gap-3 sm:max-w-none sm:flex-row sm:justify-center sm:gap-4">
+        <div className="mt-6 flex w-full max-w-[360px] flex-col items-center gap-3 sm:mt-8 sm:max-w-none sm:flex-row sm:justify-center sm:gap-4">
           <a href="#solutions" className="btn-primary w-full rounded-full sm:w-auto">
             Discover Collection
           </a>
