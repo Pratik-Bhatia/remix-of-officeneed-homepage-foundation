@@ -17,7 +17,7 @@ export type EnquiryPayload = {
   productSlug: string;
   productName: string;
   category: string;
-  quantity?: number;
+  quantity?: number | undefined;
   name: string;
   company: string;
   email: string;
