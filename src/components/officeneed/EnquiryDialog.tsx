@@ -125,8 +125,13 @@ export function EnquiryDialog({
                 placeholder={`Quantities, customization and delivery needs for ${product.name}`}
               />
             </div>
-            <Button type="submit" className="w-full sm:w-auto">
-              Send Enquiry
+            {error && (
+              <p className="text-sm text-destructive" role="alert">
+                {error}
+              </p>
+            )}
+            <Button type="submit" className="w-full sm:w-auto" disabled={submitting}>
+              {submitting ? "Sending…" : "Send Enquiry"}
             </Button>
           </form>
         )}
