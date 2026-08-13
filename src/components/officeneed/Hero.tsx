@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 const heroPerfumes = { url: "/hero/hero-perfumes.webp" };
 const heroExclusive = { url: "/hero/officeneed-exclusive-set-v2.webp" };
 const heroGifting = { url: "/hero/corporate-gifting.webp" };
+const heroAI = { url: "/hero/ai-assistant.webp" };
 
 
 const slides = [
