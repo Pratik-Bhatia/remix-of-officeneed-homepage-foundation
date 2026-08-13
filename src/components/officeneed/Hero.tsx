@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import heroPerfumes from "@/assets/hero-perfumes.png.asset.json";
 import heroExclusive from "@/assets/officeneed-exclusive-set-v2.png.asset.json";
+import heroGifting from "@/assets/corporate-gifting.png.asset.json";
 
 const slides = [
   {
@@ -27,8 +28,8 @@ const slides = [
     text: "Build lasting business relationships with curated, premium gift sets.",
     primary: { label: "View Catalogue", href: "#solutions" },
     secondary: { label: "Plan Your Gifts", href: "#bestsellers" },
-    image: heroExclusive.url, // placeholder — swapped for the Corporate Gifting image once uploaded
-    alt: "Premium corporate gift sets and curated gifting hampers.",
+    image: heroGifting.url,
+    alt: "Curated Officeneed corporate gift hamper with laptop bag, notebook, flask, mug, pen, candle, plant and thank you card.",
   },
 ];
 
