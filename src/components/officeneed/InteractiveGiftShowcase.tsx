@@ -352,7 +352,7 @@ function HamperCarousel() {
         ))}
       </div>
 
-      <p className="mt-5 text-center text-xs text-muted-foreground">
+      <p className="mt-4 text-center text-xs text-muted-foreground">
         Hover or tap a marker to explore the products.
       </p>
 
@@ -374,7 +374,7 @@ function HamperCarousel() {
 
 function SectionCTA() {
   return (
-    <div className="mx-auto mt-14 max-w-xl border-t border-border pt-10 text-center sm:mt-16">
+    <div className="mx-auto mt-12 max-w-xl border-t border-border pt-8 text-center sm:mt-14 sm:pt-10">
       <h3 className="font-display text-lg font-semibold tracking-tight">
         Explore Corporate Gifting
       </h3>
@@ -401,9 +401,6 @@ export function InteractiveGiftShowcase() {
       className="w-full overflow-hidden bg-background py-14 sm:py-16 lg:py-20"
     >
       <div className="mx-auto w-full max-w-[1600px] px-5 sm:px-8 lg:px-12">
-        <div id="corporate-gifting-heading">
-          <SectionHeader />
-        </div>
         <HamperCarousel />
         <SectionCTA />
       </div>
