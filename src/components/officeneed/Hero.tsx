@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import heroPerfumes from "@/assets/hero-perfumes.png.asset.json";
-import heroExclusive from "@/assets/officeneed-exclusive-set.png.asset.json";
+import heroExclusive from "@/assets/officeneed-exclusive-set-v2.png.asset.json";
 
 const slides = [
   {
