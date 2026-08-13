@@ -37,18 +37,63 @@ const slides = [
 
 export function Hero() {
   const [active, setActive] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const [dx, setDx] = useState(0);
+  const startX = useRef(0);
+  const startY = useRef(0);
+  const locked = useRef<"h" | "v" | null>(null);
 
   useEffect(() => {
+    if (dragging) return;
     const id = setInterval(() => setActive((i) => (i + 1) % slides.length), 6000);
     return () => clearInterval(id);
-  }, []);
+  }, [dragging]);
+
+  const go = (dir: number) =>
+    setActive((i) => (i + dir + slides.length) % slides.length);
+
+  const onPointerDown = (e: React.PointerEvent) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    startX.current = e.clientX;
+    startY.current = e.clientY;
+    locked.current = null;
+    setDragging(true);
+  };
+
+  const onPointerMove = (e: React.PointerEvent) => {
+    if (!dragging) return;
+    const deltaX = e.clientX - startX.current;
+    const deltaY = e.clientY - startY.current;
+    if (!locked.current) {
+      if (Math.abs(deltaX) < 8 && Math.abs(deltaY) < 8) return;
+      locked.current = Math.abs(deltaX) > Math.abs(deltaY) ? "h" : "v";
+    }
+    if (locked.current !== "h") return;
+    setDx(deltaX);
+  };
+
+  const endDrag = () => {
+    if (!dragging) return;
+    if (locked.current === "h" && Math.abs(dx) > 50) go(dx < 0 ? 1 : -1);
+    setDx(0);
+    locked.current = null;
+    setDragging(false);
+  };
 
   return (
     <section
       aria-labelledby="hero-heading"
       className="relative w-full overflow-x-clip bg-background"
     >
-      <div className="relative mx-auto flex min-h-[min(78svh,520px)] w-full max-w-[1400px] flex-col items-center justify-center px-5 pb-8 pt-8 text-center sm:min-h-[600px] sm:px-8 lg:h-[80vh] lg:min-h-[620px] lg:px-12 lg:pt-10">
+      <div
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
+        onPointerLeave={endDrag}
+        style={{ touchAction: "pan-y" }}
+        className="relative mx-auto flex min-h-[min(78svh,520px)] w-full max-w-[1400px] flex-col items-center justify-center px-5 pb-8 pt-8 text-center select-none sm:min-h-[600px] sm:px-8 lg:h-[80vh] lg:min-h-[620px] lg:px-12 lg:pt-10"
+      >
         {slides.map((s, i) => {
           const isActive = i === active;
           return (
