@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const heroPerfumes = { url: "/hero/hero-perfumes.webp" };
 const heroExclusive = { url: "/hero/officeneed-exclusive-set-v2.webp" };
@@ -37,18 +37,63 @@ const slides = [
 
 export function Hero() {
   const [active, setActive] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const [dx, setDx] = useState(0);
+  const startX = useRef(0);
+  const startY = useRef(0);
+  const locked = useRef<"h" | "v" | null>(null);
 
   useEffect(() => {
+    if (dragging) return;
     const id = setInterval(() => setActive((i) => (i + 1) % slides.length), 6000);
     return () => clearInterval(id);
-  }, []);
+  }, [dragging]);
+
+  const go = (dir: number) =>
+    setActive((i) => (i + dir + slides.length) % slides.length);
+
+  const onPointerDown = (e: React.PointerEvent) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    startX.current = e.clientX;
+    startY.current = e.clientY;
+    locked.current = null;
+    setDragging(true);
+  };
+
+  const onPointerMove = (e: React.PointerEvent) => {
+    if (!dragging) return;
+    const deltaX = e.clientX - startX.current;
+    const deltaY = e.clientY - startY.current;
+    if (!locked.current) {
+      if (Math.abs(deltaX) < 8 && Math.abs(deltaY) < 8) return;
+      locked.current = Math.abs(deltaX) > Math.abs(deltaY) ? "h" : "v";
+    }
+    if (locked.current !== "h") return;
+    setDx(deltaX);
+  };
+
+  const endDrag = () => {
+    if (!dragging) return;
+    if (locked.current === "h" && Math.abs(dx) > 50) go(dx < 0 ? 1 : -1);
+    setDx(0);
+    locked.current = null;
+    setDragging(false);
+  };
 
   return (
     <section
       aria-labelledby="hero-heading"
       className="relative w-full overflow-x-clip bg-background"
     >
-      <div className="relative mx-auto flex min-h-[min(78svh,520px)] w-full max-w-[1400px] flex-col items-center justify-center px-5 pb-8 pt-8 text-center sm:min-h-[600px] sm:px-8 lg:h-[80vh] lg:min-h-[620px] lg:px-12 lg:pt-10">
+      <div
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
+        onPointerLeave={endDrag}
+        style={{ touchAction: "pan-y" }}
+        className="relative mx-auto flex min-h-[min(78svh,520px)] w-full max-w-[1400px] flex-col items-center justify-center px-5 pb-8 pt-8 text-center select-none sm:min-h-[600px] sm:px-8 lg:h-[80vh] lg:min-h-[620px] lg:px-12 lg:pt-10"
+      >
         {slides.map((s, i) => {
           const isActive = i === active;
           return (
@@ -59,6 +104,8 @@ export function Hero() {
               style={{
                 opacity: isActive ? 1 : 0,
                 pointerEvents: isActive ? "auto" : "none",
+                transform: isActive && dx ? `translateX(${dx * 0.25}px)` : undefined,
+                transition: dragging ? "opacity 700ms ease-out" : "opacity 700ms ease-out, transform 300ms ease-out",
               }}
             >
               <h1 id={isActive ? "hero-heading" : undefined} className="text-display">
@@ -82,6 +129,7 @@ export function Hero() {
                 width={1366}
                 height={768}
                 fetchPriority="high"
+                draggable={false}
                 decoding="async"
                 sizes="(min-width: 1024px) 90vw, 100vw"
                 className="mt-6 min-h-0 w-full max-w-[1100px] flex-1 basis-auto object-contain sm:mt-8 lg:mt-10"
