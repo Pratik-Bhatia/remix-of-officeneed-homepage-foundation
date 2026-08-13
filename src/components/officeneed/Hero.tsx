@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
-import heroPerfumes from "@/assets/hero-perfumes.png.asset.json";
-import heroExclusive from "@/assets/officeneed-exclusive-set-v2.png.asset.json";
-import heroGifting from "@/assets/corporate-gifting.png.asset.json";
+
+const heroPerfumes = { url: "/hero/hero-perfumes.webp" };
+const heroExclusive = { url: "/hero/officeneed-exclusive-set-v2.webp" };
+const heroGifting = { url: "/hero/corporate-gifting.webp" };
+
 
 const slides = [
   {
