@@ -6,7 +6,7 @@ export function Hero() {
       aria-labelledby="hero-heading"
       className="relative w-full overflow-x-clip bg-background"
     >
-      <div className="mx-auto flex w-full max-w-[1400px] flex-col items-center px-5 pb-12 pt-14 text-center sm:px-8 sm:pt-20 lg:px-12">
+      <div className="mx-auto flex h-[80vh] w-full max-w-[1400px] flex-col items-center justify-center px-5 pb-8 pt-10 text-center sm:px-8 lg:px-12">
         <h1 id="hero-heading" className="text-display">
           Signature Scents
         </h1>
