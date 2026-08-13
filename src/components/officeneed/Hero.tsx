@@ -1,97 +1,25 @@
-import { useEffect, useRef, useState } from "react";
-import heroImage from "@/assets/hero-officeneed.jpg";
-
-const SLIDES = [0, 1, 2];
-
 export function Hero() {
-  const [active, setActive] = useState(0);
-  const trackRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const el = trackRef.current;
-    if (!el) return;
-    const onScroll = () => {
-      const i = Math.round(el.scrollLeft / el.clientWidth);
-      setActive(Math.max(0, Math.min(SLIDES.length - 1, i)));
-    };
-    el.addEventListener("scroll", onScroll, { passive: true });
-    return () => el.removeEventListener("scroll", onScroll);
-  }, []);
-
-  const goTo = (i: number) => {
-    const el = trackRef.current;
-    if (!el) return;
-    el.scrollTo({ left: i * el.clientWidth, behavior: "smooth" });
-    setActive(i);
-  };
-
   return (
     <section
       aria-labelledby="hero-heading"
       className="relative w-full overflow-x-clip bg-background"
     >
-      <div className="mx-auto grid w-full max-w-[1600px] grid-cols-1 items-center gap-8 px-5 pb-12 pt-10 sm:px-8 lg:px-12 xl:min-h-[calc(100svh-80px)] xl:grid-cols-[minmax(0,0.86fr)_minmax(0,1.14fr)] xl:gap-16 xl:py-10">
-        {/* Copy */}
-        <div className="mx-auto w-full max-w-[700px] text-center xl:mx-0 xl:max-w-[680px] xl:pr-2 xl:text-left">
-          <p className="text-eyebrow text-muted-foreground">CORPORATE PROCUREMENT, SIMPLIFIED</p>
+      <div className="mx-auto flex w-full max-w-[1600px] flex-col items-center px-5 pb-24 pt-24 text-center sm:px-8 lg:px-12">
+        <h1 id="hero-heading" className="text-display">
+          Signature Scents
+        </h1>
 
-          <h1
-            id="hero-heading"
-            className="text-display mx-auto mt-5 w-full max-w-full xl:mx-0"
-          >
-            One Partner.
-            <br />
-            Every Business Need.
-          </h1>
+        <p className="text-lede mt-5 max-w-[46ch]">
+          Elevate your professional presence with our premium fragrance collection.
+        </p>
 
-
-          <div className="mx-auto mt-9 flex w-full max-w-[360px] flex-col items-center gap-3 sm:max-w-none sm:flex-row sm:justify-center sm:gap-4 xl:mx-0 xl:justify-start">
-            <a href="#solutions" className="btn-primary w-full sm:w-auto">
-              Explore Solutions
-            </a>
-            <a href="#bestsellers" className="btn-secondary w-full sm:w-auto">
-              Shop Products
-            </a>
-          </div>
-        </div>
-
-        {/* Visual */}
-        <div className="relative mx-auto w-full max-w-[420px] md:max-w-[85%] xl:max-w-none">
-          <div
-            ref={trackRef}
-            className="flex snap-x snap-mandatory overflow-x-auto scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-          >
-            {SLIDES.map((i) => (
-              <div key={i} className="w-full shrink-0 snap-center">
-                <img
-                  src={heroImage}
-                  alt="OfficeNeed corporate gifting composition: ivory gift boxes and branded shopping bags."
-                  width={1600}
-                  height={1100}
-                  fetchPriority={i === 0 ? "high" : "low"}
-                  loading={i === 0 ? "eager" : "lazy"}
-                  decoding="async"
-                  sizes="(min-width: 1024px) 58vw, 100vw"
-                  className="mx-auto h-auto max-h-[46vh] w-full object-contain sm:max-h-[54vh] xl:h-[min(74vh,720px)] xl:max-h-none"
-                />
-              </div>
-            ))}
-          </div>
-
-          <div className="mt-5 flex items-center justify-center gap-2 xl:justify-start xl:pl-2">
-            {SLIDES.map((i) => (
-              <button
-                key={i}
-                type="button"
-                onClick={() => goTo(i)}
-                aria-label={`Go to slide ${i + 1}`}
-                aria-current={active === i}
-                className={`h-1.5 rounded-full transition-all duration-300 ${
-                  active === i ? "w-6 bg-foreground" : "w-1.5 bg-foreground/25"
-                }`}
-              />
-            ))}
-          </div>
+        <div className="mt-8 flex w-full max-w-[360px] flex-col items-center gap-3 sm:max-w-none sm:flex-row sm:justify-center sm:gap-4">
+          <a href="#solutions" className="btn-primary w-full rounded-full sm:w-auto">
+            Discover Collection
+          </a>
+          <a href="#bestsellers" className="btn-secondary w-full rounded-full sm:w-auto">
+            Shop Perfumes
+          </a>
         </div>
       </div>
     </section>
