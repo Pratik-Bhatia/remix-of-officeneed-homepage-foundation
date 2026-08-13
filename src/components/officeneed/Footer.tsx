@@ -11,6 +11,7 @@ import {
   Youtube,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { footerShopTargets } from "@/lib/navigation";
 import logoInverse from "@/assets/officeneed-logo-inverse.png";
 import visaAsset from "@/assets/payment-visa.png";
 import mastercardAsset from "@/assets/payment-mastercard.png";
@@ -69,10 +70,10 @@ const bottomLinks = [
 ];
 
 const socials = [
-  { icon: Facebook, label: "Facebook" },
-  { icon: Instagram, label: "Instagram" },
-  { icon: Linkedin, label: "LinkedIn" },
-  { icon: Youtube, label: "YouTube" },
+  { icon: Facebook, label: "Facebook", href: "https://facebook.com/officeneed" },
+  { icon: Instagram, label: "Instagram", href: "https://instagram.com/officeneed" },
+  { icon: Linkedin, label: "LinkedIn", href: "https://linkedin.com/company/officeneed" },
+  { icon: Youtube, label: "YouTube", href: "https://youtube.com/@officeneed" },
 ];
 
 const paymentMethods = [
@@ -312,10 +313,12 @@ export function Footer() {
               </form>
 
               <ul className="mt-8 flex items-center gap-7">
-                {socials.map(({ icon: Icon, label }) => (
+                {socials.map(({ icon: Icon, label, href }) => (
                   <li key={label}>
                     <a
-                      href="#"
+                      href={href}
+                      target="_blank"
+                      rel="noreferrer noopener"
                       aria-label={`OfficeNeed on ${label}`}
                       className="inline-flex text-background/80 transition-colors hover:text-background"
                     >
