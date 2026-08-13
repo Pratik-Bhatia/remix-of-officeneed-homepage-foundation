@@ -34,6 +34,15 @@ const slides = [
     image: heroGifting.url,
     alt: "Curated Officeneed corporate gift hamper with laptop bag, notebook, flask, mug, pen, candle, plant and thank you card.",
   },
+  {
+    id: "assistant",
+    heading: "AI Shopping Assistant",
+    text: "Find the exact workspace essentials you need with personalized, AI-driven recommendations.",
+    primary: { label: "Try the Assistant", href: "#solutions" },
+    secondary: { label: "How It Works", href: "#bestsellers" },
+    image: heroAI.url,
+    alt: "Sleek smartphone on a textured black pedestal surrounded by desk essentials, white flowers, and orange peel on a dark luxury background.",
+  },
 ];
 
 export function Hero() {
