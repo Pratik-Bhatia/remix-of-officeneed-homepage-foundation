@@ -73,7 +73,10 @@ function ProductsPage() {
     navigate({ search: (prev: ProductsSearch) => ({ ...prev, sort: next }), replace: true });
   const setQuery = (next: string) =>
     navigate({
-      search: (prev: ProductsSearch) => ({ ...prev, q: next || undefined }),
+      search: (prev: ProductsSearch) => {
+        const { q: _omit, ...rest } = prev;
+        return next ? { ...rest, q: next } : rest;
+      },
       replace: true,
     });
 
