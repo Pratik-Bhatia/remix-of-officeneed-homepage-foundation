@@ -10,9 +10,9 @@ import { cn } from "@/lib/utils";
 
 function SectionHeader() {
   return (
-    <div className="mx-auto w-full max-w-2xl text-center lg:mx-0 lg:text-left">
+    <div className="w-full max-w-2xl text-left">
       <p className="text-eyebrow text-muted-foreground">Corporate Gifting</p>
-      <h2 className="text-section mt-4 text-balance">
+      <h2 className="text-section mt-3 text-balance sm:mt-4">
         Designed to Gift.
         <br />
         Built to Impress.
@@ -294,30 +294,35 @@ function HamperCarousel() {
     null;
 
   return (
-    <div ref={sectionRef} className="mt-12 sm:mt-16">
-      <div className="mb-6 hidden items-center justify-end gap-3 lg:flex">
-        <button
-          type="button"
-          onClick={() => scrollBy(-1)}
-          aria-label="Previous hamper"
-          className="grid size-11 place-items-center rounded-full border border-border transition-colors duration-200 hover:bg-secondary"
-        >
-          <ChevronLeft className="size-4" aria-hidden="true" />
-        </button>
-        <button
-          type="button"
-          onClick={() => scrollBy(1)}
-          aria-label="Next hamper"
-          className="grid size-11 place-items-center rounded-full border border-border transition-colors duration-200 hover:bg-secondary"
-        >
-          <ChevronRight className="size-4" aria-hidden="true" />
-        </button>
+    <div ref={sectionRef}>
+      <div className="flex items-end justify-between gap-6">
+        <div id="corporate-gifting-heading">
+          <SectionHeader />
+        </div>
+        <div className="hidden shrink-0 items-center gap-3 sm:flex">
+          <button
+            type="button"
+            onClick={() => scrollBy(-1)}
+            aria-label="Previous hamper"
+            className="grid size-11 place-items-center rounded-full border border-border transition-colors duration-200 hover:bg-secondary"
+          >
+            <ChevronLeft className="size-4" aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            onClick={() => scrollBy(1)}
+            aria-label="Next hamper"
+            className="grid size-11 place-items-center rounded-full border border-border transition-colors duration-200 hover:bg-secondary"
+          >
+            <ChevronRight className="size-4" aria-hidden="true" />
+          </button>
+        </div>
       </div>
 
       <div
         ref={scrollerRef}
         onScroll={onScroll}
-        className="-mx-5 flex snap-x snap-mandatory gap-6 overflow-x-auto px-5 pb-4 sm:-mx-8 sm:gap-8 sm:px-8 lg:-mx-12 lg:px-12 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="-mx-5 mt-8 flex snap-x snap-mandatory gap-6 overflow-x-auto px-5 pb-4 sm:-mx-8 sm:mt-10 sm:gap-8 sm:px-8 lg:-mx-12 lg:px-12 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         {giftHampers.map((hamper, i) => (
           <HamperCard
@@ -347,7 +352,7 @@ function HamperCarousel() {
         ))}
       </div>
 
-      <p className="mt-5 text-center text-xs text-muted-foreground">
+      <p className="mt-4 text-center text-xs text-muted-foreground">
         Hover or tap a marker to explore the products.
       </p>
 
@@ -369,7 +374,7 @@ function HamperCarousel() {
 
 function SectionCTA() {
   return (
-    <div className="mx-auto mt-14 max-w-xl border-t border-border pt-10 text-center sm:mt-16">
+    <div className="mx-auto mt-12 max-w-xl border-t border-border pt-8 text-center sm:mt-14 sm:pt-10">
       <h3 className="font-display text-lg font-semibold tracking-tight">
         Explore Corporate Gifting
       </h3>
@@ -396,9 +401,6 @@ export function InteractiveGiftShowcase() {
       className="w-full overflow-hidden bg-background py-14 sm:py-16 lg:py-20"
     >
       <div className="mx-auto w-full max-w-[1600px] px-5 sm:px-8 lg:px-12">
-        <div id="corporate-gifting-heading">
-          <SectionHeader />
-        </div>
         <HamperCarousel />
         <SectionCTA />
       </div>
