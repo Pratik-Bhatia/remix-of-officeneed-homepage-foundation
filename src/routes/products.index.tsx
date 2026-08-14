@@ -13,6 +13,7 @@ import {
   sortProducts,
   type ProductSort,
 } from "@/lib/products";
+import { navCategories } from "@/lib/navigation";
 
 const TITLE = "Products — OfficeNeed";
 const DESCRIPTION =
@@ -195,7 +196,7 @@ function ProductsPage() {
                 ))
               ) : (
                 // Show Subcategories for the selected category
-                (import.meta.glob('../lib/navigation.ts', { eager: true })['../lib/navigation.ts'] as any)?.navCategories
+                navCategories
                   ?.find((nav: any) => nav.label === category || (category === "Office Supplies" && nav.label === "Office Stationery") || (category === "Hardware & IT" && nav.label === "Hardware Supplies"))?.items
                   ?.map((item: string) => (
                   <li key={item} className="snap-center shrink-0">
