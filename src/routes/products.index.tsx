@@ -20,19 +20,61 @@ const DESCRIPTION =
 
 type ProductsSearch = {
   category?: (typeof productCategories)[number];
+  subcategory?: string;
   sort?: ProductSort;
   q?: string;
 };
 
+const categoryImages: Record<string, string> = {
+  "Corporate Gifting": "https://images.unsplash.com/photo-1544816155-12df9643f363?auto=format&fit=crop&w=300&q=75",
+  "Office Supplies": "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=300&q=75",
+  "Hardware & IT": "https://images.unsplash.com/photo-1527864550417-7fd91fc51a46?auto=format&fit=crop&w=300&q=75",
+  "Printing & Branding": "https://images.unsplash.com/photo-1586281380349-632531db7ed4?auto=format&fit=crop&w=300&q=75",
+  "Fragrance & Luxury Gifting": "https://images.unsplash.com/photo-1592945403244-b3fbafd7f539?auto=format&fit=crop&w=300&q=75",
+  "All Products": "https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=300&q=75",
+};
+
+const subcategoryImages: Record<string, string> = {
+  // Corporate Gifting
+  "Gift Sets": "https://images.unsplash.com/photo-1513201099705-a9746e1e201f?auto=format&fit=crop&w=200&q=75",
+  "Corporate Gifts": "https://images.unsplash.com/photo-1607083206968-13611e3d76db?auto=format&fit=crop&w=200&q=75",
+  "Premium Gifts": "https://images.unsplash.com/photo-1549465220-1a8b9238cd48?auto=format&fit=crop&w=200&q=75",
+  "Drinkware & Utensils": "https://images.unsplash.com/photo-1602143407151-7111542de6e8?auto=format&fit=crop&w=200&q=75",
+  "Customized Gifts": "https://images.unsplash.com/photo-1517842645767-c639042777db?auto=format&fit=crop&w=200&q=75",
+  // Fragrance & Luxury Gifting
+  "Perfumes": "https://images.unsplash.com/photo-1594035910387-fea47794261f?auto=format&fit=crop&w=200&q=75",
+  "Eastern Perfumes": "https://images.unsplash.com/photo-1592945403244-b3fbafd7f539?auto=format&fit=crop&w=200&q=75",
+  "Western Perfumes": "https://images.unsplash.com/photo-1615634260167-c8cdede054de?auto=format&fit=crop&w=200&q=75",
+  "Luxury Gifting": "https://images.unsplash.com/photo-1608571423902-eed4a5ad8108?auto=format&fit=crop&w=200&q=75",
+  // Office Stationery
+  "Writing Instruments": "https://images.unsplash.com/photo-1583485088034-697b5bc54ccd?auto=format&fit=crop&w=200&q=75",
+  "Notebooks": "https://images.unsplash.com/photo-1531346878377-a5be20888e57?auto=format&fit=crop&w=200&q=75",
+  "Desk Accessories": "https://images.unsplash.com/photo-1524578271613-d550eacf6090?auto=format&fit=crop&w=200&q=75",
+  "Office Supplies": "https://images.unsplash.com/photo-1568667256549-094345857637?auto=format&fit=crop&w=200&q=75",
+  // Hardware Supplies
+  "Mouse": "https://images.unsplash.com/photo-1527864550417-7fd91fc51a46?auto=format&fit=crop&w=200&q=75",
+  "Keyboards": "https://images.unsplash.com/photo-1587829741301-dc798b83add3?auto=format&fit=crop&w=200&q=75",
+  "Printers": "https://images.unsplash.com/photo-1612815154858-60aa4c59eaa6?auto=format&fit=crop&w=200&q=75",
+  "Computer Accessories": "https://images.unsplash.com/photo-1588872657578-7efd1f1555ed?auto=format&fit=crop&w=200&q=75",
+  // Printing & Branding
+  "Custom Printing": "https://images.unsplash.com/photo-1586281380349-632531db7ed4?auto=format&fit=crop&w=200&q=75",
+  "Corporate Branding": "https://images.unsplash.com/photo-1524234107056-1c1f48f64ab8?auto=format&fit=crop&w=200&q=75",
+  "Printed Materials": "https://images.unsplash.com/photo-1556905055-8f358a7a47b2?auto=format&fit=crop&w=200&q=75",
+  "Branded Merchandise": "https://images.unsplash.com/photo-1523381210434-271e8be1f52b?auto=format&fit=crop&w=200&q=75",
+};
+
+
 export const Route = createFileRoute("/products/")({
   validateSearch: (search: Record<string, unknown>): ProductsSearch => {
     const rawCategory = String(search["category"] ?? "");
+    const rawSubcategory = String(search["subcategory"] ?? "");
     const rawSort = String(search["sort"] ?? "");
     const rawQuery = typeof search["q"] === "string" ? (search["q"] as string) : "";
     const result: ProductsSearch = {};
     if ((productCategories as readonly string[]).includes(rawCategory)) {
       result.category = rawCategory as (typeof productCategories)[number];
     }
+    if (rawSubcategory) result.subcategory = rawSubcategory;
     if ((productSortOptions as readonly string[]).includes(rawSort)) {
       result.sort = rawSort as ProductSort;
     }
@@ -59,6 +101,7 @@ export const Route = createFileRoute("/products/")({
 function ProductsPage() {
   const search = Route.useSearch();
   const category = search.category ?? "All Products";
+  const subcategory = search.subcategory ?? "";
   const sort = search.sort ?? "Featured";
   const navigate = useNavigate({ from: "/products/" });
   const query = search.q ?? "";
@@ -66,7 +109,12 @@ function ProductsPage() {
 
   const setCategory = (next: (typeof productCategories)[number]) =>
     navigate({
-      search: (prev: ProductsSearch) => ({ ...prev, category: next }),
+      search: (prev: ProductsSearch) => ({ ...prev, category: next, subcategory: undefined }),
+      replace: true,
+    });
+  const setSubcategory = (next: string) =>
+    navigate({
+      search: (prev: ProductsSearch) => ({ ...prev, subcategory: next }),
       replace: true,
     });
   const setSort = (next: ProductSort) =>
@@ -82,17 +130,19 @@ function ProductsPage() {
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
+    const sub = subcategory.trim().toLowerCase();
     const filtered = products.filter((p) => {
       const inCategory = category === "All Products" || p.category === category;
+      const inSubcategory = !sub || p.name.toLowerCase().includes(sub) || p.summary.toLowerCase().includes(sub) || p.description.toLowerCase().includes(sub);
       const matches =
         !q ||
         p.name.toLowerCase().includes(q) ||
         p.summary.toLowerCase().includes(q) ||
         p.category.toLowerCase().includes(q);
-      return inCategory && matches;
+      return inCategory && inSubcategory && matches;
     });
     return sortProducts(filtered, sort);
-  }, [category, query, sort]);
+  }, [category, subcategory, query, sort]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -113,35 +163,65 @@ function ProductsPage() {
             </ol>
           </nav>
 
-          <header className="max-w-2xl">
-            <h1 className="text-section">Products</h1>
-            <p className="mt-3 text-sm leading-relaxed text-muted-foreground sm:text-base">
-              {DESCRIPTION}
+          <header className="max-w-2xl text-center mx-auto mb-10">
+            <h1 className="text-4xl sm:text-5xl font-display font-medium tracking-tight text-foreground">
+              {subcategory ? subcategory : category}
+            </h1>
+            <p className="mt-4 text-sm sm:text-base leading-relaxed text-muted-foreground">
+              {category === "All Products" && !subcategory ? DESCRIPTION : `Explore our premium selection of ${subcategory ? subcategory.toLowerCase() : category.toLowerCase()}.`}
             </p>
           </header>
 
-          {/* Category navigation */}
-          <nav aria-label="Product categories" className="mt-8 sm:mt-10">
-            <ul className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {productCategories.map((c) => (
-                <li key={c}>
-                  <button
-                    type="button"
-                    aria-pressed={category === c}
-                    onClick={() => setCategory(c)}
-                    className={cn(
-                      "shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-sm transition-colors duration-300",
-                      category === c
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-secondary text-secondary-foreground hover:bg-muted",
-                    )}
-                  >
-                    {c}
-                  </button>
-                </li>
-              ))}
+          {/* Apple-style category/subcategory lineup */}
+          <nav aria-label="Lineup" className="mt-8 mb-16 sm:mt-10 border-b border-border pb-8">
+            <ul className="flex items-start justify-center gap-6 sm:gap-10 overflow-x-auto px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden snap-x">
+              {category === "All Products" ? (
+                // Show Main Categories
+                productCategories.filter(c => c !== "All Products").map((c) => (
+                  <li key={c} className="snap-center shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setCategory(c)}
+                      className="group flex flex-col items-center gap-3 w-20 sm:w-24 focus:outline-none"
+                    >
+                      <div className="size-14 sm:size-16 rounded-2xl overflow-hidden bg-secondary border border-border shadow-sm transition-transform duration-300 group-hover:-translate-y-1 group-hover:shadow-md">
+                        <img src={categoryImages[c]} alt={c} className="w-full h-full object-cover" />
+                      </div>
+                      <span className="text-[11px] sm:text-xs font-medium text-foreground/80 group-hover:text-foreground text-center leading-tight">
+                        {c}
+                      </span>
+                    </button>
+                  </li>
+                ))
+              ) : (
+                // Show Subcategories for the selected category
+                (import.meta.glob('../lib/navigation.ts', { eager: true })['../lib/navigation.ts'] as any)?.navCategories
+                  ?.find((nav: any) => nav.label === category || (category === "Office Supplies" && nav.label === "Office Stationery") || (category === "Hardware & IT" && nav.label === "Hardware Supplies"))?.items
+                  ?.map((item: string) => (
+                  <li key={item} className="snap-center shrink-0">
+                    <button
+                      type="button"
+                      aria-pressed={subcategory === item}
+                      onClick={() => setSubcategory(item === subcategory ? "" : item)}
+                      className="group flex flex-col items-center gap-3 w-20 sm:w-24 focus:outline-none"
+                    >
+                      <div className={cn("size-14 sm:size-16 rounded-2xl overflow-hidden bg-secondary border transition-all duration-300 group-hover:-translate-y-1 group-hover:shadow-md", subcategory === item ? "border-primary ring-2 ring-primary/20 shadow-md" : "border-border shadow-sm")}>
+                        <img src={subcategoryImages[item] || categoryImages[category]} alt={item} className="w-full h-full object-cover" />
+                      </div>
+                      <span className={cn("text-[11px] sm:text-xs text-center leading-tight transition-colors", subcategory === item ? "font-semibold text-foreground" : "font-medium text-foreground/80 group-hover:text-foreground")}>
+                        {item}
+                      </span>
+                    </button>
+                  </li>
+                ))
+              )}
             </ul>
           </nav>
+
+          {/* Explore Header */}
+          <div className="mt-12 sm:mt-16 mb-6">
+            <h2 className="text-2xl sm:text-3xl font-display font-semibold tracking-tight">Explore our collection.</h2>
+          </div>
 
           {/* Controls */}
           <div className="mt-6 flex flex-col gap-3 sm:mt-8 sm:flex-row sm:items-center sm:justify-between">
