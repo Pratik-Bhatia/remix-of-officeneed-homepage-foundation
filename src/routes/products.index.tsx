@@ -1,10 +1,20 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { Search, SlidersHorizontal } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { categoryFilters } from "@/lib/filters";
 import { Navbar } from "@/components/officeneed/Navbar";
 import { Footer } from "@/components/officeneed/Footer";
 import { ProductCard } from "@/components/officeneed/ProductCard";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import {
   productCategories,
@@ -24,6 +34,7 @@ type ProductsSearch = {
   subcategory?: string;
   sort?: ProductSort;
   q?: string;
+  f?: Record<string, string[]>;
 };
 
 const categoryImages: Record<string, string> = {
@@ -71,6 +82,7 @@ export const Route = createFileRoute("/products/")({
     const rawSubcategory = String(search["subcategory"] ?? "");
     const rawSort = String(search["sort"] ?? "");
     const rawQuery = typeof search["q"] === "string" ? (search["q"] as string) : "";
+    const rawF = search["f"] as Record<string, string[]> | undefined;
     const result: ProductsSearch = {};
     if ((productCategories as readonly string[]).includes(rawCategory)) {
       result.category = rawCategory as (typeof productCategories)[number];
@@ -80,6 +92,7 @@ export const Route = createFileRoute("/products/")({
       result.sort = rawSort as ProductSort;
     }
     if (rawQuery) result.q = rawQuery;
+    if (rawF) result.f = rawF;
     return result;
   },
   head: () => ({
@@ -106,11 +119,14 @@ function ProductsPage() {
   const sort = search.sort ?? "Featured";
   const navigate = useNavigate({ from: "/products/" });
   const query = search.q ?? "";
-  const [filtersOpen, setFiltersOpen] = useState(false);
+
 
   const setCategory = (next: (typeof productCategories)[number]) =>
     navigate({
-      search: (prev: ProductsSearch) => ({ ...prev, category: next, subcategory: undefined }),
+      search: (prev: ProductsSearch) => {
+        const { subcategory: _omit, ...rest } = prev;
+        return { ...rest, category: next };
+      },
       replace: true,
     });
   const setSubcategory = (next: string) =>
@@ -120,6 +136,7 @@ function ProductsPage() {
     });
   const setSort = (next: ProductSort) =>
     navigate({ search: (prev: ProductsSearch) => ({ ...prev, sort: next }), replace: true });
+
   const setQuery = (next: string) =>
     navigate({
       search: (prev: ProductsSearch) => {
@@ -129,42 +146,101 @@ function ProductsPage() {
       replace: true,
     });
 
+  const activeFilters = search.f ?? {};
+  
+  const toggleFilter = (groupId: string, value: string) => {
+    navigate({
+      search: (prev: ProductsSearch) => {
+        const nextFilters = { ...(prev.f || {}) };
+        if (!nextFilters[groupId]) {
+          nextFilters[groupId] = [value];
+        } else if (nextFilters[groupId].includes(value)) {
+          nextFilters[groupId] = nextFilters[groupId].filter((v) => v !== value);
+          if (nextFilters[groupId].length === 0) delete nextFilters[groupId];
+        } else {
+          nextFilters[groupId] = [...nextFilters[groupId], value];
+        }
+        
+        if (Object.keys(nextFilters).length === 0) {
+          const { f: _omit, ...rest } = prev;
+          return rest;
+        }
+        return { ...prev, f: nextFilters };
+      },
+      replace: true,
+    });
+  };
+
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     const sub = subcategory.trim().toLowerCase();
     const filtered = products.filter((p) => {
       const inCategory = category === "All Products" || p.category === category;
-      const inSubcategory = !sub || p.name.toLowerCase().includes(sub) || p.summary.toLowerCase().includes(sub) || p.description.toLowerCase().includes(sub);
+      const inSubcategory = !sub || p.subcategories?.some((s) => s.toLowerCase() === sub);
       const matches =
         !q ||
         p.name.toLowerCase().includes(q) ||
         p.summary.toLowerCase().includes(q) ||
         p.category.toLowerCase().includes(q);
-      return inCategory && inSubcategory && matches;
+        
+      let passesFilters = true;
+      if (Object.keys(activeFilters).length > 0) {
+        for (const [groupId, selectedValues] of Object.entries(activeFilters)) {
+          if (!p.filterAttributes || !p.filterAttributes[groupId]) {
+            passesFilters = false;
+            break;
+          }
+          const productValues = p.filterAttributes[groupId];
+          if (!productValues.some((v) => selectedValues.includes(v))) {
+            passesFilters = false;
+            break;
+          }
+        }
+      }
+
+      return inCategory && inSubcategory && matches && passesFilters;
     });
     return sortProducts(filtered, sort);
-  }, [category, subcategory, query, sort]);
+  }, [category, subcategory, query, sort, activeFilters]);
+
+
+  const currentFilters = category !== "All Products" ? categoryFilters[category as keyof typeof categoryFilters] : null;
+
+  const FilterList = () => {
+    if (!currentFilters) return null;
+    return (
+      <div className="flex flex-col gap-8">
+        {currentFilters.map((group) => (
+          <div key={group.id}>
+            <h3 className="font-medium text-sm mb-4">{group.label}</h3>
+            <div className="flex flex-col gap-3">
+              {group.options.map((option) => (
+                <label key={option.value} className="flex items-center gap-3 text-sm cursor-pointer group">
+                  <Checkbox
+                    checked={activeFilters[group.id]?.includes(option.value) || false}
+                    onCheckedChange={() => toggleFilter(group.id, option.value)}
+                    className="border-muted-foreground/30 data-[state=checked]:bg-primary data-[state=checked]:border-primary transition-colors"
+                  />
+                  <span className="text-muted-foreground group-hover:text-foreground transition-colors">
+                    {option.label}
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
       <main className="w-full overflow-x-hidden">
         <div className="mx-auto w-full max-w-[1600px] px-5 py-10 sm:px-8 sm:py-12 lg:px-12 lg:py-16">
-          <nav aria-label="Breadcrumb" className="mb-6">
-            <ol className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-              <li>
-                <Link to="/" className="transition-colors hover:text-foreground">
-                  Home
-                </Link>
-              </li>
-              <li aria-hidden>/</li>
-              <li aria-current="page" className="text-foreground">
-                Products
-              </li>
-            </ol>
-          </nav>
 
-          <header className="max-w-2xl text-center mx-auto mb-10">
+
+          <header className="max-w-2xl mb-10">
             <h1 className="text-4xl sm:text-5xl font-display font-medium tracking-tight text-foreground">
               {subcategory ? subcategory : category}
             </h1>
@@ -175,7 +251,7 @@ function ProductsPage() {
 
           {/* Apple-style category/subcategory lineup */}
           <nav aria-label="Lineup" className="mt-8 mb-16 sm:mt-10 border-b border-border pb-8">
-            <ul className="flex items-start justify-center gap-6 sm:gap-10 overflow-x-auto px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden snap-x">
+            <ul className="flex items-start justify-start gap-6 sm:gap-10 overflow-x-auto pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden snap-x">
               {category === "All Products" ? (
                 // Show Main Categories
                 productCategories.filter(c => c !== "All Products").map((c) => (
@@ -227,6 +303,7 @@ function ProductsPage() {
           {/* Controls */}
           <div className="mt-6 flex flex-col gap-3 sm:mt-8 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-2">
+              
               <div className="relative min-w-0 flex-1 sm:w-72 sm:flex-none">
                 <Search
                   className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
@@ -241,16 +318,30 @@ function ProductsPage() {
                   className="pl-9"
                 />
               </div>
-              <button
-                type="button"
-                onClick={() => setFiltersOpen((v) => !v)}
-                aria-expanded={filtersOpen}
-                aria-controls="mobile-filters"
-                className="inline-flex shrink-0 items-center gap-2 rounded-md border border-border px-3 py-2 text-sm sm:hidden"
-              >
-                <SlidersHorizontal className="size-4" aria-hidden />
-                Filter
-              </button>
+
+              {currentFilters && (
+                <Sheet>
+                  <SheetTrigger asChild>
+                    <button
+                      type="button"
+                      className="inline-flex shrink-0 items-center gap-2 rounded-md border border-border px-3 py-2 text-sm lg:hidden hover:bg-secondary/50 transition-colors"
+                    >
+                      <SlidersHorizontal className="size-4" aria-hidden />
+                      Filter
+                    </button>
+                  </SheetTrigger>
+                  <SheetContent side="right" className="w-[300px] sm:w-[400px]">
+                    <SheetHeader>
+                      <SheetTitle className="text-left">Filters</SheetTitle>
+                    </SheetHeader>
+                    <div className="mt-8">
+                      <FilterList />
+                    </div>
+                  </SheetContent>
+                </Sheet>
+              )}
+
+
             </div>
 
             <div className="flex items-center justify-between gap-3 sm:justify-end">
@@ -261,62 +352,50 @@ function ProductsPage() {
                 <label htmlFor="sort" className="sr-only">
                   Sort by
                 </label>
-                <select
-                  id="sort"
-                  value={sort}
-                  onChange={(e) => setSort(e.target.value as ProductSort)}
-                  className="h-9 max-w-[60vw] rounded-md border border-border bg-background px-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 sm:max-w-none"
-                >
-                  {productSortOptions.map((o) => (
-                    <option key={o} value={o}>
-                      {o}
-                    </option>
-                  ))}
-                </select>
+                <Select value={sort} onValueChange={(value) => setSort(value as ProductSort)}>
+                  <SelectTrigger id="sort" className="h-9 w-[180px] sm:w-[200px] text-sm">
+                    <SelectValue placeholder="Sort by" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {productSortOptions.map((o) => (
+                      <SelectItem key={o} value={o}>
+                        {o}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           </div>
 
-          {/* Mobile filter panel */}
-          {filtersOpen ? (
-            <div
-              id="mobile-filters"
-              className="mt-4 rounded-xl border border-border p-4 sm:hidden"
-            >
-              <p className="text-eyebrow text-muted-foreground">Category</p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {productCategories.map((c) => (
-                  <button
-                    key={c}
-                    type="button"
-                    aria-pressed={category === c}
-                    onClick={() => setCategory(c)}
-                    className={cn(
-                      "rounded-full px-3 py-1.5 text-xs transition-colors",
-                      category === c
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-secondary text-secondary-foreground",
-                    )}
-                  >
-                    {c}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : null}
 
-          {/* Grid */}
-          {visible.length === 0 ? (
-            <p className="mt-14 text-sm text-muted-foreground">
-              No products match that search. Try a different term or category.
-            </p>
-          ) : (
-            <div className="mt-8 grid grid-cols-2 gap-x-5 gap-y-10 sm:mt-10 sm:gap-x-6 md:grid-cols-3 xl:grid-cols-4">
-              {visible.map((p) => (
-                <ProductCard key={p.slug} product={p} />
-              ))}
+
+
+          {/* Main Layout Area */}
+          <div className="mt-8 sm:mt-10 lg:flex lg:gap-12 xl:gap-16">
+            {/* Desktop Sidebar */}
+            {currentFilters && (
+              <aside className="hidden lg:block w-64 shrink-0">
+                <FilterList />
+              </aside>
+            )}
+            
+            {/* Grid */}
+            <div className="flex-1">
+              {visible.length === 0 ? (
+                <p className="text-sm text-muted-foreground mt-4 lg:mt-0">
+                  No products match that search. Try a different term or category.
+                </p>
+              ) : (
+                <div className="grid grid-cols-2 gap-x-5 gap-y-10 sm:gap-x-6 md:grid-cols-3 xl:grid-cols-3">
+                  {visible.map((p) => (
+                    <ProductCard key={p.slug} product={p} />
+                  ))}
+                </div>
+              )}
             </div>
-          )}
+          </div>
+
         </div>
       </main>
       <Footer />

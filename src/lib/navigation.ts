@@ -87,6 +87,7 @@ export type ProductsSortOption =
 
 export type ProductsLinkTarget = {
   category?: ProductsCategoryFilter;
+  subcategory?: string;
   sort?: ProductsSortOption;
 };
 
@@ -111,7 +112,10 @@ const navItemOverrides: Record<string, ProductsLinkTarget> = {
 export function navItemTarget(categoryId: string, item: string): ProductsLinkTarget {
   const override = navItemOverrides[item];
   if (override) return override;
-  return { category: navCategoryToProductCategory[categoryId] ?? "All Products" };
+  return { 
+    category: navCategoryToProductCategory[categoryId] ?? "All Products",
+    subcategory: item 
+  };
 }
 
 /** Footer "Shop" labels -> /products search params. */

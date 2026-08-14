@@ -18,6 +18,8 @@ export type Product = {
   slug: string;
   name: string;
   category: ProductCategory;
+  subcategories: string[];
+  filterAttributes?: Record<string, string[]>;
   /** Short one-line description used on cards and meta descriptions */
   summary: string;
   /** Longer description shown on the detail page */
@@ -72,6 +74,8 @@ export const products: Product[] = [
     slug: "signature-executive-gift-hamper",
     name: "Signature Executive Gift Hamper",
     category: "Corporate Gifting",
+    subcategories: ["Gift Sets", "Corporate Gifts"],
+    filterAttributes: {"price": ["2000_5000"], "minOrder": ["10_49"]},
     summary: "A curated leadership hamper assembled and branded to your specification.",
     description:
       "A considered gifting programme in a single box: notebook, pen, drinkware and a fragrance accent, presented in rigid packaging. Contents can be adjusted per recipient tier, and the full hamper can be branded with your identity.",
@@ -107,6 +111,8 @@ export const products: Product[] = [
     slug: "matte-insulated-steel-bottle",
     name: "Matte Insulated Steel Bottle",
     category: "Corporate Gifting",
+    subcategories: ["Drinkware & Utensils", "Corporate Gifts"],
+    filterAttributes: {"price": ["under_2000"], "minOrder": ["50_plus"]},
     summary: "Double-walled 750ml bottle with a soft matte finish for everyday use.",
     description:
       "A durable, everyday-carry bottle in double-walled stainless steel. Holds temperature for up to 12 hours and takes laser engraving cleanly, making it a reliable choice for large-volume team gifting.",
@@ -131,6 +137,8 @@ export const products: Product[] = [
     slug: "leather-document-organiser",
     name: "Leather Document Organiser",
     category: "Corporate Gifting",
+    subcategories: ["Corporate Gifts", "Premium Gifts"],
+    filterAttributes: {"price": ["2000_5000"], "minOrder": ["10_49"]},
     summary: "A4 organiser in full-grain leather with notepad and card slots.",
     description:
       "A quietly premium organiser for meetings and onboarding kits. Full-grain leather exterior, card and pen slots inside, and a replaceable A4 ruled pad.",
@@ -154,6 +162,8 @@ export const products: Product[] = [
     slug: "hardbound-executive-notebook",
     name: "Hardbound Executive Notebook",
     category: "Office Supplies",
+    subcategories: ["Notebooks", "Office Supplies"],
+    filterAttributes: {"type": ["notebooks"]},
     summary: "A5 hardbound notebook on 100gsm ivory paper with an elastic closure.",
     description:
       "A dependable daily notebook: hardbound spine that opens flat, 100gsm ivory paper that resists bleed-through, ribbon marker and elastic closure.",
@@ -179,6 +189,8 @@ export const products: Product[] = [
     slug: "brushed-metal-rollerball-pen",
     name: "Brushed Metal Rollerball Pen",
     category: "Office Supplies",
+    subcategories: ["Writing Instruments", "Office Supplies"],
+    filterAttributes: {"type": ["writing"]},
     summary: "Weighted brass-body rollerball with a smooth 0.7mm German refill.",
     description:
       "A balanced, weighted rollerball with a brushed metal body and a smooth German-made refill. A practical desk gift that survives daily use.",
@@ -202,6 +214,8 @@ export const products: Product[] = [
     slug: "minimal-desk-accessory-set",
     name: "Minimal Desk Accessory Set",
     category: "Office Supplies",
+    subcategories: ["Desk Accessories", "Office Supplies"],
+    filterAttributes: {"type": ["desk"]},
     summary: "Five-piece desk set in powder-coated steel and oak.",
     description:
       "A coordinated desk set — tray, pen cup, card stand, clip holder and coaster — in powder-coated steel with oak accents. Suited to executive desks and workspace refresh programmes.",
@@ -224,6 +238,8 @@ export const products: Product[] = [
     slug: "a4-multipurpose-paper-carton",
     name: "A4 Multipurpose Paper — Carton",
     category: "Office Supplies",
+    subcategories: ["Office Supplies"],
+    filterAttributes: {"type": ["paper"]},
     summary: "75gsm A4 copier paper, 5 reams per carton, on scheduled replenishment.",
     description:
       "High-brightness 75gsm A4 paper suitable for copiers, laser and inkjet printers. Supplied by the carton and available on a scheduled replenishment contract.",
@@ -246,6 +262,8 @@ export const products: Product[] = [
     slug: "silent-wireless-mouse",
     name: "Silent Wireless Mouse",
     category: "Hardware & IT",
+    subcategories: ["Mouse", "Computer Accessories"],
+    filterAttributes: {"connectivity": ["wireless"], "type": ["peripherals"]},
     summary: "Quiet-click 2.4GHz mouse with adjustable DPI and long battery life.",
     description:
       "A quiet-click wireless mouse designed for shared workspaces. Adjustable DPI, 2.4GHz USB receiver and up to 12 months of battery life on a single AA cell.",
@@ -270,6 +288,8 @@ export const products: Product[] = [
     slug: "low-profile-wireless-keyboard",
     name: "Low-Profile Wireless Keyboard",
     category: "Hardware & IT",
+    subcategories: ["Keyboards", "Computer Accessories"],
+    filterAttributes: {"connectivity": ["wireless", "bluetooth"], "type": ["peripherals"]},
     summary: "Full-size scissor-switch keyboard with multi-device pairing.",
     description:
       "A slim full-size keyboard with scissor-switch keys and multi-device Bluetooth pairing, suited to hot-desking and hybrid workstations.",
@@ -292,6 +312,8 @@ export const products: Product[] = [
     slug: "compact-workgroup-printer",
     name: "Compact Workgroup Printer",
     category: "Hardware & IT",
+    subcategories: ["Printers", "Hardware & IT"],
+    filterAttributes: {"connectivity": ["wireless", "wired"], "type": ["printers"]},
     summary: "Duplex mono laser printer for teams of 10–25, with network printing.",
     description:
       "A compact mono laser printer for small workgroups. Automatic duplex, wired and wireless network printing, and a 250-sheet tray. Supplied with installation and consumables planning.",
@@ -315,6 +337,8 @@ export const products: Product[] = [
     slug: "usb-c-docking-station",
     name: "USB-C Docking Station",
     category: "Hardware & IT",
+    subcategories: ["Computer Accessories", "Hardware & IT"],
+    filterAttributes: {"connectivity": ["wired"], "type": ["peripherals"]},
     summary: "Single-cable dock with dual display output and 90W passthrough charging.",
     description:
       "A single-cable dock for hybrid desks: dual display output, gigabit ethernet, USB-A ports and 90W passthrough charging for laptops.",
@@ -338,6 +362,8 @@ export const products: Product[] = [
     slug: "branded-corporate-stationery-kit",
     name: "Branded Corporate Stationery Kit",
     category: "Printing & Branding",
+    subcategories: ["Corporate Branding", "Printed Materials"],
+    filterAttributes: {"customization": ["print"]},
     summary: "Letterheads, envelopes and cards printed to your brand specification.",
     description:
       "A complete printed stationery programme — letterheads, envelopes, compliment slips and business cards — produced to your brand guidelines with colour matching across runs.",
@@ -360,6 +386,8 @@ export const products: Product[] = [
     slug: "custom-branded-merchandise-pack",
     name: "Custom Branded Merchandise Pack",
     category: "Printing & Branding",
+    subcategories: ["Branded Merchandise", "Custom Printing"],
+    filterAttributes: {"customization": ["embroidery", "print", "laser_engraving"]},
     summary: "Apparel, drinkware and desk items branded as a single merchandise programme.",
     description:
       "A merchandise programme assembled around one brand identity: apparel, drinkware, bags and desk items, produced together so finishes and colours stay consistent.",
@@ -378,6 +406,8 @@ export const products: Product[] = [
     slug: "eastern-oud-perfume-100ml",
     name: "Eastern Oud Perfume 100ml",
     category: "Fragrance & Luxury Gifting",
+    subcategories: ["Eastern Perfumes", "Perfumes"],
+    filterAttributes: {"scent": ["oud", "amber"], "volume": ["100ml"]},
     summary: "A deep oud composition with amber and saffron, in a weighted glass flacon.",
     description:
       "An eastern composition built on oud, warmed by amber and saffron, with a long dry-down. Presented in a weighted glass flacon inside a rigid gift box.",
@@ -402,6 +432,8 @@ export const products: Product[] = [
     slug: "western-signature-eau-de-parfum",
     name: "Western Signature Eau de Parfum",
     category: "Fragrance & Luxury Gifting",
+    subcategories: ["Western Perfumes", "Perfumes"],
+    filterAttributes: {"scent": ["citrus", "musk"], "volume": ["100ml"]},
     summary: "A fresh citrus-cedar signature suited to daily corporate wear.",
     description:
       "A bright opening of bergamot and citrus settling into cedar and light musk — a versatile signature that reads well in professional settings.",
@@ -423,6 +455,8 @@ export const products: Product[] = [
     slug: "luxury-fragrance-gift-set",
     name: "Luxury Fragrance Gift Set",
     category: "Fragrance & Luxury Gifting",
+    subcategories: ["Luxury Gifting", "Gift Sets", "Premium Gifts"],
+    filterAttributes: {"scent": ["oud", "citrus"], "volume": ["50ml", "100ml"]},
     summary: "Perfume, candle and diffuser presented as one luxury gifting set.",
     description:
       "A three-piece luxury set — eau de parfum, scented candle and reed diffuser — sharing a single scent story, presented in a rigid box for senior recipients.",
