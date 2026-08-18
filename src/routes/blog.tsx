@@ -64,7 +64,7 @@ function BlogPage() {
 
         {/* Featured Article */}
         <section className="mb-16">
-          <Link to={`/blog/${featuredArticle.slug}`} className="group block">
+          <Link to="/blog/$slug" params={{ slug: featuredArticle.slug }} className="group block">
             <div className="relative h-96 md:h-[32rem] rounded-xl overflow-hidden mb-6">
               <img src={featuredArticle.image} alt={featuredArticle.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
               <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors" />
@@ -85,7 +85,7 @@ function BlogPage() {
           <h3 className="text-2xl font-light text-foreground mb-8">Latest Articles</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
             {articles.map((article, idx) => (
-              <Link key={idx} to={`/blog/${article.slug}`} className="group flex flex-col">
+              <Link key={idx} to="/blog/$slug" params={{ slug: article.slug }} className="group flex flex-col">
                 <div className="relative h-48 rounded-lg overflow-hidden mb-4 bg-secondary">
                   <img src={article.image} alt={article.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
                 </div>
