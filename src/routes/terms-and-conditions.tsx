@@ -258,7 +258,7 @@ function TermsAndConditionsPage() {
   };
 
   return (
-    <main className="min-h-screen bg-[#FAFAF8] text-foreground" style={{ fontFamily: "var(--font-nexa)" }}>
+    <main className="min-h-screen bg-[#FAFAF8] text-foreground">
       <Nav />
 
       {/* Hero Section */}
@@ -278,12 +278,12 @@ function TermsAndConditionsPage() {
           <nav aria-label="Breadcrumb" className="mb-6 flex items-center justify-center gap-2 text-[13px] font-medium text-muted-foreground">
             <Link
               to="/"
-              className="transition-colors duration-200 hover:text-[var(--s-dark)]"
+              className="transition-colors duration-200 hover:text-foreground"
             >
               Home
             </Link>
             <ChevronRight size={14} className="text-muted-foreground/60" />
-            <span className="font-semibold text-[var(--s-dark)]">
+            <span className="font-semibold text-foreground">
               Terms & Conditions
             </span>
           </nav>
@@ -292,9 +292,9 @@ function TermsAndConditionsPage() {
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-            className="mb-5 mx-auto inline-flex items-center gap-2 rounded-full border border-[rgba(0,0,0,0.08)] bg-white px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.2em] text-[var(--s-dark)] shadow-sm"
+            className="mb-5 mx-auto inline-flex items-center gap-2 rounded-full border border-[rgba(0,0,0,0.08)] bg-white px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.2em] text-foreground shadow-sm"
           >
-            <ShieldCheck size={14} className="text-[var(--s-dark)]" />
+            <ShieldCheck size={14} className="text-foreground" />
             <span>LEGAL & COMPLIANCE</span>
           </motion.div>
 
@@ -302,7 +302,7 @@ function TermsAndConditionsPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
-            className="mb-6 font-display text-[36px] font-bold leading-tight tracking-tight text-[var(--s-dark)] md:text-[50px] lg:text-[58px]"
+            className="mb-6 font-display text-[36px] font-bold leading-tight tracking-tight text-foreground md:text-[50px] lg:text-[58px]"
           >
             Terms & Conditions
           </motion.h1>
@@ -338,15 +338,15 @@ function TermsAndConditionsPage() {
                       onClick={() => scrollToSection(sec.id)}
                       className={`group flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-left text-[14px] transition-all duration-200 ${
                         isActive
-                          ? "bg-[var(--s-dark)] text-white font-semibold shadow-sm"
-                          : "text-[rgb(15_17_23_/_0.7)] hover:bg-white hover:text-[var(--s-dark)]"
+                          ? "bg-foreground text-white font-semibold shadow-sm"
+                          : "text-[rgb(15_17_23_/_0.7)] hover:bg-white hover:text-foreground"
                       }`}
                     >
                       <span
                         className={`text-[12px] font-mono font-bold ${
                           isActive
                             ? "text-white/80"
-                            : "text-muted-foreground group-hover:text-[var(--s-dark)]"
+                            : "text-muted-foreground group-hover:text-foreground"
                         }`}
                       >
                         {sec.number}
@@ -363,7 +363,7 @@ function TermsAndConditionsPage() {
               <div className="rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white p-2 shadow-sm">
                 <button
                   onClick={() => setIsMobileTocOpen(!isMobileTocOpen)}
-                  className="flex w-full items-center justify-between rounded-xl bg-[#FAFAF8] px-4 py-3.5 text-left font-bold text-[15px] text-[var(--s-dark)] transition-colors hover:bg-[rgba(0,0,0,0.02)]"
+                  className="flex w-full items-center justify-between rounded-xl bg-[#FAFAF8] px-4 py-3.5 text-left font-bold text-[15px] text-foreground transition-colors hover:bg-[rgba(0,0,0,0.02)]"
                 >
                   <span className="flex items-center gap-2.5">
                     <BookOpen size={17} />
@@ -391,7 +391,7 @@ function TermsAndConditionsPage() {
                           <button
                             key={sec.id}
                             onClick={() => scrollToSection(sec.id)}
-                            className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[14px] text-[rgb(15_17_23_/_0.75)] hover:bg-[#FAFAF8] hover:text-[var(--s-dark)] font-medium"
+                            className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[14px] text-[rgb(15_17_23_/_0.75)] hover:bg-[#FAFAF8] hover:text-foreground font-medium"
                           >
                             <span className="font-mono text-[12px] font-bold text-muted-foreground">
                               {sec.number}
@@ -432,10 +432,10 @@ function TermsAndConditionsPage() {
                   >
                     {/* Section Header */}
                     <div className="mb-5 flex items-center gap-4">
-                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#FAFAF8] border border-[rgba(0,0,0,0.06)] font-mono text-[16px] font-bold text-[var(--s-dark)] group-hover:bg-[var(--s-dark)] group-hover:text-white transition-colors duration-300">
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#FAFAF8] border border-[rgba(0,0,0,0.06)] font-mono text-[16px] font-bold text-foreground group-hover:bg-foreground group-hover:text-white transition-colors duration-300">
                         {section.number}
                       </div>
-                      <h2 className="font-display text-[22px] md:text-[26px] font-bold text-[var(--s-dark)] tracking-tight">
+                      <h2 className="font-display text-[22px] md:text-[26px] font-bold text-foreground tracking-tight">
                         {section.title}
                       </h2>
                     </div>
@@ -533,10 +533,10 @@ function TermsAndConditionsPage() {
                 transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
                 className="mt-12 rounded-3xl border border-[rgba(0,0,0,0.08)] bg-white p-8 md:p-12 text-center shadow-[0_4px_25px_rgba(0,0,0,0.03)]"
               >
-                <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[#FAFAF8] border border-[rgba(0,0,0,0.07)] text-[var(--s-dark)]">
+                <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[#FAFAF8] border border-[rgba(0,0,0,0.07)] text-foreground">
                   <HelpCircle size={24} />
                 </div>
-                <h3 className="font-display text-[26px] md:text-[32px] font-bold text-[var(--s-dark)] tracking-tight mb-3">
+                <h3 className="font-display text-[26px] md:text-[32px] font-bold text-foreground tracking-tight mb-3">
                   Need Assistance?
                 </h3>
                 <p className="mx-auto max-w-xl text-[16px] leading-relaxed text-[rgb(15_17_23_/_0.7)] mb-8">
@@ -546,14 +546,14 @@ function TermsAndConditionsPage() {
                 <div className="flex flex-wrap items-center justify-center gap-4">
                   <Link
                     to="/contact-us"
-                    className="inline-flex items-center gap-2.5 rounded-xl bg-[var(--s-dark)] px-7 py-3.5 text-[15px] font-bold text-white shadow-md transition-all duration-300 hover:bg-[var(--s-dark)]/90 hover:shadow-lg"
+                    className="inline-flex items-center gap-2.5 rounded-xl bg-foreground px-7 py-3.5 text-[15px] font-bold text-white shadow-md transition-all duration-300 hover:bg-foreground/90 hover:shadow-lg"
                   >
                     <span>Contact Us</span>
                     <ArrowRight size={17} />
                   </Link>
                   <Link
                     to="/catalogues"
-                    className="inline-flex items-center gap-2.5 rounded-xl border border-[rgba(0,0,0,0.12)] bg-[#FAFAF8] px-7 py-3.5 text-[15px] font-bold text-[var(--s-dark)] transition-all duration-300 hover:bg-white hover:border-[rgba(0,0,0,0.25)]"
+                    className="inline-flex items-center gap-2.5 rounded-xl border border-[rgba(0,0,0,0.12)] bg-[#FAFAF8] px-7 py-3.5 text-[15px] font-bold text-foreground transition-all duration-300 hover:bg-white hover:border-[rgba(0,0,0,0.25)]"
                   >
                     <span>Explore Catalogues</span>
                     <FileText size={17} />

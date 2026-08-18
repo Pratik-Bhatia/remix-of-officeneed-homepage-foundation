@@ -23,13 +23,13 @@ function PrivacyPolicyPage() {
 
       
       {/* Compact Hero */}
-      <section className="relative flex min-h-[40vh] md:min-h-[50vh] flex-col items-center justify-center overflow-hidden bg-[#FAFAF8] px-6 py-24 text-center md:px-10" style={{ fontFamily: "var(--font-nexa)" }}>
+      <section className="relative flex min-h-[40vh] md:min-h-[50vh] flex-col items-center justify-center overflow-hidden bg-[#FAFAF8] px-6 py-24 text-center md:px-10">
         
         {/* Subtle Background Pattern */}
         <div 
           className="pointer-events-none absolute inset-0 opacity-[0.03]"
           style={{
-            backgroundImage: "radial-gradient(circle at 50% 50%, var(--s-dark) 0%, transparent 60%)",
+            backgroundImage: "radial-gradient(circle at 50% 50%, rgba(0,0,0,0.1) 0%, transparent 60%)",
           }}
         />
 
@@ -38,7 +38,7 @@ function PrivacyPolicyPage() {
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-            className="mb-6 mx-auto inline-flex items-center rounded-full border border-[rgba(0,0,0,0.06)] bg-white px-4 py-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--s-dark)] shadow-sm"
+            className="mb-6 mx-auto inline-flex items-center rounded-full border border-[rgba(0,0,0,0.06)] bg-white px-4 py-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-foreground shadow-sm"
           >
             LEGAL
           </motion.div>
@@ -47,7 +47,7 @@ function PrivacyPolicyPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
-            className="mb-6 font-display text-[32px] font-bold leading-tight tracking-tight text-[var(--s-dark)] md:text-[48px] lg:text-[56px]"
+            className="mb-6 font-display text-[32px] font-bold leading-tight tracking-tight text-foreground md:text-[48px] lg:text-[56px]"
           >
             Privacy Policy
           </motion.h1>
@@ -64,9 +64,9 @@ function PrivacyPolicyPage() {
       </section>
 
       {/* Privacy Content */}
-      <section className="py-16 md:py-20" style={{ fontFamily: "var(--font-nexa)" }}>
+      <section className="py-16 md:py-20">
         <div className="mx-auto max-w-[850px] px-6 md:px-10">
-          <div className="prose prose-lg mx-auto max-w-none text-[rgb(15_17_23_/_0.7)] prose-headings:text-[var(--s-dark)] prose-headings:font-bold prose-h2:mt-12 prose-h2:mb-6 prose-h2:text-[24px] prose-h2:tracking-tight md:prose-h2:text-[28px] prose-p:mb-6 prose-p:leading-[1.8] prose-p:text-[16px] prose-li:text-[16px] prose-li:marker:text-[var(--s-dark)] prose-a:text-[var(--s-dark)] hover:prose-a:text-black">
+          <div className="prose prose-lg mx-auto max-w-none text-[rgb(15_17_23_/_0.7)] prose-headings:text-foreground prose-headings:font-bold prose-h2:mt-12 prose-h2:mb-6 prose-h2:text-[24px] prose-h2:tracking-tight md:prose-h2:text-[28px] prose-p:mb-6 prose-p:leading-[1.8] prose-p:text-[16px] prose-li:text-[16px] prose-li:marker:text-foreground prose-a:text-foreground hover:prose-a:text-black">
             
             <p><strong>Last Updated: {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</strong></p>
 
