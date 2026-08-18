@@ -552,7 +552,7 @@ function TermsAndConditionsPage() {
                     <ArrowRight size={17} />
                   </Link>
                   <Link
-                    to="/catalogues"
+                    to="/products"
                     className="inline-flex items-center gap-2.5 rounded-xl border border-[rgba(0,0,0,0.12)] bg-[#FAFAF8] px-7 py-3.5 text-[15px] font-bold text-foreground transition-all duration-300 hover:bg-white hover:border-[rgba(0,0,0,0.25)]"
                   >
                     <span>Explore Catalogues</span>
