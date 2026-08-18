@@ -269,7 +269,7 @@ export function Footer() {
                 {quickLinks.map(({ label, href }) => (
                   <li key={label}>
                     <Link
-                      to={href}
+                      to={href as any}
                       className="text-xs text-background/80 transition-colors hover:text-background sm:text-sm"
                     >
                       {label}
@@ -341,7 +341,7 @@ export function Footer() {
                 {bottomLinks.map(({ label, href }) => (
                   <li key={label}>
                     <Link
-                      to={href}
+                      to={href as any}
                       className="text-[0.7rem] text-background/60 underline-offset-4 transition-colors hover:text-background hover:underline sm:text-xs"
                     >
                       {label}
