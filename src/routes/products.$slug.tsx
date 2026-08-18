@@ -99,6 +99,9 @@ function ProductDetail() {
   const related = getRelatedProducts(product, 4);
   const step = 1;
   const min = product.minimumOrderQuantity ?? 1;
+  const numericPrice = product.price ? parseInt(product.price.replace(/\D/g, ""), 10) : 0;
+  const displayPrice = numericPrice ? `₹${(numericPrice * quantity).toLocaleString("en-IN")}` : product.price;
+
 
   return (
     <div className="min-h-screen bg-background">
@@ -146,7 +149,7 @@ function ProductDetail() {
                         aria-label={`Show image ${i + 1} of ${product.images.length}`}
                         aria-current={activeImage === i}
                         className={cn(
-                          "size-16 sm:size-20 shrink-0 overflow-hidden rounded-xl border bg-secondary transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground",
+                          "size-24 sm:size-32 shrink-0 overflow-hidden rounded-xl border bg-secondary transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground",
                           activeImage === i ? "border-foreground ring-1 ring-foreground opacity-100" : "border-border opacity-70 hover:opacity-100",
                         )}
                       >
@@ -195,31 +198,34 @@ function ProductDetail() {
             {/* Information */}
             <div>
               <p className="text-eyebrow text-muted-foreground">{product.category}</p>
-              <h1 className="mt-2 text-section">{product.name}</h1>
-              <p className="mt-4 text-sm leading-relaxed text-muted-foreground sm:text-base">
-                {product.summary}
-              </p>
+              <h1 className="mt-2 text-2xl md:text-3xl font-light tracking-tight text-foreground leading-tight">{product.name}</h1>
+              
+              <div className="mt-4 space-y-3">
+                <p className="text-sm leading-relaxed text-muted-foreground sm:text-base">
+                  {product.summary}
+                </p>
 
-              <p className="mt-6 text-lg font-semibold tabular-nums text-foreground">
-                {product.price
-                  ? `${product.startingPrice ? "From " : ""}${product.price}`
-                  : "Price on enquiry"}
-              </p>
+                <p className="text-xl font-medium tabular-nums text-foreground">
+                  {product.price
+                    ? `${product.startingPrice ? "From " : ""}${displayPrice}`
+                    : "Price on enquiry"}
+                </p>
 
-              <dl className="mt-4 space-y-1 text-xs text-muted-foreground">
-                {product.availability ? (
-                  <div className="flex gap-2">
-                    <dt className="font-medium text-foreground/80">Availability</dt>
-                    <dd>{product.availability}</dd>
-                  </div>
-                ) : null}
-                {product.sku ? (
-                  <div className="flex gap-2">
-                    <dt className="font-medium text-foreground/80">Product code</dt>
-                    <dd className="tabular-nums">{product.sku}</dd>
-                  </div>
-                ) : null}
-              </dl>
+                <dl className="flex flex-wrap gap-x-6 gap-y-2 text-xs text-muted-foreground">
+                  {product.availability ? (
+                    <div className="flex items-center gap-1.5">
+                      <dt className="font-medium text-foreground/80">Availability:</dt>
+                      <dd>{product.availability}</dd>
+                    </div>
+                  ) : null}
+                  {product.sku ? (
+                    <div className="flex items-center gap-1.5">
+                      <dt className="font-medium text-foreground/80">Product code:</dt>
+                      <dd className="tabular-nums">{product.sku}</dd>
+                    </div>
+                  ) : null}
+                </dl>
+              </div>
 
               {product.supportsQuantity ? (
                 <div className="mt-6">
@@ -243,7 +249,7 @@ function ProductDetail() {
                       onChange={(e) =>
                         setQuantity(Math.max(min, Number(e.target.value) || min))
                       }
-                      className="w-16 border-x border-border bg-background py-2 text-center text-sm tabular-nums outline-none"
+                      className="w-12 border-x border-border bg-background py-1.5 text-center text-sm tabular-nums outline-none"
                     />
                     <button
                       type="button"
@@ -258,28 +264,22 @@ function ProductDetail() {
               ) : null}
 
               <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-                <EnquiryDialog
-                  product={product}
-                  quantity={product.supportsQuantity ? quantity : undefined}
-                  trigger={
-                    <Button size="lg" className="w-full sm:w-auto">
-                      Enquire Now
-                    </Button>
-                  }
-                />
+                <Button size="lg" className="w-full sm:w-auto font-medium text-background bg-foreground hover:bg-foreground/90">
+                  Buy Now
+                </Button>
                 <EnquiryDialog
                   product={product}
                   quantity={product.supportsQuantity ? quantity : undefined}
                   trigger={
                     <Button size="lg" variant="outline" className="w-full sm:w-auto">
-                      Add to Enquiry
+                      Enquire Now
                     </Button>
                   }
                 />
               </div>
 
               {/* Details */}
-              <div className="mt-10 space-y-8 border-t border-border pt-8">
+              <div className="mt-6 space-y-6 border-t border-border pt-6">
                 <section>
                   <h2 className="text-sm font-semibold text-foreground">Description</h2>
                   <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
