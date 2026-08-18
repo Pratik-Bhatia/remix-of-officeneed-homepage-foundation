@@ -166,7 +166,7 @@ export function ChatWidget() {
   return (
     <div
       className={cn(
-        "fixed inset-x-0 bottom-0 z-[60] flex justify-end px-0 sm:inset-auto sm:bottom-6 sm:right-6 sm:px-0",
+        "fixed inset-x-0 bottom-0 z-[100] flex justify-end px-0 sm:inset-auto sm:bottom-6 sm:right-6 sm:px-0",
         !open && "pointer-events-none",
       )}
       aria-live="polite"
