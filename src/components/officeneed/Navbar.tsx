@@ -132,6 +132,12 @@ export function Navbar() {
                 </button>
               </li>
             ))}
+            <li>
+              <Link to="/about-us" className="nav-link h-16 xl:h-20 whitespace-nowrap">About Us</Link>
+            </li>
+            <li>
+              <Link to="/contact-us" className="nav-link h-16 xl:h-20 whitespace-nowrap">Contact</Link>
+            </li>
           </ul>
         </nav>
 
@@ -279,6 +285,45 @@ export function Navbar() {
               );
             })}
           </ul>
+          
+          <div className="my-6 border-t border-border"></div>
+          <div className="flex flex-col gap-2">
+            <Link
+              to="/about-us"
+              onClick={() => setMobileOpen(false)}
+              className="flex min-h-12 w-full items-center text-[15px] text-muted-foreground hover:text-foreground"
+            >
+              About Us
+            </Link>
+            <Link
+              to="/clients"
+              onClick={() => setMobileOpen(false)}
+              className="flex min-h-12 w-full items-center text-[15px] text-muted-foreground hover:text-foreground"
+            >
+              Our Clients
+            </Link>
+            <Link
+              to="/faqs"
+              onClick={() => setMobileOpen(false)}
+              className="flex min-h-12 w-full items-center text-[15px] text-muted-foreground hover:text-foreground"
+            >
+              FAQs
+            </Link>
+            <Link
+              to="/blog"
+              onClick={() => setMobileOpen(false)}
+              className="flex min-h-12 w-full items-center text-[15px] text-muted-foreground hover:text-foreground"
+            >
+              Blog
+            </Link>
+            <Link
+              to="/contact-us"
+              onClick={() => setMobileOpen(false)}
+              className="flex min-h-12 w-full items-center text-[15px] text-muted-foreground hover:text-foreground"
+            >
+              Contact Us
+            </Link>
+          </div>
 
           <button
             type="button"
