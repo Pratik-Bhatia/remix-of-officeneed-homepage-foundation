@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
-import { Minus, Plus } from "lucide-react";
+import { Minus, Plus, ChevronLeft, ChevronRight } from "lucide-react";
 import { Navbar } from "@/components/officeneed/Navbar";
 import { Footer } from "@/components/officeneed/Footer";
 import { ProductCard } from "@/components/officeneed/ProductCard";
@@ -89,6 +89,13 @@ function ProductDetail() {
   const { product } = Route.useLoaderData();
   const [activeImage, setActiveImage] = useState(0);
   const [quantity, setQuantity] = useState(product.minimumOrderQuantity ?? 1);
+  
+  const nextImage = () => {
+    setActiveImage((prev) => (prev + 1) % product.images.length);
+  };
+  const prevImage = () => {
+    setActiveImage((prev) => (prev - 1 + product.images.length) % product.images.length);
+  };
   const related = getRelatedProducts(product, 4);
   const step = 1;
   const min = product.minimumOrderQuantity ?? 1;
@@ -96,7 +103,7 @@ function ProductDetail() {
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
-      <main className="w-full overflow-x-hidden">
+      <main className="w-full overflow-clip">
         <div className="mx-auto w-full max-w-[1600px] px-5 py-8 sm:px-8 sm:py-10 lg:px-12 lg:py-14">
           <nav aria-label="Breadcrumb" className="mb-6">
             <ol className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
@@ -121,43 +128,68 @@ function ProductDetail() {
           </nav>
 
           <div className="grid gap-10 lg:grid-cols-2 lg:gap-16">
-            {/* Gallery */}
-            <div>
-              <div className="overflow-hidden rounded-2xl bg-secondary">
-                <img
-                  src={product.images[activeImage]}
-                  alt={`${product.name} — image ${activeImage + 1}`}
-                  className="aspect-4/3 w-full object-contain p-6 sm:p-10"
-                />
-              </div>
-              {product.images.length > 1 ? (
-                <div
-                  role="group"
-                  aria-label="Product images"
-                  className="mt-4 flex gap-3 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-                >
-                  {product.images.map((src, i) => (
-                    <button
-                      key={src}
-                      type="button"
-                      onClick={() => setActiveImage(i)}
-                      aria-label={`Show image ${i + 1} of ${product.images.length}`}
-                      aria-current={activeImage === i}
-                      className={cn(
-                        "size-20 shrink-0 overflow-hidden rounded-xl border bg-secondary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground sm:size-24",
-                        activeImage === i ? "border-foreground" : "border-border",
-                      )}
-                    >
-                      <img
-                        src={src}
-                        alt=""
-                        loading="lazy"
-                        className="h-full w-full object-cover"
-                      />
-                    </button>
-                  ))}
+            {/* Gallery Wrapper (Sticky on desktop) */}
+            <div className="lg:sticky lg:top-[120px] self-start">
+              <div className="flex flex-col lg:flex-row gap-4">
+                {/* Thumbnails */}
+                {product.images.length > 1 && (
+                  <div
+                    role="group"
+                    aria-label="Product thumbnails"
+                    className="order-2 lg:order-1 flex lg:flex-col gap-3 overflow-x-auto lg:overflow-y-auto pb-2 lg:pb-0 lg:pr-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                  >
+                    {product.images.map((src, i) => (
+                      <button
+                        key={src}
+                        type="button"
+                        onClick={() => setActiveImage(i)}
+                        aria-label={`Show image ${i + 1} of ${product.images.length}`}
+                        aria-current={activeImage === i}
+                        className={cn(
+                          "size-16 sm:size-20 shrink-0 overflow-hidden rounded-xl border bg-secondary transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground",
+                          activeImage === i ? "border-foreground ring-1 ring-foreground opacity-100" : "border-border opacity-70 hover:opacity-100",
+                        )}
+                      >
+                        <img
+                          src={src}
+                          alt=""
+                          loading="lazy"
+                          className="h-full w-full object-cover"
+                        />
+                      </button>
+                    ))}
+                  </div>
+                )}
+                
+                {/* Main Image */}
+                <div className="order-1 lg:order-2 flex-1 relative overflow-hidden rounded-2xl bg-secondary group">
+                  <img
+                    src={product.images[activeImage]}
+                    alt={`${product.name} — image ${activeImage + 1}`}
+                    className="aspect-square lg:aspect-[4/3] w-full object-contain p-6 sm:p-10"
+                  />
+                  
+                  {/* Arrows */}
+                  {product.images.length > 1 && (
+                    <>
+                      <button
+                        onClick={prevImage}
+                        aria-label="Previous product image"
+                        className="absolute left-3 lg:left-4 top-1/2 -translate-y-1/2 flex items-center justify-center size-9 lg:size-10 rounded-full bg-background/80 backdrop-blur border border-border text-foreground opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity hover:bg-background focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground shadow-sm"
+                      >
+                        <ChevronLeft className="size-4 lg:size-5" />
+                      </button>
+                      <button
+                        onClick={nextImage}
+                        aria-label="Next product image"
+                        className="absolute right-3 lg:right-4 top-1/2 -translate-y-1/2 flex items-center justify-center size-9 lg:size-10 rounded-full bg-background/80 backdrop-blur border border-border text-foreground opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity hover:bg-background focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground shadow-sm"
+                      >
+                        <ChevronRight className="size-4 lg:size-5" />
+                      </button>
+                    </>
+                  )}
                 </div>
-              ) : null}
+              </div>
             </div>
 
             {/* Information */}

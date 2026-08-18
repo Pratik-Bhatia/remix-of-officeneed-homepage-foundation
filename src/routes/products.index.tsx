@@ -236,7 +236,7 @@ function ProductsPage() {
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
-      <main className="w-full overflow-x-hidden">
+      <main className="w-full overflow-clip">
         <div className="mx-auto w-full max-w-[1600px] px-5 py-10 sm:px-8 sm:py-12 lg:px-12 lg:py-16">
 
 
