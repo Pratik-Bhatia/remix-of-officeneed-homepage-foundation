@@ -266,10 +266,10 @@ export function Footer() {
                 Quick Links
               </h2>
               <ul className="mt-6 space-y-4">
-                {quickLinks.map((label) => (
+                {quickLinks.map(({ label, href }) => (
                   <li key={label}>
                     <Link
-                      to="/"
+                      to={href}
                       className="text-xs text-background/80 transition-colors hover:text-background sm:text-sm"
                     >
                       {label}
@@ -338,10 +338,10 @@ export function Footer() {
                 © 2026 OfficeNeed. All rights reserved.
               </p>
               <ul className="flex flex-wrap gap-x-6 gap-y-2">
-                {bottomLinks.map((label) => (
+                {bottomLinks.map(({ label, href }) => (
                   <li key={label}>
                     <Link
-                      to="/"
+                      to={href}
                       className="text-[0.7rem] text-background/60 underline-offset-4 transition-colors hover:text-background hover:underline sm:text-xs"
                     >
                       {label}
