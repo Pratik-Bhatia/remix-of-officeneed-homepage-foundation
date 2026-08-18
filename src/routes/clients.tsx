@@ -12,6 +12,10 @@ export const Route = createFileRoute('/clients')({
   }),
 })
 
+// Automatically import all images from the client-logos directory
+const logoModules = import.meta.glob('@/assets/client-logos/*.{png,jpg,jpeg,svg}', { eager: true }) as Record<string, { default: string }>;
+const logos = Object.values(logoModules).map(mod => mod.default);
+
 function ClientsPage() {
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -24,9 +28,9 @@ function ClientsPage() {
         
         <section className="py-16 px-6 max-w-7xl mx-auto">
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-            {Array.from({ length: 12 }).map((_, i) => (
-              <div key={i} className="aspect-[3/2] bg-secondary rounded-lg flex items-center justify-center text-muted-foreground text-sm border border-border/50">
-                Client Logo
+            {logos.map((logoUrl, i) => (
+              <div key={i} className="aspect-[3/2] bg-background border border-border/50 rounded-lg flex items-center justify-center p-6 hover:shadow-sm transition-shadow">
+                <img src={logoUrl} alt="Client Logo" className="max-w-full max-h-full object-contain filter grayscale hover:grayscale-0 transition-all duration-300 opacity-70 hover:opacity-100" />
               </div>
             ))}
           </div>

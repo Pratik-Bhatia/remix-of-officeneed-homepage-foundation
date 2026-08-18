@@ -27,11 +27,12 @@ function AboutUsPage() {
         <section className="py-16 px-6 max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-16">
           <div>
             <h2 className="text-2xl mb-4 text-foreground font-medium">Our Story</h2>
-            <p className="text-muted-foreground leading-relaxed">Founded with a vision to redefine the corporate workspace, Officeneed has grown into a trusted partner for businesses seeking excellence. We understand that the right environment fuels productivity and innovation.</p>
+            <p className="text-muted-foreground leading-relaxed mb-4">For over 20 years, we've helped businesses simplify procurement. Instead of managing multiple vendors for corporate gifting, printing, office supplies, IT hardware, furniture, and pantry essentials, Officeneed brings everything together under one trusted partner.</p>
+            <p className="text-muted-foreground leading-relaxed">Our goal is simple—to save businesses time, reduce procurement hassles, and deliver reliable products and services that help teams work more efficiently.</p>
           </div>
           <div>
             <h2 className="text-2xl mb-4 text-foreground font-medium">What We Do</h2>
-            <p className="text-muted-foreground leading-relaxed">From comprehensive office supplies to high-end ergonomic furniture and technology solutions, we offer an end-to-end procurement experience tailored exclusively for B2B enterprises.</p>
+            <p className="text-muted-foreground leading-relaxed">With a reliable supply network and dedicated account managers, we help businesses save time, reduce costs, and focus on what matters most—growing their business.</p>
           </div>
         </section>
 

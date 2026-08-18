@@ -61,31 +61,44 @@ function ContactUsPage() {
           <div className="space-y-10 lg:pl-10">
             <div>
               <h2 className="text-2xl font-medium mb-6">Contact Information</h2>
-              <div className="space-y-6">
-                <div className="flex items-start gap-4">
-                  <Mail className="w-5 h-5 text-muted-foreground mt-1" />
-                  <div>
-                    <h3 className="font-medium">Email Us</h3>
-                    <p className="text-muted-foreground text-sm mt-1">support@officeneed.com</p>
-                    <p className="text-muted-foreground text-sm">sales@officeneed.com</p>
-                  </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
+                
+                <div className="flex flex-col gap-2">
+                  <h3 className="font-medium">Corporate Gifting</h3>
+                  <a href="tel:+919922655975" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"><Phone className="w-4 h-4" /> +91 99226 55975</a>
+                  <a href="mailto:gifting@officeneed.in" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"><Mail className="w-4 h-4" /> gifting@officeneed.in</a>
                 </div>
-                <div className="flex items-start gap-4">
-                  <Phone className="w-5 h-5 text-muted-foreground mt-1" />
-                  <div>
-                    <h3 className="font-medium">Call Us</h3>
-                    <p className="text-muted-foreground text-sm mt-1">+1 (800) 123-4567</p>
-                    <p className="text-muted-foreground text-sm">Mon-Fri, 9am-6pm EST</p>
-                  </div>
+
+                <div className="flex flex-col gap-2">
+                  <h3 className="font-medium">Stationery</h3>
+                  <a href="tel:+917972797965" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"><Phone className="w-4 h-4" /> +91 79727 97965</a>
+                  <a href="mailto:contact@officeneed.in" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"><Mail className="w-4 h-4" /> contact@officeneed.in</a>
                 </div>
-                <div className="flex items-start gap-4">
+
+                <div className="flex flex-col gap-2">
+                  <h3 className="font-medium">Hardware & IT</h3>
+                  <a href="tel:+919762136698" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"><Phone className="w-4 h-4" /> +91 97621 36698</a>
+                  <a href="mailto:computer@officeneed.in" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"><Mail className="w-4 h-4" /> computer@officeneed.in</a>
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <h3 className="font-medium">Printing & Branding</h3>
+                  <a href="tel:+917972398840" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"><Phone className="w-4 h-4" /> +91 79723 98840</a>
+                  <a href="mailto:print@officeneed.in" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"><Mail className="w-4 h-4" /> print@officeneed.in</a>
+                </div>
+
+              </div>
+
+              <div className="mt-8 pt-8 border-t border-border flex items-start gap-4">
                   <MapPin className="w-5 h-5 text-muted-foreground mt-1" />
                   <div>
-                    <h3 className="font-medium">Headquarters</h3>
-                    <p className="text-muted-foreground text-sm mt-1">123 Corporate Blvd, Suite 400<br />New York, NY 10001</p>
+                    <h3 className="font-medium">Primary Office</h3>
+                    <p className="text-muted-foreground text-sm mt-1">Officeneed, India</p>
+                    <p className="text-muted-foreground text-sm mt-2 font-medium">Business Hours</p>
+                    <p className="text-muted-foreground text-sm">Mon-Fri, 9am-6pm IST</p>
                   </div>
-                </div>
               </div>
+
             </div>
           </div>
         </section>
