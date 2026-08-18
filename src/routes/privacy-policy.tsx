@@ -130,11 +130,6 @@ function PrivacyPolicyPage() {
         </div>
       </section>
 
-      {/* Final CTA */}
-      <FinalCTA 
-        heading={<>Ready to streamline your<br className="hidden md:block"/> corporate procurement?</>}
-        description="Connect with our experts today to set up your corporate account."
-      />
 
       <Footer />
     </main>
