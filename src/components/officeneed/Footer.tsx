@@ -53,20 +53,19 @@ const shopLinks = [
 ];
 
 const quickLinks = [
-  "Exchanges or Returns",
-  "Our Story",
-  "Shipping Policy",
-  "Terms & Conditions",
-  "Privacy Policy",
-  "Contact Us",
+  { label: "Our Story", href: "/about-us" },
+  { label: "Our Clients", href: "/clients" },
+  { label: "Blog & Insights", href: "/blog" },
+  { label: "FAQs", href: "/faqs" },
+  { label: "Contact Us", href: "/contact-us" },
 ];
 
 const bottomLinks = [
-  "Refund Policy",
-  "Privacy Policy",
-  "Terms & Conditions",
-  "Shipping Policy",
-  "Contact Us",
+  { label: "Shipping & Delivery", href: "/shipping-delivery" },
+  { label: "Returns & Refunds", href: "/returns-refunds" },
+  { label: "Cancellation Policy", href: "/cancellation-policy" },
+  { label: "Terms & Conditions", href: "/terms-and-conditions" },
+  { label: "Privacy Policy", href: "/privacy-policy" },
 ];
 
 const socials = [
