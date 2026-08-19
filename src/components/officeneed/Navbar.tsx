@@ -11,6 +11,7 @@ function Logo({ className }: { className?: string }) {
       to="/"
       aria-label="OfficeNeed — home"
       className="inline-flex shrink-0 items-center rounded-sm"
+import { CartDrawer } from "@/components/officeneed/CartDrawer";
     >
       <img
         src={logoUrl}
