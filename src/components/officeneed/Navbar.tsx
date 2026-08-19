@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { Menu, MessageSquare, Search, ShoppingBag, User, X, ChevronDown } from "lucide-react";
 import logoUrl from "@/assets/officeneed-logo.png";
 import { primaryNavCategories as navCategories, navItemTarget } from "@/lib/navigation";
+import { CartDrawer } from "@/components/officeneed/CartDrawer";
 import { cn } from "@/lib/utils";
 
 function Logo({ className }: { className?: string }) {
@@ -11,7 +12,6 @@ function Logo({ className }: { className?: string }) {
       to="/"
       aria-label="OfficeNeed — home"
       className="inline-flex shrink-0 items-center rounded-sm"
-import { CartDrawer } from "@/components/officeneed/CartDrawer";
     >
       <img
         src={logoUrl}
