@@ -11,6 +11,8 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { Toaster } from "@/components/ui/sonner";
+import { useCartSync } from "@/hooks/useCartSync";
 import { ChatWidget } from "@/components/officeneed/ChatWidget";
 
 
@@ -127,6 +129,13 @@ function RootComponent() {
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <Outlet />
       <ChatWidget />
+      <CartSync />
+      <Toaster position="top-center" />
     </QueryClientProvider>
   );
+}
+
+function CartSync() {
+  useCartSync();
+  return null;
 }

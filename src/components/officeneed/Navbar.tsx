@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { Menu, MessageSquare, Search, ShoppingBag, User, X, ChevronDown } from "lucide-react";
+import { Menu, MessageSquare, Search, User, X, ChevronDown } from "lucide-react";
 import logoUrl from "@/assets/officeneed-logo.png";
 import { primaryNavCategories as navCategories, navItemTarget } from "@/lib/navigation";
+import { CartDrawer } from "@/components/officeneed/CartDrawer";
 import { cn } from "@/lib/utils";
 
 function Logo({ className }: { className?: string }) {
@@ -154,9 +155,7 @@ export function Navbar() {
               <User className="size-5 md:size-[22px] xl:size-5" strokeWidth={1.6} />
             </IconButton>
           </span>
-          <IconButton label="Cart" className="size-[26px] md:size-10 xl:size-11">
-            <ShoppingBag className="size-5 md:size-[22px] xl:size-5" strokeWidth={1.6} />
-          </IconButton>
+          <CartDrawer triggerClassName="size-[26px] md:size-10 xl:size-11" />
         </div>
       </div>
 
