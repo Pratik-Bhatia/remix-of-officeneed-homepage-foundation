@@ -229,3 +229,47 @@ export function useShopifyCatalogue(staticProducts: Product[]) {
   );
   return [...live, ...fallback];
 }
+
+/** Live bestsellers from Shopify (tagged "Best Selling"), static as fallback. */
+export function useShopifyBestsellers(staticItems: BestsellerProduct[]) {
+  const { data } = useQuery({
+    queryKey: ["shopify", "bestsellers"],
+    queryFn: async () => {
+      try {
+        const tagged = await fetchProducts(24, 'tag:"Best Selling"');
+        const edges = tagged.length ? tagged : await fetchProducts(12);
+        return edges.map((e) => e.node);
+      } catch {
+        return [] as ShopifyProductNode[];
+      }
+    },
+    staleTime: 5 * 60 * 1000,
+    retry: 1,
+  });
+
+  const nodes = data ?? [];
+  if (nodes.length === 0) return staticItems;
+
+  return nodes.map((node): BestsellerProduct => {
+    const p = shopifyNodeToProduct(node);
+    const category: BestsellerProduct["category"] =
+      p.category === "Office Supplies"
+        ? "Office Stationery"
+        : p.category === "Hardware & IT"
+          ? "Hardware Supplies"
+          : p.category === "Printing & Branding"
+            ? "Corporate Gifting"
+            : p.category;
+    return {
+      id: node.id,
+      name: p.name,
+      category,
+      collection: node.vendor || p.subcategories[0] || category,
+      image: p.images[0]!,
+      price: p.price ?? "Price on enquiry",
+      bestseller: true,
+      shopifyHandle: node.handle,
+      productUrl: `/products/${node.handle}`,
+    };
+  });
+}
