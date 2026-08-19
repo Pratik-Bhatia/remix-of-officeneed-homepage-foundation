@@ -24,6 +24,7 @@ import {
   type ProductSort,
 } from "@/lib/products";
 import { navCategories } from "@/lib/navigation";
+import { findShopifyMatch, mergeProduct, useShopifyIndex } from "@/lib/shopify-overlay";
 
 const TITLE = "Products — OfficeNeed";
 const DESCRIPTION =
@@ -210,7 +211,7 @@ function ProductsPage() {
       return inCategory && inSubcategory && matches && passesFilters;
     });
     return sortProducts(filtered, sort);
-  }, [category, subcategory, query, sort, activeFilters]);
+  }, [catalogue, category, subcategory, query, sort, activeFilters]);
 
 
   const currentFilters = category !== "All Products" ? categoryFilters[category as keyof typeof categoryFilters] : null;
