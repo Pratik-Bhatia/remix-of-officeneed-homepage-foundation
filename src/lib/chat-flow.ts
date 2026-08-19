@@ -1,9 +1,5 @@
 /**
  * Scripted conversation flow for the OfficeNeed chat assistant.
- *
- * Adapted from the LeadFlow capture questionnaire: the same qualification
- * signals (purpose, quantity, budget, timeline) drive a lightweight product
- * recommendation over the local catalogue.
  */
 import { products, type Product, type ProductCategory } from "./products";
 
@@ -12,22 +8,24 @@ export type ChatStepId =
   | "quantity"
   | "budget"
   | "timeline"
+  | "recommendation"
   | "name"
   | "company"
   | "email"
-  | "message";
+  | "phone"
+  | "message"
+  | "file";
 
 export type ChatStep = {
   id: ChatStepId;
   question: string;
-  /** Quick-reply chips; when absent the user types a free-text answer. */
   options?: string[];
-  inputType?: "text" | "email";
+  inputType?: "text" | "email" | "tel" | "file";
   placeholder?: string;
   optional?: boolean;
 };
 
-export const chatSteps: ChatStep[] = [
+export const qualificationSteps: ChatStep[] = [
   {
     id: "purpose",
     question: "What are you shopping for?",
@@ -55,6 +53,9 @@ export const chatSteps: ChatStep[] = [
     question: "When do you need delivery?",
     options: ["Immediately", "Within 15 days", "Within a month", "Just exploring"],
   },
+];
+
+export const enquirySteps: ChatStep[] = [
   {
     id: "name",
     question: "Great — who should we address the quote to?",
@@ -74,12 +75,24 @@ export const chatSteps: ChatStep[] = [
     placeholder: "you@company.com",
   },
   {
+    id: "phone",
+    question: "Your phone number?",
+    inputType: "tel",
+    placeholder: "+91 9876543210",
+  },
+  {
     id: "message",
     question: "Anything else we should know? (customization, branding, deadlines)",
     inputType: "text",
     placeholder: "Optional — press send to skip",
     optional: true,
   },
+  {
+    id: "file",
+    question: "Any logo or design files you want to attach?",
+    inputType: "file",
+    optional: true,
+  }
 ];
 
 export type ChatAnswers = Partial<Record<ChatStepId, string>>;
@@ -95,21 +108,16 @@ const purposeToCategories: Record<string, ProductCategory[]> = {
 
 export function parseQuantity(label?: string): number | undefined {
   switch (label) {
-    case "Under 50":
-      return 25;
-    case "50 – 250":
-      return 150;
-    case "250 – 1000":
-      return 500;
-    case "1000+":
-      return 1500;
-    default:
-      return undefined;
+    case "Under 50": return 25;
+    case "50 – 250": return 150;
+    case "250 – 1000": return 500;
+    case "1000+": return 1500;
+    default: return undefined;
   }
 }
 
 /** Ranks catalogue products against the answers collected in chat. */
-export function recommendProducts(answers: ChatAnswers, limit = 3): Product[] {
+export function recommendProducts(answers: ChatAnswers, limit = 6): Product[] {
   const wanted = purposeToCategories[answers.purpose ?? ""] ?? [];
   const qty = parseQuantity(answers.quantity) ?? 0;
 
@@ -133,13 +141,14 @@ export function recommendProducts(answers: ChatAnswers, limit = 3): Product[] {
     .map((s) => s.product);
 }
 
-export function buildEnquiryMessage(answers: ChatAnswers, recommended: Product[]): string {
+export function buildEnquiryMessage(answers: ChatAnswers, selected: {product: Product, quantity: number}[]): string {
   return [
     `Purpose: ${answers.purpose ?? "—"}`,
-    `Quantity: ${answers.quantity ?? "—"}`,
     `Budget: ${answers.budget ?? "—"}`,
     `Timeline: ${answers.timeline ?? "—"}`,
-    `Interested in: ${recommended.map((p) => p.name).join(", ") || "—"}`,
+    `Selected Products: \n${selected.map((s) => `- ${s.product.name} (Qty: ${s.quantity})`).join("\n") || "None"}`,
+    answers.phone ? `Phone: ${answers.phone}` : "",
+    answers.file ? `File Attached: ${answers.file}` : "",
     answers.message ? `Notes: ${answers.message}` : "",
   ]
     .filter(Boolean)
