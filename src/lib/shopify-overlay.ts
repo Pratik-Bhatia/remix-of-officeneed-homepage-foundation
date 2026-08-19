@@ -125,3 +125,107 @@ export function useShopifyIndex() {
   });
   return data;
 }
+
+/* ------------------------------------------------------------------ */
+/* Mapping live Shopify products into the site's Product shape         */
+/* ------------------------------------------------------------------ */
+
+type Rule = { category: Product["category"]; sub: string; match: RegExp };
+
+const RULES: Rule[] = [
+  { category: "Fragrance & Luxury Gifting", sub: "Perfumes", match: /perfum|fragranc|attar|oud|eau de|deodor|cologne/ },
+  { category: "Hardware & IT", sub: "Mouse", match: /\bmouse\b/ },
+  { category: "Hardware & IT", sub: "Keyboards", match: /keyboard/ },
+  { category: "Hardware & IT", sub: "Printers", match: /printer|toner|cartridge/ },
+  { category: "Hardware & IT", sub: "Computer Accessories", match: /bluetooth|speaker|headphone|earph|headset|usb|pen ?drive|flash drive|hdd|ssd|hard disk|sd card|jbl|cable|charger|adapter|dock|webcam|monitor|router|laptop|power bank/ },
+  { category: "Printing & Branding", sub: "Custom Printing", match: /printing|branding|banner|business card|visiting card|letterhead|brochure/ },
+  { category: "Corporate Gifting", sub: "Corporate Gifts", match: /corporate gift|gift set|hamper|gifting/ },
+  { category: "Corporate Gifting", sub: "Drinkware & Utensils", match: /bottle|flask|mug|tumbler|borosil|drinkware|lunch box|casserole/ },
+  { category: "Office Supplies", sub: "Writing Instruments", match: /\bpen\b|pencil|marker|highlighter|sketch pen|refill|ball ?point/ },
+  { category: "Office Supplies", sub: "Notebooks", match: /notebook|diary|register|notepad|journal/ },
+  { category: "Office Supplies", sub: "Desk Accessories", match: /stapler|punch|scissor|calculator|organiser|organizer|clip|pin|tape|glue|desk/ },
+];
+
+function classify(node: ShopifyProductNode): { category: Product["category"]; sub: string } {
+  const haystack = normalize(
+    [node.title, node.productType, node.vendor, node.description?.slice(0, 120)]
+      .filter(Boolean)
+      .join(" "),
+  );
+  for (const rule of RULES) {
+    if (rule.match.test(haystack)) return { category: rule.category, sub: rule.sub };
+  }
+  return { category: "Office Supplies", sub: "Office Supplies" };
+}
+
+function priceBucket(amount: number): string {
+  if (amount < 2000) return "under_2000";
+  if (amount <= 5000) return "2000_5000";
+  return "above_5000";
+}
+
+const PLACEHOLDER_IMAGE =
+  "https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=1200&q=75";
+
+/** Convert a live Shopify product into the site's static `Product` shape. */
+export function shopifyNodeToProduct(node: ShopifyProductNode): Product {
+  const { category, sub } = classify(node);
+  const images = nodeImages(node);
+  const description = (node.description ?? "").trim();
+  const summary = description
+    ? description.replace(/\s+/g, " ").slice(0, 150)
+    : `${node.title} — available through OfficeNeed.`;
+  const amount = parseFloat(node.priceRange?.minVariantPrice?.amount ?? "0");
+  const variants = node.variants?.edges?.map((e) => e.node) ?? [];
+
+  return {
+    slug: node.handle,
+    name: node.title,
+    category,
+    subcategories: [sub],
+    filterAttributes: { price: [priceBucket(amount)] },
+    summary,
+    description: description || summary,
+    ...(amount > 0
+      ? { price: formatMoney(node.priceRange.minVariantPrice.amount, node.priceRange.minVariantPrice.currencyCode) }
+      : {}),
+    startingPrice: variants.length > 1,
+    availability: variants.some((v) => v.availableForSale) ? "In stock" : "Made to order",
+    images: images.length ? images : [PLACEHOLDER_IMAGE],
+    addedOn: "2024-01-01",
+    ...(node.vendor ? { specifications: [{ label: "Brand", value: node.vendor }] } : {}),
+    ...(variants.length > 1 ? { variants: variants.map((v) => v.title) } : {}),
+  };
+}
+
+/**
+ * Full catalogue: live Shopify products first, with any static product that has
+ * no Shopify equivalent kept as a fallback. If Shopify is unavailable, the
+ * static catalogue is returned untouched.
+ */
+export function useShopifyCatalogue(staticProducts: Product[]) {
+  const { data } = useQuery({
+    queryKey: ["shopify", "catalog"],
+    queryFn: async () => {
+      try {
+        const edges = await fetchProducts(250);
+        return edges.map((e) => e.node);
+      } catch {
+        return [] as ShopifyProductNode[];
+      }
+    },
+    staleTime: 5 * 60 * 1000,
+    retry: 1,
+  });
+
+  const nodes = data ?? [];
+  if (nodes.length === 0) return staticProducts;
+
+  const index = buildShopifyIndex(nodes);
+  const live = nodes.map(shopifyNodeToProduct);
+  const liveSlugs = new Set(live.map((p) => p.slug));
+  const fallback = staticProducts.filter(
+    (p) => !liveSlugs.has(p.slug) && !findShopifyMatch(index, p.slug, p.name),
+  );
+  return [...live, ...fallback];
+}
