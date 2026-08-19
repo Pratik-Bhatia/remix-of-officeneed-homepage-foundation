@@ -9,20 +9,25 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { getProductBySlug, getRelatedProducts } from "@/lib/products";
 import { fetchProductByHandle } from "@/lib/shopify";
-import {
-  findShopifyMatch,
-  mergeProduct,
-  useShopifyIndex,
-} from "@/lib/shopify-overlay";
-import { useQuery } from "@tanstack/react-query";
+import { mergeProduct, shopifyNodeToProduct } from "@/lib/shopify-overlay";
 
 const BASE = "https://officeneed-premier-launch.lovable.app";
 
 export const Route = createFileRoute("/products/$slug")({
-  loader: ({ params }) => {
-    const product = getProductBySlug(params.slug);
-    if (!product) throw notFound();
-    return { product };
+  loader: async ({ params }) => {
+    const staticProduct = getProductBySlug(params.slug);
+
+    // Live Shopify details take priority; static data is the fallback.
+    let node = null;
+    try {
+      node = await fetchProductByHandle(params.slug);
+    } catch {
+      node = null;
+    }
+
+    if (staticProduct) return { product: mergeProduct(staticProduct, node ?? undefined) };
+    if (node) return { product: shopifyNodeToProduct(node) };
+    throw notFound();
   },
   head: ({ params, loaderData }) => {
     if (!loaderData) {
@@ -93,32 +98,7 @@ function ProductNotFound() {
 }
 
 function ProductDetail() {
-  const { product: staticProduct } = Route.useLoaderData();
-
-  // Live Shopify data for this product, when the store carries it.
-  const { data: shopifyNode } = useQuery({
-    queryKey: ["shopify", "product", staticProduct.slug],
-    queryFn: async () => {
-      try {
-        return (await fetchProductByHandle(staticProduct.slug)) ?? null;
-      } catch {
-        return null;
-      }
-    },
-    staleTime: 5 * 60 * 1000,
-    retry: 1,
-  });
-
-  const shopifyIndex = useShopifyIndex();
-  const product = useMemo(
-    () =>
-      mergeProduct(
-        staticProduct,
-        shopifyNode ??
-          findShopifyMatch(shopifyIndex, staticProduct.slug, staticProduct.name),
-      ),
-    [staticProduct, shopifyNode, shopifyIndex],
-  );
+  const { product } = Route.useLoaderData();
 
   const [activeImage, setActiveImage] = useState(0);
   const [quantity, setQuantity] = useState(product.minimumOrderQuantity ?? 1);
@@ -129,13 +109,7 @@ function ProductDetail() {
   const prevImage = () => {
     setActiveImage((prev) => (prev - 1 + product.images.length) % product.images.length);
   };
-  const related = useMemo(
-    () =>
-      getRelatedProducts(staticProduct, 4).map((r) =>
-        mergeProduct(r, findShopifyMatch(shopifyIndex, r.slug, r.name)),
-      ),
-    [staticProduct, shopifyIndex],
-  );
+  const related = useMemo(() => getRelatedProducts(product, 4), [product]);
   const step = 1;
   const min = product.minimumOrderQuantity ?? 1;
   const numericPrice = product.price ? parseInt(product.price.replace(/\D/g, ""), 10) : 0;
