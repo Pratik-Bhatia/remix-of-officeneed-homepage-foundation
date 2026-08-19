@@ -43,22 +43,26 @@ function ShopProductPage() {
 
   if (isPending) {
     return (
-      <><Navbar />
-    <main className="flex min-h-[60vh] items-center justify-center">
-        <Loader2 className="size-6 animate-spin text-muted-foreground" />
-      </main>
+      <>
+        <Navbar />
+        <main className="flex min-h-[60vh] items-center justify-center">
+          <Loader2 className="size-6 animate-spin text-muted-foreground" />
+        </main>
+      </>
     );
   }
 
   if (error || !product) {
     return (
-      <><Navbar />
-    <main className="mx-auto max-w-[1600px] px-6 py-24 text-center">
-        <h1 className="text-2xl font-semibold">Product not found</h1>
-        <Link to="/shop" className="mt-4 inline-block underline">
-          Back to shop
-        </Link>
-      </main>
+      <>
+        <Navbar />
+        <main className="mx-auto max-w-[1600px] px-6 py-24 text-center">
+          <h1 className="text-2xl font-semibold">Product not found</h1>
+          <Link to="/shop" className="mt-4 inline-block underline">
+            Back to shop
+          </Link>
+        </main>
+      </>
     );
   }
 
