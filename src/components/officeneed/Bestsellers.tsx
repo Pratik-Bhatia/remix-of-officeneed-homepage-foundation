@@ -6,6 +6,7 @@ import {
   bestsellerProducts,
   type BestsellerProduct,
 } from "@/lib/bestsellers";
+import { findShopifyMatch, mergeBestseller, useShopifyIndex } from "@/lib/shopify-overlay";
 
 function ProductCard({ product }: { product: BestsellerProduct }) {
   return (
@@ -46,12 +47,18 @@ export function Bestsellers() {
   const [canPrev, setCanPrev] = useState(false);
   const [canNext, setCanNext] = useState(true);
 
-  const products = useMemo(
+  const shopifyIndex = useShopifyIndex();
+  const catalogue = useMemo(
     () =>
-      active === "All"
-        ? bestsellerProducts
-        : bestsellerProducts.filter((p) => p.category === active),
-    [active],
+      bestsellerProducts.map((p) =>
+        mergeBestseller(p, findShopifyMatch(shopifyIndex, p.shopifyHandle, p.name)),
+      ),
+    [shopifyIndex],
+  );
+
+  const products = useMemo(
+    () => (active === "All" ? catalogue : catalogue.filter((p) => p.category === active)),
+    [active, catalogue],
   );
 
   const sync = useCallback(() => {
