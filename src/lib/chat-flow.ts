@@ -8,7 +8,7 @@ export type ChatStepId =
   | "quantity"
   | "budget"
   | "timeline"
-  | "recommendation"
+  | "refine"
   | "name"
   | "company"
   | "email"
@@ -25,7 +25,7 @@ export type ChatStep = {
   optional?: boolean;
 };
 
-export const qualificationSteps: ChatStep[] = [
+export const chatSteps: ChatStep[] = [
   {
     id: "purpose",
     question: "What are you shopping for?",
@@ -40,25 +40,31 @@ export const qualificationSteps: ChatStep[] = [
   },
   {
     id: "quantity",
-    question: "Roughly how many units do you need?",
-    options: ["Under 50", "50 – 250", "250 – 1000", "1000+"],
+    question: "Great. Approximately how many people are you buying for?",
+    options: ["10–25", "25–50", "50–100", "100–250", "250+"],
   },
   {
     id: "budget",
-    question: "What's your per-unit budget range?",
-    options: ["Under ₹500", "₹500 – ₹1,500", "₹1,500 – ₹5,000", "₹5,000+"],
+    question: "What's your approximate budget per item?",
+    options: ["Under ₹500", "₹500–₹1,000", "₹1,000–₹2,500", "₹2,500+"],
   },
   {
     id: "timeline",
-    question: "When do you need delivery?",
-    options: ["Immediately", "Within 15 days", "Within a month", "Just exploring"],
+    question: "When do you need them?",
+    options: ["This week", "1–2 weeks", "2–4 weeks", "Flexible"],
   },
 ];
+
+export const refineStep: ChatStep = {
+  id: "refine",
+  question: "I found a few options that fit your requirements. Would you like something more premium?",
+  options: ["Show Premium Options", "Show Budget Options", "Prepare Enquiry", "Start Over"]
+};
 
 export const enquirySteps: ChatStep[] = [
   {
     id: "name",
-    question: "Great — who should we address the quote to?",
+    question: "I can prepare this enquiry for you. Where should we send the details?\n\nFirst, what is your name?",
     inputType: "text",
     placeholder: "Your full name",
   },
@@ -70,7 +76,7 @@ export const enquirySteps: ChatStep[] = [
   },
   {
     id: "email",
-    question: "And your work email for the quote?",
+    question: "What's your work email?",
     inputType: "email",
     placeholder: "you@company.com",
   },
@@ -82,14 +88,14 @@ export const enquirySteps: ChatStep[] = [
   },
   {
     id: "message",
-    question: "Anything else we should know? (customization, branding, deadlines)",
+    question: "Any specific notes or customization requirements?",
     inputType: "text",
     placeholder: "Optional — press send to skip",
     optional: true,
   },
   {
     id: "file",
-    question: "Any logo or design files you want to attach?",
+    question: "Would you like to attach any logo or reference files?",
     inputType: "file",
     optional: true,
   }
@@ -108,16 +114,16 @@ const purposeToCategories: Record<string, ProductCategory[]> = {
 
 export function parseQuantity(label?: string): number | undefined {
   switch (label) {
-    case "Under 50": return 25;
-    case "50 – 250": return 150;
-    case "250 – 1000": return 500;
-    case "1000+": return 1500;
+    case "10–25": return 15;
+    case "25–50": return 40;
+    case "50–100": return 75;
+    case "100–250": return 150;
+    case "250+": return 500;
     default: return undefined;
   }
 }
 
-/** Ranks catalogue products against the answers collected in chat. */
-export function recommendProducts(answers: ChatAnswers, limit = 6): Product[] {
+export function recommendProducts(answers: ChatAnswers, refinement?: string, limit = 4): Product[] {
   const wanted = purposeToCategories[answers.purpose ?? ""] ?? [];
   const qty = parseQuantity(answers.quantity) ?? 0;
 
@@ -130,7 +136,17 @@ export function recommendProducts(answers: ChatAnswers, limit = 6): Product[] {
     if (product.badge === "Featured") score += 2;
     if (product.badge === "New") score += 1;
     if (qty && (product.minimumOrderQuantity ?? 0) <= qty) score += 2;
-    if (answers.timeline === "Immediately" && product.availability) score += 1;
+    if (answers.timeline === "This week" && product.availability) score += 1;
+
+    // Refinement bumps
+    if (refinement === "Show Premium Options") {
+        const priceNum = parseInt(product.price?.replace(/\D/g, "") ?? "0", 10);
+        if (priceNum > 2000) score += 5;
+    }
+    if (refinement === "Show Budget Options") {
+        const priceNum = parseInt(product.price?.replace(/\D/g, "") ?? "0", 10);
+        if (priceNum > 0 && priceNum < 1000) score += 5;
+    }
 
     return { product, score };
   });
@@ -141,12 +157,13 @@ export function recommendProducts(answers: ChatAnswers, limit = 6): Product[] {
     .map((s) => s.product);
 }
 
-export function buildEnquiryMessage(answers: ChatAnswers, selected: {product: Product, quantity: number}[]): string {
+export function buildEnquiryMessage(answers: ChatAnswers, selected: Product[]): string {
   return [
     `Purpose: ${answers.purpose ?? "—"}`,
+    `Quantity: ${answers.quantity ?? "—"}`,
     `Budget: ${answers.budget ?? "—"}`,
     `Timeline: ${answers.timeline ?? "—"}`,
-    `Selected Products: \n${selected.map((s) => `- ${s.product.name} (Qty: ${s.quantity})`).join("\n") || "None"}`,
+    `Selected Products: \n${selected.map((p) => `- ${p.name}`).join("\n") || "None"}`,
     answers.phone ? `Phone: ${answers.phone}` : "",
     answers.file ? `File Attached: ${answers.file}` : "",
     answers.message ? `Notes: ${answers.message}` : "",

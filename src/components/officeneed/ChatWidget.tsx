@@ -1,12 +1,13 @@
-import { useEffect, useRef, useState, type FormEvent, type ChangeEvent } from "react";
-import { Link } from "@tanstack/react-router";
-import { Send, X, Check, ArrowRight, Upload, Loader2, Minus, Plus, Trash2 } from "lucide-react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { Link, useNavigate } from "@tanstack/react-router";
+import { Send, X, MessageSquare, Plus, Check, Loader2, Paperclip, ChevronRight, CheckCircle2 } from "lucide-react";
 import logoUrl from "@/assets/officeneed-logo.png";
 import { cn } from "@/lib/utils";
 import {
   buildEnquiryMessage,
-  qualificationSteps,
+  chatSteps,
   enquirySteps,
+  refineStep,
   parseQuantity,
   recommendProducts,
   type ChatAnswers,
@@ -19,25 +20,19 @@ type Bubble = {
   id: string;
   role: "bot" | "user";
   text?: string;
-  isRecommendationContext?: boolean;
-};
-
-type SelectedProduct = {
-  product: Product;
-  quantity: number;
+  isActionable?: boolean; // If this bubble contains products to show
+  products?: Product[];
 };
 
 let seq = 0;
 const uid = () => `m${++seq}`;
 
 const GREETING =
-  "Hi! I'm the OfficeNeed assistant. I'll ask a few quick questions and put together the right recommendations and a quote for you.";
+  "Hi! I'm the OfficeNeed Assistant. I'll help you find the right products for your requirement.";
 
 export function ChatWidget() {
   const [open, setOpen] = useState(false);
-  
-  // phase: 'qualification' -> 'recommendation' -> 'enquiry' -> 'done'
-  const [phase, setPhase] = useState<'qualification' | 'recommendation' | 'enquiry' | 'done'>('qualification');
+  const [phase, setPhase] = useState<"qualification" | "refinement" | "enquiry" | "done">("qualification");
   const [stepIndex, setStepIndex] = useState(0);
   const [answers, setAnswers] = useState<ChatAnswers>({});
   const [messages, setMessages] = useState<Bubble[]>([]);
@@ -45,18 +40,15 @@ export function ChatWidget() {
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
   
-  const [recommended, setRecommended] = useState<Product[]>([]);
-  const [selectedProducts, setSelectedProducts] = useState<SelectedProduct[]>([]);
+  const [selectedProductSlugs, setSelectedProductSlugs] = useState<Set<string>>(new Set());
+  const [currentRecommendations, setCurrentRecommendations] = useState<Product[]>([]);
   
-  // For file upload mock
-  const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
-
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const navigate = useNavigate();
 
-  const currentStepList = phase === 'qualification' ? qualificationSteps : (phase === 'enquiry' ? enquirySteps : []);
-  const step: ChatStep | undefined = currentStepList[stepIndex];
+  const currentStepList = phase === "qualification" ? chatSteps : phase === "enquiry" ? enquirySteps : [];
+  const step: ChatStep | undefined = phase === "refinement" ? refineStep : currentStepList[stepIndex];
 
   useEffect(() => {
     const onOpen = () => setOpen(true);
@@ -64,48 +56,50 @@ export function ChatWidget() {
     return () => window.removeEventListener("officeneed:open-chat", onOpen);
   }, []);
 
+  // Kick off the conversation
   useEffect(() => {
     if (!open || messages.length > 0) return;
     setMessages([{ id: uid(), role: "bot", text: GREETING }]);
-    pushBot(qualificationSteps[0]!.question, 500);
+    pushBot(chatSteps[0]!.question, 500);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages, typing]);
+  }, [messages, typing, currentRecommendations]);
 
   useEffect(() => {
     if (open && step && !step.options) inputRef.current?.focus();
   }, [open, step, typing]);
 
-  function pushBot(text: string, delay = 650, isContext = false) {
+  function pushBot(text: string, delay = 650, products?: Product[], isActionable?: boolean) {
     setTyping(true);
     window.setTimeout(() => {
       setTyping(false);
-      setMessages((m) => [...m, { id: uid(), role: "bot", text, isRecommendationContext: isContext }]);
+      setMessages((m) => [...m, { id: uid(), role: "bot", text, ...(products ? { products } : {}), ...(isActionable !== undefined ? { isActionable } : {}) }]);
     }, delay);
   }
 
-  async function answer(value: string) {
-    if (phase === 'recommendation') {
-      // Free text refine
-      const clean = value.trim();
-      if (!clean) return;
-      setMessages((m) => [...m, { id: uid(), role: "user", text: clean }]);
-      setDraft("");
-      setTyping(true);
-      window.setTimeout(() => {
-         setTyping(false);
-         setMessages((m) => [...m, { id: uid(), role: "bot", text: "I've updated the recommendations on the right based on your input." }]);
-         // mock shuffling recommendations
-         setRecommended((r) => [...r].reverse());
-      }, 1000);
-      return;
-    }
-
+  async function handleFileUpload(file: File) {
     if (!step) return;
+    setTyping(true);
+    // Mock file upload
+    await new Promise(r => setTimeout(r, 1500));
+    setTyping(false);
+    
+    const filename = file.name;
+    const next: ChatAnswers = { ...answers, [step.id]: filename };
+    setAnswers(next);
+    setMessages((m) => [...m, { id: uid(), role: "user", text: `📎 ${filename}` }]);
+    
+    await proceedEnquiry(next);
+  }
+
+  async function answer(value: string) {
+    if (!step || typing) return;
     const clean = value.trim();
     if (!clean && !step.optional) return;
+    
     if (step.inputType === "email" && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(clean)) {
       setMessages((m) => [
         ...m,
@@ -116,65 +110,81 @@ export function ChatWidget() {
       return;
     }
 
-    if (step.inputType === "tel" && !clean.match(/[0-9]{5}/) && !step.optional) {
-       setMessages((m) => [
-        ...m,
-        { id: uid(), role: "user", text: clean },
-        { id: uid(), role: "bot", text: "Please enter a valid phone number." },
-      ]);
-      setDraft("");
-      return;
-    }
-
     const next: ChatAnswers = { ...answers, [step.id]: clean };
     setAnswers(next);
     setDraft("");
-    setMessages((m) => [...m, { id: uid(), role: "user", text: clean || (step.id === 'file' && !clean ? "Skip" : "Skip") }]);
+    setMessages((m) => [...m, { id: uid(), role: "user", text: clean || "Skip" }]);
 
-    const nextIndex = stepIndex + 1;
-    if (nextIndex < currentStepList.length) {
-      setStepIndex(nextIndex);
-      pushBot(currentStepList[nextIndex]!.question, 650);
-      return;
-    }
-
-    if (phase === 'qualification') {
-       // Transition to recommendation
-       const picks = recommendProducts(next);
-       setRecommended(picks);
-       setPhase('recommendation');
-       pushBot("Based on that, here's what I'd recommend on the right. You can select products to add to your enquiry, or tell me here if you want to fine-tune (e.g. 'Lower budget').", 700, true);
-    } else if (phase === 'enquiry') {
-       await finish(next);
+    if (phase === "qualification") {
+      const nextIndex = stepIndex + 1;
+      if (nextIndex < chatSteps.length) {
+        setStepIndex(nextIndex);
+        pushBot(chatSteps[nextIndex]!.question, 500);
+      } else {
+        // We finished qualification, show recommendations
+        setPhase("refinement");
+        const picks = recommendProducts(next);
+        setCurrentRecommendations(picks);
+        pushBot("Based on what you've told me, here are a few options I'd recommend.", 800, picks, true);
+        pushBot(refineStep.question, 1800);
+      }
+    } else if (phase === "refinement") {
+      if (clean === "Start Over") {
+         restart();
+      } else if (clean === "Prepare Enquiry") {
+         setPhase("enquiry");
+         setStepIndex(0);
+         pushBot(enquirySteps[0]!.question, 600);
+      } else {
+         // Show Premium / Show Budget
+         const picks = recommendProducts(next, clean);
+         setCurrentRecommendations(picks);
+         pushBot(`Here are some options based on your preference for "${clean}":`, 800, picks, true);
+         pushBot(refineStep.question, 1800);
+      }
+    } else if (phase === "enquiry") {
+      await proceedEnquiry(next);
     }
   }
 
+  async function proceedEnquiry(next: ChatAnswers) {
+    const nextIndex = stepIndex + 1;
+    if (nextIndex < enquirySteps.length) {
+      setStepIndex(nextIndex);
+      pushBot(enquirySteps[nextIndex]!.question, 600);
+      return;
+    }
+    await finish(next);
+  }
+
   async function finish(final: ChatAnswers) {
+    const selected = currentRecommendations.filter(p => selectedProductSlugs.has(p.slug));
+    const top = selected.length > 0 ? selected[0] : currentRecommendations[0];
+    
     setTyping(true);
     try {
-      if (selectedProducts.length === 0) throw new Error("Please select at least one product.");
-      const top = selectedProducts[0]!.product;
+      if (!top) throw new Error("No matching products");
       const result = await submitEnquiry({
         data: {
           productSlug: top.slug,
           productName: top.name,
           category: top.category,
-          quantity: selectedProducts[0]!.quantity,
+          quantity: parseQuantity(final.quantity),
           name: final.name ?? "Chat visitor",
           company: final.company ?? "",
           email: final.email ?? "",
-          message: buildEnquiryMessage(final, selectedProducts),
+          message: buildEnquiryMessage(final, selected),
         },
       });
       if (!result.ok) throw new Error(result.error);
       setTyping(false);
-      setPhase('done');
+      setPhase("done");
       setMessages((m) => [
         ...m,
         {
           id: uid(),
           role: "bot",
-          text: `Thanks ${final.name ?? ""}! Your requirement is with our team — you'll get a formal quote by email shortly.`,
+          text: `Your enquiry has been sent.\n\nWe've received your requirements and our team will get back to you shortly.`,
         },
       ]);
     } catch (err) {
@@ -182,7 +192,7 @@ export function ChatWidget() {
       setError(err instanceof Error ? err.message : "Something went wrong.");
       setMessages((m) => [
         ...m,
-        { id: uid(), role: "bot", text: "I couldn't send that through. Please try again in a moment." },
+        { id: uid(), role: "bot", text: "We couldn't submit your enquiry right now. Please try again." },
       ]);
     }
   }
@@ -191,144 +201,162 @@ export function ChatWidget() {
     setMessages([]);
     setAnswers({});
     setStepIndex(0);
-    setPhase('qualification');
+    setPhase("qualification");
+    setSelectedProductSlugs(new Set());
     setError(null);
     setDraft("");
-    setSelectedProducts([]);
-    setRecommended([]);
     setMessages([{ id: uid(), role: "bot", text: GREETING }]);
-    pushBot(qualificationSteps[0]!.question, 500);
+    pushBot(chatSteps[0]!.question, 500);
   }
+
+  const toggleProduct = (slug: string) => {
+    setSelectedProductSlugs(prev => {
+      const next = new Set(prev);
+      if (next.has(slug)) next.delete(slug);
+      else next.add(slug);
+      return next;
+    });
+  };
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
     void answer(draft);
   };
 
-  const handleFileUpload = (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    
-    setUploading(true);
-    setUploadProgress(0);
-    
-    let prog = 0;
-    const interval = setInterval(() => {
-      prog += 10;
-      setUploadProgress(prog);
-      if (prog >= 100) {
-        clearInterval(interval);
-        setUploading(false);
-        void answer(file.name);
-      }
-    }, 200);
-  };
-
-  const toggleProduct = (product: Product) => {
-    setSelectedProducts(prev => {
-      const exists = prev.find(p => p.product.slug === product.slug);
-      if (exists) return prev.filter(p => p.product.slug !== product.slug);
-      return [...prev, { product, quantity: parseQuantity(answers.quantity) || 50 }];
-    });
-  };
-
-  const updateQuantity = (slug: string, delta: number) => {
-    setSelectedProducts(prev => prev.map(p => {
-      if (p.product.slug === slug) {
-         const nq = Math.max(1, p.quantity + delta);
-         return { ...p, quantity: nq };
-      }
-      return p;
-    }));
-  };
-
-  const goToEnquiry = () => {
-    if (selectedProducts.length === 0) return;
-    setPhase('enquiry');
-    setStepIndex(0);
-    pushBot(enquirySteps[0]!.question, 500);
-  };
-
   return (
-    <div
-      className={cn(
-        "fixed inset-0 z-[100] flex items-center justify-center bg-background/80 backdrop-blur-sm px-0 sm:px-6 transition-all duration-300",
-        !open && "pointer-events-none opacity-0"
-      )}
-      aria-live="polite"
-    >
+    <>
+      {/* Floating Launcher Button */}
+      <div className={cn(
+        "fixed bottom-6 right-6 z-[100] transition-all duration-300",
+        open ? "opacity-0 pointer-events-none translate-y-4 scale-95" : "opacity-100 translate-y-0 scale-100"
+      )}>
+        <button
+          onClick={() => setOpen(true)}
+          className="group flex items-center justify-center size-14 rounded-full bg-primary text-primary-foreground shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+          aria-label="Open AI Shopping Assistant"
+        >
+          <MessageSquare className="size-6" />
+        </button>
+      </div>
+
+      {/* Chat Widget Panel */}
       <div
-        role="dialog"
-        aria-modal="false"
-        aria-label="OfficeNeed chat assistant"
-        aria-hidden={!open}
         className={cn(
-          "flex flex-col sm:flex-row h-full w-full sm:h-[85vh] sm:max-w-5xl sm:rounded-2xl overflow-hidden border border-border bg-background shadow-[0_24px_60px_-24px_rgb(0_0_0_/_0.25)] transition-[transform,opacity] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
-          open
-            ? "translate-y-0 opacity-100 scale-100"
-            : "translate-y-8 opacity-0 scale-95",
+          "fixed inset-x-0 bottom-0 z-[110] flex justify-end sm:inset-auto sm:bottom-6 sm:right-6 transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
+          !open && "pointer-events-none",
+          open ? "translate-y-0 opacity-100" : "translate-y-8 opacity-0"
         )}
+        aria-live="polite"
       >
-        {/* Left Panel: Chat */}
-        <div className={cn(
-            "flex flex-col border-r border-border bg-card/30 transition-all duration-500",
-          phase === 'recommendation' ? "w-full sm:w-[400px] shrink-0 hidden sm:flex" : phase === 'enquiry' ? "w-full sm:w-[400px] shrink-0 flex" : "w-full sm:mx-auto sm:w-[500px]",
-          phase === 'done' && "w-full sm:mx-auto sm:w-[500px]"
-        )}>
+        <div
+          role="dialog"
+          aria-modal="false"
+          aria-label="OfficeNeed AI Shopping Assistant"
+          aria-hidden={!open}
+          className={cn(
+            "flex h-[90svh] w-full flex-col overflow-hidden bg-background sm:h-[650px] sm:w-[420px] sm:rounded-2xl sm:border sm:border-border sm:shadow-[0_20px_40px_-15px_rgba(0,0,0,0.1)]",
+          )}
+        >
           {/* Header */}
-          <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-4 bg-background">
+          <div className="flex items-center justify-between gap-3 border-b border-border bg-white/80 backdrop-blur-md px-5 py-4 z-10 shrink-0">
             <div className="flex items-center gap-3">
-              <img src={logoUrl} alt="" width={640} height={122} className="h-5 w-auto" />
-              <div className="leading-tight">
-                <p className="text-sm font-semibold">Assistant</p>
-                <p className="text-xs text-muted-foreground">AI Shopping Guide</p>
+              <img src={logoUrl} alt="" width={640} height={122} className="h-4 w-auto object-contain" />
+              <div className="leading-tight border-l border-border pl-3">
+                <p className="text-sm font-semibold text-foreground">Assistant</p>
+                <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">AI Shopping Guide</p>
               </div>
             </div>
-            {(!phase || phase === 'qualification' || phase === 'done') && (
-              <button
-                type="button"
-                aria-label="Close chat"
-                onClick={() => setOpen(false)}
-                className="inline-flex size-8 items-center justify-center rounded-full text-foreground/70 transition-colors hover:bg-secondary hover:text-foreground"
-              >
-                <X className="size-5" strokeWidth={1.6} />
-              </button>
-            )}
-            {(phase === 'recommendation' || phase === 'enquiry') && (
-              <button
-                type="button"
-                aria-label="Close chat"
-                onClick={() => setOpen(false)}
-                className="sm:hidden inline-flex size-8 items-center justify-center rounded-full text-foreground/70 transition-colors hover:bg-secondary hover:text-foreground"
-              >
-                <X className="size-5" strokeWidth={1.6} />
-              </button>
-            )}
+            <button
+              type="button"
+              aria-label="Close assistant"
+              onClick={() => setOpen(false)}
+              className="inline-flex size-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+            >
+              <X className="size-5" strokeWidth={1.6} />
+            </button>
           </div>
 
-          {/* Transcript */}
-          <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto overscroll-contain px-5 py-6">
+          {/* Transcript / Conversation */}
+          <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto overscroll-contain px-5 py-5 pb-8 bg-[#F9FAFB]/50">
             {messages.map((m) => (
-              <div key={m.id} className={cn("flex", m.role === "user" ? "justify-end" : "justify-start")}>
-                <div className={cn("max-w-[85%] space-y-2", m.role === "user" && "flex justify-end")}>
-                  {m.text && (
+              <div key={m.id} className={cn("flex flex-col", m.role === "user" ? "items-end" : "items-start")}>
+                
+                {/* Text Bubble */}
+                {m.text && (
+                  <div className={cn("max-w-[85%] space-y-2 relative")}>
                     <p
                       className={cn(
-                        "whitespace-pre-line text-[14.5px] leading-relaxed",
+                        "whitespace-pre-line text-[14.5px] leading-relaxed shadow-sm",
                         m.role === "user"
-                          ? "rounded-2xl rounded-br-sm bg-primary px-4 py-2.5 text-primary-foreground shadow-sm"
-                          : "rounded-2xl rounded-bl-sm bg-background border border-border/60 px-4 py-2.5 text-foreground shadow-sm"
+                          ? "rounded-2xl rounded-br-sm bg-primary px-4 py-2.5 text-primary-foreground"
+                          : "rounded-2xl rounded-bl-sm bg-white border border-border/60 px-4 py-2.5 text-foreground",
                       )}
                     >
                       {m.text}
                     </p>
-                  )}
-                </div>
+                  </div>
+                )}
+                
+                {/* Products Recommendation Carousel */}
+                {m.products && m.products.length > 0 && m.isActionable && (
+                  <div className="w-full mt-3 overflow-x-auto pb-4 -mx-5 px-5 snap-x snap-mandatory no-scrollbar flex gap-3">
+                    {m.products.map((p) => {
+                      const isSelected = selectedProductSlugs.has(p.slug);
+                      return (
+                        <div key={p.slug} className="w-[240px] shrink-0 snap-center rounded-xl bg-white border border-border/80 shadow-sm overflow-hidden flex flex-col group transition-all hover:shadow-md">
+                          {p.images[0] && (
+                            <div className="relative aspect-[4/3] bg-secondary/30 overflow-hidden">
+                              <img
+                                src={p.images[0]}
+                                alt={p.name}
+                                loading="lazy"
+                                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                              />
+                              <div className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-white/90 backdrop-blur-sm text-[10px] font-bold uppercase tracking-wider text-foreground">
+                                {p.category}
+                              </div>
+                            </div>
+                          )}
+                          <div className="p-3.5 flex flex-col flex-1">
+                            <h4 className="font-semibold text-sm leading-tight line-clamp-2 mb-1">{p.name}</h4>
+                            <p className="text-sm font-medium text-muted-foreground mb-4">
+                              {p.price ? `${p.startingPrice ? "From " : ""}${p.price}` : "Enquire for price"}
+                            </p>
+                            
+                            <div className="mt-auto space-y-2">
+                              <button
+                                onClick={() => toggleProduct(p.slug)}
+                                className={cn(
+                                  "w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-sm font-semibold transition-all duration-200",
+                                  isSelected 
+                                    ? "bg-primary/10 text-primary border border-primary/20" 
+                                    : "bg-foreground text-background hover:bg-foreground/90"
+                                )}
+                              >
+                                {isSelected ? <Check className="size-4" /> : <Plus className="size-4" />}
+                                {isSelected ? "Added to Enquiry" : "Add to Enquiry"}
+                              </button>
+                              
+                              <Link
+                                to="/products/$slug"
+                                params={{ slug: p.slug }}
+                                onClick={() => setOpen(false)}
+                                className="w-full flex items-center justify-center py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+                              >
+                                View Product
+                              </Link>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
             ))}
 
             {typing && (
-              <div className="flex items-center gap-1.5 text-muted-foreground px-1 py-2" aria-label="Assistant is typing">
+              <div className="flex items-center gap-1.5 text-muted-foreground max-w-[85%] rounded-2xl rounded-bl-sm bg-white border border-border/60 px-4 py-3.5 shadow-sm" aria-label="Assistant is typing">
                 <span className="size-1.5 animate-bounce rounded-full bg-primary/60 [animation-delay:-0.3s]" />
                 <span className="size-1.5 animate-bounce rounded-full bg-primary/60 [animation-delay:-0.15s]" />
                 <span className="size-1.5 animate-bounce rounded-full bg-primary/60" />
@@ -336,215 +364,99 @@ export function ChatWidget() {
             )}
           </div>
 
-          {/* Composer */}
-          {phase !== 'done' && (
-            <div className="border-t border-border bg-background p-4">
-              {step?.options && phase !== 'recommendation' ? (
-                <div className="flex flex-wrap gap-2">
-                  {step.options.map((opt) => (
-                    <button
-                      key={opt}
-                      type="button"
-                      disabled={typing}
-                      onClick={() => void answer(opt)}
-                      className="rounded-full border border-border/80 bg-card px-4 py-2.5 text-sm font-medium transition-all hover:border-primary/50 hover:bg-primary/5 hover:text-primary disabled:opacity-50"
-                    >
-                      {opt}
-                    </button>
-                  ))}
-                </div>
-              ) : step?.inputType === 'file' ? (
-                <div className="flex flex-col gap-3">
-                  {uploading ? (
-                    <div className="flex flex-col gap-2 p-4 border border-border rounded-xl">
-                       <div className="flex items-center justify-between text-sm">
-                         <span className="flex items-center gap-2"><Loader2 className="size-4 animate-spin"/> Uploading...</span>
-                         <span>{uploadProgress}%</span>
-                       </div>
-                       <div className="h-1.5 w-full bg-secondary rounded-full overflow-hidden">
-                          <div className="h-full bg-primary transition-all duration-200" style={{width: `${uploadProgress}%`}} />
-                       </div>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2">
-                      <label className="flex-1 flex items-center justify-center gap-2 rounded-full border border-dashed border-primary/40 bg-primary/5 px-4 py-2.5 text-sm font-medium text-primary cursor-pointer hover:bg-primary/10 transition-colors">
-                        <Upload className="size-4" />
-                        <span>Upload File</span>
-                        <input type="file" className="hidden" onChange={handleFileUpload} />
-                      </label>
-                      {step.optional && (
-                        <button onClick={() => void answer('')} className="rounded-full px-4 py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors">
-                          Skip
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <form onSubmit={onSubmit} className="flex items-center gap-2 relative">
-                  <input
-                    ref={inputRef}
-                    value={draft}
-                    onChange={(e) => setDraft(e.target.value)}
-                    type={step?.inputType === "email" ? "email" : step?.inputType === 'tel' ? 'tel' : "text"}
-                    placeholder={phase === 'recommendation' ? "e.g. Lower budget, faster delivery..." : (step?.placeholder ?? "Type a message")}
-                    disabled={typing || (!step && phase !== 'recommendation')}
-                    className="w-full rounded-full border border-border/80 bg-background pl-4 pr-12 py-3 text-sm outline-none transition-all focus:border-primary/50 focus:ring-1 focus:ring-primary/20 disabled:opacity-60 shadow-sm"
-                  />
-                  <button
-                    type="submit"
-                    aria-label="Send message"
-                    disabled={typing || (!draft.trim() && !step?.optional && phase !== 'recommendation')}
-                    className="absolute right-1.5 top-1.5 bottom-1.5 inline-flex aspect-square items-center justify-center rounded-full bg-primary text-primary-foreground transition-all hover:bg-primary/90 disabled:opacity-40 disabled:hover:bg-primary"
-                  >
-                    <Send className="size-4 -ml-0.5" strokeWidth={2} />
-                  </button>
-                </form>
-              )}
-              {error && (
-                <p className="mt-3 text-xs font-medium text-destructive px-1" role="alert">
-                  {error}
-                </p>
-              )}
-            </div>
-          )}
-          {phase === 'done' && (
-             <div className="border-t border-border bg-background p-4">
+          {/* Composer / Quick Replies */}
+          <div className="border-t border-border bg-white p-4 shrink-0 shadow-[0_-5px_15px_-10px_rgba(0,0,0,0.05)]">
+            {phase === "done" ? (
+              <div className="flex flex-col gap-2">
+                <button
+                  type="button"
+                  onClick={() => setOpen(false)}
+                  className="w-full rounded-xl bg-foreground text-background py-3 text-[14px] font-semibold transition-colors hover:bg-foreground/90"
+                >
+                  Continue Shopping
+                </button>
                 <button
                   type="button"
                   onClick={restart}
-                  className="w-full rounded-full border border-border py-3 text-sm font-medium transition-colors hover:bg-secondary"
+                  className="w-full rounded-xl border border-border py-3 text-[14px] font-semibold text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
                 >
-                  Start a new enquiry
+                  Close Assistant
                 </button>
-             </div>
-          )}
-        </div>
-
-        {/* Right Panel: Products & Enquiry */}
-        {(phase === 'recommendation' || phase === 'enquiry') && (
-          <div className={cn("flex-1 flex-col bg-background h-full sm:h-auto overflow-hidden animate-in fade-in slide-in-from-right-8 duration-500", phase === 'enquiry' ? "hidden sm:flex" : "flex")}>
-            {/* Header */}
-            <div className="flex items-center justify-between border-b border-border px-6 py-4 bg-background z-10">
-              <h2 className="text-lg font-semibold tracking-tight">
-                {phase === 'recommendation' ? "Recommended for you" : "Enquiry Summary"}
-              </h2>
-              <button
-                type="button"
-                aria-label="Close chat"
-                onClick={() => setOpen(false)}
-                className="hidden sm:inline-flex size-8 items-center justify-center rounded-full text-foreground/70 transition-colors hover:bg-secondary hover:text-foreground"
-              >
-                <X className="size-5" strokeWidth={1.6} />
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-6 bg-secondary/10">
-              {phase === 'recommendation' && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pb-20">
-                  {recommended.map(p => {
-                    const isSelected = selectedProducts.some(sp => sp.product.slug === p.slug);
-                    return (
-                      <div key={p.slug} className={cn(
-                        "group flex flex-col rounded-2xl border bg-background overflow-hidden transition-all duration-200 hover:shadow-md",
-                        isSelected ? "border-primary ring-1 ring-primary/20" : "border-border"
-                      )}>
-                        <div className="aspect-[4/3] bg-secondary relative overflow-hidden">
-                           {p.images[0] && <img src={p.images[0]} alt={p.name} className="w-full h-full object-cover" />}
-                           <div className="absolute top-3 left-3 flex flex-col gap-1.5">
-                              <span className="inline-flex items-center gap-1 rounded-full bg-white/90 backdrop-blur text-[11px] font-medium px-2 py-0.5 shadow-sm text-green-700 uppercase tracking-wide">
-                                 <Check className="size-3" /> Matches criteria
-                              </span>
-                           </div>
-                           <Link to="/products/$slug" params={{slug: p.slug}} target="_blank" className="absolute inset-0 z-0" />
-                        </div>
-                        <div className="p-4 flex flex-col flex-1">
-                           <h3 className="font-semibold text-base leading-snug mb-1 group-hover:text-primary transition-colors">{p.name}</h3>
-                           <p className="text-sm text-muted-foreground mb-4">{p.category}</p>
-                           <div className="mt-auto flex items-center justify-between">
-                             <p className="font-semibold text-[15px]">{p.price ? `${p.startingPrice ? 'From ' : ''}${p.price}` : 'Price on request'}</p>
-                             <button
-                               onClick={() => toggleProduct(p)}
-                               className={cn(
-                                 "relative z-10 text-xs font-medium px-4 py-2 rounded-full transition-colors",
-                                 isSelected ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground hover:bg-secondary/80"
-                               )}
-                             >
-                               {isSelected ? 'Added ✓' : 'Add to enquiry'}
-                             </button>
-                           </div>
-                        </div>
-                      </div>
-                    )
-                  })}
+              </div>
+            ) : step?.options ? (
+              <div className="flex flex-wrap gap-2 justify-end">
+                {step.options.map((opt) => (
+                  <button
+                    key={opt}
+                    type="button"
+                    disabled={typing}
+                    onClick={() => void answer(opt)}
+                    className="rounded-full border border-border/80 bg-white px-4 py-2 text-[14px] font-medium text-foreground shadow-sm transition-all hover:border-foreground/30 hover:bg-[#FAFAF8] active:scale-95 disabled:opacity-50"
+                  >
+                    {opt}
+                  </button>
+                ))}
+              </div>
+            ) : step?.inputType === "file" ? (
+              <div className="flex flex-col gap-3">
+                <div className="relative">
+                  <input
+                    type="file"
+                    disabled={typing}
+                    onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0])}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
+                    accept="image/*,.pdf,.doc,.docx"
+                  />
+                  <div className="flex items-center justify-center gap-2 w-full rounded-xl border border-dashed border-border/80 bg-secondary/30 px-4 py-8 text-[14px] font-medium text-muted-foreground transition-colors hover:border-foreground/30 hover:bg-secondary/50">
+                    {typing ? (
+                       <Loader2 className="size-5 animate-spin text-primary" />
+                    ) : (
+                       <>
+                         <Paperclip className="size-5 text-foreground/50" />
+                         <span>Click to upload a file</span>
+                       </>
+                    )}
+                  </div>
                 </div>
-              )}
-              
-              {phase === 'enquiry' && (
-                 <div className="max-w-2xl mx-auto space-y-6 pb-20">
-                    <div className="rounded-2xl border border-border bg-background p-6 shadow-sm">
-                       <h3 className="font-semibold mb-5 flex items-center gap-2">
-                          <Check className="size-4 text-primary" /> Selected Products
-                       </h3>
-                       <div className="space-y-4">
-                         {selectedProducts.map(sp => (
-                           <div key={sp.product.slug} className="flex items-center gap-4 p-3 rounded-xl border border-border/60 bg-card">
-                             {sp.product.images[0] && <img src={sp.product.images[0]} className="size-16 rounded-lg object-cover bg-secondary" />}
-                             <div className="flex-1 min-w-0">
-                                <p className="font-medium text-sm truncate">{sp.product.name}</p>
-                                <p className="text-xs text-muted-foreground">{sp.product.price || sp.product.category}</p>
-                             </div>
-                             <div className="flex items-center gap-3 bg-secondary/50 rounded-full px-1 py-1">
-                                <button onClick={() => updateQuantity(sp.product.slug, -10)} className="p-1 hover:bg-background rounded-full transition-colors"><Minus className="size-3.5"/></button>
-                                <span className="text-sm font-medium w-8 text-center">{sp.quantity}</span>
-                                <button onClick={() => updateQuantity(sp.product.slug, 10)} className="p-1 hover:bg-background rounded-full transition-colors"><Plus className="size-3.5"/></button>
-                             </div>
-                             <button onClick={() => toggleProduct(sp.product)} className="p-2 text-muted-foreground hover:text-destructive transition-colors">
-                               <Trash2 className="size-4" />
-                             </button>
-                           </div>
-                         ))}
-                       </div>
-                    </div>
-
-                    <div className="rounded-2xl border border-border bg-background p-6 shadow-sm">
-                       <h3 className="font-semibold mb-5 text-sm text-muted-foreground uppercase tracking-wider">Requirement Details</h3>
-                       <dl className="grid grid-cols-1 sm:grid-cols-2 gap-y-5 gap-x-4 text-sm">
-                         <div><dt className="text-muted-foreground mb-1">Purpose</dt><dd className="font-medium">{answers.purpose || '—'}</dd></div>
-                         <div><dt className="text-muted-foreground mb-1">Timeline</dt><dd className="font-medium">{answers.timeline || '—'}</dd></div>
-                         <div><dt className="text-muted-foreground mb-1">Budget</dt><dd className="font-medium">{answers.budget || '—'}</dd></div>
-                       </dl>
-                    </div>
-                 </div>
-              )}
-            </div>
-
-            {/* Bottom Sticky Action Bar */}
-            <div className="border-t border-border bg-background p-4 px-6 flex justify-between items-center z-10 shadow-[0_-10px_20px_-10px_rgb(0_0_0_/_0.05)]">
-               {phase === 'recommendation' ? (
-                 <>
-                   <div className="text-sm">
-                     <span className="font-medium">{selectedProducts.length}</span> items selected
-                   </div>
-                   <button
-                     onClick={goToEnquiry}
-                     disabled={selectedProducts.length === 0}
-                     className="inline-flex items-center gap-2 rounded-full bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground transition-all hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
-                   >
-                     Proceed to Enquiry <ArrowRight className="size-4" />
-                   </button>
-                 </>
-               ) : (
-                 <>
-                   <div className="text-sm text-muted-foreground">
-                     Complete details on left to submit
-                   </div>
-                 </>
-               )}
-            </div>
+                {step.optional && !typing && (
+                  <button
+                    type="button"
+                    onClick={() => void answer("")}
+                    className="text-sm font-medium text-muted-foreground hover:text-foreground p-2"
+                  >
+                    Skip
+                  </button>
+                )}
+              </div>
+            ) : (
+              <form onSubmit={onSubmit} className="flex items-center gap-2">
+                <input
+                  ref={inputRef}
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  type={step?.inputType === "email" ? "email" : step?.inputType === "tel" ? "tel" : "text"}
+                  placeholder={step?.placeholder ?? "Type a message..."}
+                  disabled={typing || !step}
+                  className="min-w-0 flex-1 rounded-xl border border-border/80 bg-[#FAFAF8] px-4 py-3 text-[14px] outline-none transition-all placeholder:text-muted-foreground focus:border-foreground/40 focus:bg-white focus:ring-2 focus:ring-foreground/5 disabled:opacity-60"
+                />
+                <button
+                  type="submit"
+                  aria-label="Send message"
+                  disabled={typing || (!draft.trim() && !step?.optional)}
+                  className="inline-flex size-[46px] shrink-0 items-center justify-center rounded-xl bg-foreground text-background transition-all hover:bg-foreground/90 disabled:opacity-40"
+                >
+                  <Send className="size-[18px]" strokeWidth={2} />
+                </button>
+              </form>
+            )}
+            {error && (
+              <p className="mt-3 text-sm text-destructive text-center font-medium" role="alert">
+                {error}
+              </p>
+            )}
           </div>
-        )}
+        </div>
       </div>
-    </div>
+    </>
   );
 }
