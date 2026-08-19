@@ -24,7 +24,7 @@ import {
   type ProductSort,
 } from "@/lib/products";
 import { navCategories } from "@/lib/navigation";
-import { findShopifyMatch, mergeProduct, useShopifyIndex } from "@/lib/shopify-overlay";
+import { useShopifyCatalogue } from "@/lib/shopify-overlay";
 
 const TITLE = "Products — OfficeNeed";
 const DESCRIPTION =
@@ -172,14 +172,7 @@ function ProductsPage() {
     });
   };
 
-  const shopifyIndex = useShopifyIndex();
-  const catalogue = useMemo(
-    () =>
-      products.map((p) =>
-        mergeProduct(p, findShopifyMatch(shopifyIndex, p.slug, p.name)),
-      ),
-    [shopifyIndex],
-  );
+  const catalogue = useShopifyCatalogue(products);
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
