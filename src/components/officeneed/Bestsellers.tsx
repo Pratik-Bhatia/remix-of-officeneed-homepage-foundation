@@ -6,6 +6,7 @@ import {
   bestsellerProducts,
   type BestsellerProduct,
 } from "@/lib/bestsellers";
+import { useShopifyBestsellers } from "@/lib/shopify-overlay";
 
 function ProductCard({ product }: { product: BestsellerProduct }) {
   return (
@@ -46,12 +47,11 @@ export function Bestsellers() {
   const [canPrev, setCanPrev] = useState(false);
   const [canNext, setCanNext] = useState(true);
 
+  const catalogue = useShopifyBestsellers(bestsellerProducts);
+
   const products = useMemo(
-    () =>
-      active === "All"
-        ? bestsellerProducts
-        : bestsellerProducts.filter((p) => p.category === active),
-    [active],
+    () => (active === "All" ? catalogue : catalogue.filter((p) => p.category === active)),
+    [active, catalogue],
   );
 
   const sync = useCallback(() => {

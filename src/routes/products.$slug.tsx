@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { Minus, Plus, ChevronLeft, ChevronRight } from "lucide-react";
 import { Navbar } from "@/components/officeneed/Navbar";
@@ -8,14 +8,26 @@ import { EnquiryDialog } from "@/components/officeneed/EnquiryDialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { getProductBySlug, getRelatedProducts } from "@/lib/products";
+import { fetchProductByHandle } from "@/lib/shopify";
+import { mergeProduct, shopifyNodeToProduct } from "@/lib/shopify-overlay";
 
 const BASE = "https://officeneed-premier-launch.lovable.app";
 
 export const Route = createFileRoute("/products/$slug")({
-  loader: ({ params }) => {
-    const product = getProductBySlug(params.slug);
-    if (!product) throw notFound();
-    return { product };
+  loader: async ({ params }) => {
+    const staticProduct = getProductBySlug(params.slug);
+
+    // Live Shopify details take priority; static data is the fallback.
+    let node = null;
+    try {
+      node = await fetchProductByHandle(params.slug);
+    } catch {
+      node = null;
+    }
+
+    if (staticProduct) return { product: mergeProduct(staticProduct, node ?? undefined) };
+    if (node) return { product: shopifyNodeToProduct(node) };
+    throw notFound();
   },
   head: ({ params, loaderData }) => {
     if (!loaderData) {
@@ -87,6 +99,7 @@ function ProductNotFound() {
 
 function ProductDetail() {
   const { product } = Route.useLoaderData();
+
   const [activeImage, setActiveImage] = useState(0);
   const [quantity, setQuantity] = useState(product.minimumOrderQuantity ?? 1);
   
@@ -96,7 +109,7 @@ function ProductDetail() {
   const prevImage = () => {
     setActiveImage((prev) => (prev - 1 + product.images.length) % product.images.length);
   };
-  const related = getRelatedProducts(product, 4);
+  const related = useMemo(() => getRelatedProducts(product, 4), [product]);
   const step = 1;
   const min = product.minimumOrderQuantity ?? 1;
   const numericPrice = product.price ? parseInt(product.price.replace(/\D/g, ""), 10) : 0;

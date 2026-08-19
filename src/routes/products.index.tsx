@@ -24,6 +24,7 @@ import {
   type ProductSort,
 } from "@/lib/products";
 import { navCategories } from "@/lib/navigation";
+import { useShopifyCatalogue } from "@/lib/shopify-overlay";
 
 const TITLE = "Products — OfficeNeed";
 const DESCRIPTION =
@@ -171,10 +172,12 @@ function ProductsPage() {
     });
   };
 
+  const catalogue = useShopifyCatalogue(products);
+
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     const sub = subcategory.trim().toLowerCase();
-    const filtered = products.filter((p) => {
+    const filtered = catalogue.filter((p) => {
       const inCategory = category === "All Products" || p.category === category;
       const inSubcategory = !sub || p.subcategories?.some((s) => s.toLowerCase() === sub);
       const matches =
@@ -201,7 +204,7 @@ function ProductsPage() {
       return inCategory && inSubcategory && matches && passesFilters;
     });
     return sortProducts(filtered, sort);
-  }, [category, subcategory, query, sort, activeFilters]);
+  }, [catalogue, category, subcategory, query, sort, activeFilters]);
 
 
   const currentFilters = category !== "All Products" ? categoryFilters[category as keyof typeof categoryFilters] : null;
