@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { Minus, Plus, ChevronLeft, ChevronRight } from "lucide-react";
 import { Navbar } from "@/components/officeneed/Navbar";
@@ -8,6 +8,13 @@ import { EnquiryDialog } from "@/components/officeneed/EnquiryDialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { getProductBySlug, getRelatedProducts } from "@/lib/products";
+import { fetchProductByHandle } from "@/lib/shopify";
+import {
+  findShopifyMatch,
+  mergeProduct,
+  useShopifyIndex,
+} from "@/lib/shopify-overlay";
+import { useQuery } from "@tanstack/react-query";
 
 const BASE = "https://officeneed-premier-launch.lovable.app";
 
@@ -86,7 +93,33 @@ function ProductNotFound() {
 }
 
 function ProductDetail() {
-  const { product } = Route.useLoaderData();
+  const { product: staticProduct } = Route.useLoaderData();
+
+  // Live Shopify data for this product, when the store carries it.
+  const { data: shopifyNode } = useQuery({
+    queryKey: ["shopify", "product", staticProduct.slug],
+    queryFn: async () => {
+      try {
+        return (await fetchProductByHandle(staticProduct.slug)) ?? null;
+      } catch {
+        return null;
+      }
+    },
+    staleTime: 5 * 60 * 1000,
+    retry: 1,
+  });
+
+  const shopifyIndex = useShopifyIndex();
+  const product = useMemo(
+    () =>
+      mergeProduct(
+        staticProduct,
+        shopifyNode ??
+          findShopifyMatch(shopifyIndex, staticProduct.slug, staticProduct.name),
+      ),
+    [staticProduct, shopifyNode, shopifyIndex],
+  );
+
   const [activeImage, setActiveImage] = useState(0);
   const [quantity, setQuantity] = useState(product.minimumOrderQuantity ?? 1);
   
@@ -96,7 +129,13 @@ function ProductDetail() {
   const prevImage = () => {
     setActiveImage((prev) => (prev - 1 + product.images.length) % product.images.length);
   };
-  const related = getRelatedProducts(product, 4);
+  const related = useMemo(
+    () =>
+      getRelatedProducts(staticProduct, 4).map((r) =>
+        mergeProduct(r, findShopifyMatch(shopifyIndex, r.slug, r.name)),
+      ),
+    [staticProduct, shopifyIndex],
+  );
   const step = 1;
   const min = product.minimumOrderQuantity ?? 1;
   const numericPrice = product.price ? parseInt(product.price.replace(/\D/g, ""), 10) : 0;
