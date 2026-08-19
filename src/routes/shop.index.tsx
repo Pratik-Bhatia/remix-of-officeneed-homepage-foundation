@@ -1,6 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
+import { Navbar } from "@/components/officeneed/Navbar";
+import { Footer } from "@/components/officeneed/Footer";
 import { fetchProducts, formatMoney } from "@/lib/shopify";
 
 export const Route = createFileRoute("/shop/")({
@@ -31,6 +33,7 @@ function ShopPage() {
   });
 
   return (
+    <><Navbar />
     <main className="mx-auto w-full max-w-[1600px] px-4 py-12 sm:px-6 lg:px-12">
       <p className="text-eyebrow text-muted-foreground">Shopify Store</p>
       <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Shop OfficeNeed</h1>
@@ -80,5 +83,6 @@ function ShopPage() {
         </div>
       )}
     </main>
+    <Footer /></>
   );
 }

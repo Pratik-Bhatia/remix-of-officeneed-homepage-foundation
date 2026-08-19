@@ -4,6 +4,8 @@ import { useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Navbar } from "@/components/officeneed/Navbar";
+import { Footer } from "@/components/officeneed/Footer";
 import { fetchProductByHandle, formatMoney } from "@/lib/shopify";
 import { useCartStore } from "@/stores/cartStore";
 
@@ -41,7 +43,8 @@ function ShopProductPage() {
 
   if (isPending) {
     return (
-      <main className="flex min-h-[60vh] items-center justify-center">
+      <><Navbar />
+    <main className="flex min-h-[60vh] items-center justify-center">
         <Loader2 className="size-6 animate-spin text-muted-foreground" />
       </main>
     );
@@ -49,7 +52,8 @@ function ShopProductPage() {
 
   if (error || !product) {
     return (
-      <main className="mx-auto max-w-[1600px] px-6 py-24 text-center">
+      <><Navbar />
+    <main className="mx-auto max-w-[1600px] px-6 py-24 text-center">
         <h1 className="text-2xl font-semibold">Product not found</h1>
         <Link to="/shop" className="mt-4 inline-block underline">
           Back to shop
@@ -76,6 +80,7 @@ function ShopProductPage() {
   };
 
   return (
+    <><Navbar />
     <main className="mx-auto w-full max-w-[1600px] px-4 py-12 sm:px-6 lg:px-12">
       <Link to="/shop" className="text-sm text-muted-foreground hover:text-foreground">
         ← Back to shop
@@ -163,5 +168,6 @@ function ShopProductPage() {
         </div>
       </div>
     </main>
+    <Footer /></>
   );
 }
