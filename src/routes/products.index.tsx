@@ -171,10 +171,19 @@ function ProductsPage() {
     });
   };
 
+  const shopifyIndex = useShopifyIndex();
+  const catalogue = useMemo(
+    () =>
+      products.map((p) =>
+        mergeProduct(p, findShopifyMatch(shopifyIndex, p.slug, p.name)),
+      ),
+    [shopifyIndex],
+  );
+
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     const sub = subcategory.trim().toLowerCase();
-    const filtered = products.filter((p) => {
+    const filtered = catalogue.filter((p) => {
       const inCategory = category === "All Products" || p.category === category;
       const inSubcategory = !sub || p.subcategories?.some((s) => s.toLowerCase() === sub);
       const matches =
