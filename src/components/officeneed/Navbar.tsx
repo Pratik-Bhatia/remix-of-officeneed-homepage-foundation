@@ -154,9 +154,7 @@ export function Navbar() {
               <User className="size-5 md:size-[22px] xl:size-5" strokeWidth={1.6} />
             </IconButton>
           </span>
-          <IconButton label="Cart" className="size-[26px] md:size-10 xl:size-11">
-            <ShoppingBag className="size-5 md:size-[22px] xl:size-5" strokeWidth={1.6} />
-          </IconButton>
+          <CartDrawer triggerClassName="size-[26px] md:size-10 xl:size-11" />
         </div>
       </div>
 
