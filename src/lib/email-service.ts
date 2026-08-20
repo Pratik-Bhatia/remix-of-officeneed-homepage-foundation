@@ -22,9 +22,9 @@ export async function sendCustomerConfirmationEmail(params: {
   email: string;
   name: string;
   enquiryId: string;
-  purpose?: string;
-  quantity?: number;
-  timeline?: string;
+  purpose?: string | undefined;
+  quantity?: number | undefined;
+  timeline?: string | undefined;
   pdfBuffer: Buffer;
 }): Promise<boolean> {
   const resend = getResendClient();
@@ -76,14 +76,14 @@ export async function sendCustomerConfirmationEmail(params: {
 export async function sendInternalNotificationEmail(params: {
   enquiryId: string;
   customerName: string;
-  companyName?: string;
+  companyName?: string | undefined;
   email: string;
-  phone?: string;
-  purpose?: string;
-  quantity?: number;
-  budget?: string;
-  timeline?: string;
-  notes?: string;
+  phone?: string | undefined;
+  purpose?: string | undefined;
+  quantity?: number | undefined;
+  budget?: string | undefined;
+  timeline?: string | undefined;
+  notes?: string | undefined;
   subtotal: number;
   pdfBuffer: Buffer;
 }): Promise<boolean> {
