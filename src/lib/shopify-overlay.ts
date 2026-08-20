@@ -113,12 +113,7 @@ export function useShopifyIndex() {
   const { data } = useQuery({
     queryKey: ["shopify", "catalog-index"],
     queryFn: async () => {
-      try {
-        const edges = await fetchProducts(250);
-        return buildShopifyIndex(edges.map((e) => e.node));
-      } catch {
-        return new Map() as ShopifyIndex;
-      }
+      return new Map() as ShopifyIndex;
     },
     staleTime: 5 * 60 * 1000,
     retry: 1,
@@ -207,12 +202,7 @@ export function useShopifyCatalogue(staticProducts: Product[]) {
   const { data } = useQuery({
     queryKey: ["shopify", "catalog"],
     queryFn: async () => {
-      try {
-        const edges = await fetchProducts(250);
-        return edges.map((e) => e.node);
-      } catch {
-        return [] as ShopifyProductNode[];
-      }
+      return [] as ShopifyProductNode[];
     },
     staleTime: 5 * 60 * 1000,
     retry: 1,
@@ -235,13 +225,7 @@ export function useShopifyBestsellers(staticItems: BestsellerProduct[]) {
   const { data } = useQuery({
     queryKey: ["shopify", "bestsellers"],
     queryFn: async () => {
-      try {
-        const tagged = await fetchProducts(24, 'tag:"Best Selling"');
-        const edges = tagged.length ? tagged : await fetchProducts(12);
-        return edges.map((e) => e.node);
-      } catch {
-        return [] as ShopifyProductNode[];
-      }
+      return [] as ShopifyProductNode[];
     },
     staleTime: 5 * 60 * 1000,
     retry: 1,
