@@ -29,12 +29,21 @@ export interface EnquiryPDFData {
   }>;
 }
 
+function sanitizeText(text: string | number | undefined): string {
+  if (!text && text !== 0) return "-";
+  return String(text)
+    .replace(/₹/g, "Rs. ")
+    .replace(/[\u202F\u00A0]/g, " ")
+    .trim();
+}
+
 function formatCurrency(amount: number) {
-  return new Intl.NumberFormat("en-IN", {
+  const formatted = new Intl.NumberFormat("en-IN", {
     style: "currency",
     currency: "INR",
     maximumFractionDigits: 2,
   }).format(amount);
+  return sanitizeText(formatted);
 }
 
 export async function generateEnquiryPDF(data: EnquiryPDFData): Promise<Buffer> {
@@ -90,10 +99,10 @@ export async function generateEnquiryPDF(data: EnquiryPDFData): Promise<Buffer> 
   ];
   
   const rightCol = [
-    `Purpose: ${data.requirements.purpose || "—"}`,
-    `Quantity: ${data.requirements.quantity || "—"}`,
-    `Budget: ${data.requirements.budget || "—"}`,
-    `Timeline: ${data.requirements.timeline || "—"}`,
+    `Purpose: ${sanitizeText(data.requirements.purpose)}`,
+    `Quantity: ${sanitizeText(data.requirements.quantity)}`,
+    `Budget: ${sanitizeText(data.requirements.budget)}`,
+    `Timeline: ${sanitizeText(data.requirements.timeline)}`,
   ];
 
   for (let i = 0; i < Math.max(leftCol.length, rightCol.length); i++) {
