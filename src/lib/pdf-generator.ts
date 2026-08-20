@@ -136,7 +136,7 @@ export async function generateEnquiryPDF(data: EnquiryPDFData): Promise<Buffer> 
     ];
   });
 
-  // @ts-expect-error jsPDF-autotable types
+  
   autoTable(doc, {
     startY: currentY,
     head: [['Product', 'Category', 'SKU', 'Qty', 'Unit Price', 'Total']],
