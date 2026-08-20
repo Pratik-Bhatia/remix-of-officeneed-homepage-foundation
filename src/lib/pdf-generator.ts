@@ -6,23 +6,23 @@ export interface EnquiryPDFData {
   date: string;
   customer: {
     name: string;
-    company?: string;
+    company?: string | undefined;
     email: string;
-    phone?: string;
-    city?: string;
-    industry?: string;
+    phone?: string | undefined;
+    city?: string | undefined;
+    industry?: string | undefined;
   };
   requirements: {
-    purpose?: string;
-    quantity?: number;
-    budget?: string;
-    timeline?: string;
-    notes?: string;
+    purpose?: string | undefined;
+    quantity?: number | undefined;
+    budget?: string | undefined;
+    timeline?: string | undefined;
+    notes?: string | undefined;
   };
   products: Array<{
     name: string;
     category: string;
-    sku?: string;
+    sku?: string | undefined;
     quantity: number;
     unitPriceStr: string;
     unitPrice: number;
@@ -136,7 +136,6 @@ export async function generateEnquiryPDF(data: EnquiryPDFData): Promise<Buffer> 
     ];
   });
 
-  // @ts-expect-error jsPDF-autotable types
   autoTable(doc, {
     startY: currentY,
     head: [['Product', 'Category', 'SKU', 'Qty', 'Unit Price', 'Total']],

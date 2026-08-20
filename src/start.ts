@@ -25,7 +25,21 @@ const csrfMiddleware = createCsrfMiddleware({
   filter: (ctx) => ctx.handlerType === "serverFn",
 });
 
+// The generated attacher throws if the browser bundle lacks Supabase env vars,
+// which would break public (unauthenticated) server functions like enquiries.
+// Keep attaching the token when possible, but never fail the request.
+const safeAttachSupabaseAuth = createMiddleware({ type: "function" }).client(
+  async ({ next }) => {
+    try {
+      return await attachSupabaseAuth.options.client!({ next } as never);
+    } catch (error) {
+      console.warn("[auth] skipping bearer token attachment", error);
+      return next();
+    }
+  },
+);
+
 export const startInstance = createStart(() => ({
-  functionMiddleware: [attachSupabaseAuth],
+  functionMiddleware: [safeAttachSupabaseAuth],
   requestMiddleware: [errorMiddleware, csrfMiddleware],
 }));
