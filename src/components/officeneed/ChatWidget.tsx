@@ -37,8 +37,10 @@ export function ChatWidget() {
   const [answers, setAnswers] = useState<ChatAnswers>({});
   const [messages, setMessages] = useState<Bubble[]>([]);
   const [typing, setTyping] = useState(false);
-  const [draft, setDraft] = useState("");
+  const [loadingMsg, setLoadingMsg] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [resultStatus, setResultStatus] = useState<{enquiryId: string, emailSent: boolean} | null>(null);
+  const [draft, setDraft] = useState("");
   
   const [selectedProductSlugs, setSelectedProductSlugs] = useState<Set<string>>(new Set());
   const [currentRecommendations, setCurrentRecommendations] = useState<Product[]>([]);
@@ -162,33 +164,65 @@ export function ChatWidget() {
     const top = selected.length > 0 ? selected[0] : currentRecommendations[0];
     
     setTyping(true);
+    setLoadingMsg("Preparing your enquiry...");
     try {
       if (!top) throw new Error("No matching products");
+      
+      const qtyNum = parseQuantity(final.quantity);
+
+      const productPayload = selected.length > 0 ? selected : [top];
+      const selectedProducts = productPayload.map(p => ({
+        slug: p.slug,
+        name: p.name,
+        category: p.category,
+        quantity: qtyNum || 1,
+        priceStr: p.price ?? "POA",
+        priceNum: p.price ? parseInt(p.price.replace(/[^0-9]/g, ''), 10) || 0 : 0
+      }));
+
+      setTimeout(() => setLoadingMsg("Creating your summary..."), 1500);
+      setTimeout(() => setLoadingMsg("Sending confirmation..."), 3000);
+
       const result = await submitEnquiry({
         data: {
           productSlug: top.slug,
           productName: top.name,
           category: top.category,
-          quantity: parseQuantity(final.quantity),
+          quantity: qtyNum,
           name: final.name ?? "Chat visitor",
           company: final.company ?? "",
           email: final.email ?? "",
+          phone: final.phone,
           message: buildEnquiryMessage(final, selected),
+          purpose: final.purpose,
+          budget: final.budget,
+          timeline: final.timeline,
+          notes: final.message,
+          selectedProducts,
         },
       });
+
       if (!result.ok) throw new Error(result.error);
       setTyping(false);
+      setLoadingMsg("");
       setPhase("done");
+      setResultStatus({ enquiryId: result.enquiryId!, emailSent: result.customerEmailSent! });
+      
+      const successText = result.customerEmailSent 
+        ? `Your enquiry has been submitted successfully.\n\nWe've sent a confirmation to ${final.email}.\n\nEnquiry ID: ${result.enquiryId}` 
+        : `Your enquiry was received successfully.\n\nWe couldn't send the confirmation email right now, but our team has received your enquiry.\n\nEnquiry ID: ${result.enquiryId}`;
+
       setMessages((m) => [
         ...m,
         {
           id: uid(),
           role: "bot",
-          text: `Your enquiry has been sent.\n\nWe've received your requirements and our team will get back to you shortly.`,
+          text: successText,
         },
       ]);
     } catch (err) {
       setTyping(false);
+      setLoadingMsg("");
       setError(err instanceof Error ? err.message : "Something went wrong.");
       setMessages((m) => [
         ...m,
@@ -356,10 +390,11 @@ export function ChatWidget() {
             ))}
 
             {typing && (
-              <div className="flex items-center gap-1.5 text-muted-foreground max-w-[85%] rounded-2xl rounded-bl-sm bg-white border border-border/60 px-4 py-3.5 shadow-sm" aria-label="Assistant is typing">
+              <div className="flex w-fit items-center gap-2 rounded-2xl rounded-bl-sm bg-secondary px-4 py-3 shadow-sm text-sm">
                 <span className="size-1.5 animate-bounce rounded-full bg-primary/60 [animation-delay:-0.3s]" />
                 <span className="size-1.5 animate-bounce rounded-full bg-primary/60 [animation-delay:-0.15s]" />
                 <span className="size-1.5 animate-bounce rounded-full bg-primary/60" />
+                {loadingMsg && <span className="ml-2 font-medium text-foreground">{loadingMsg}</span>}
               </div>
             )}
           </div>
