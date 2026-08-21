@@ -50,7 +50,7 @@ export function ChatWidget() {
   const [selectedProductSlugs, setSelectedProductSlugs] = useState<Set<string>>(new Set());
   const [currentRecommendations, setCurrentRecommendations] = useState<Product[]>([]);
   
-  const [uploads, setUploads] = useState<Array<{ name: string; size: number; status: "uploading" | "saved" | "failed" }>>([]);
+  const [uploads, setUploads] = useState<Array<{ name: string; size: number; status: "uploading" | "saved" | "failed"; error?: string }>>([]);
   const attachmentsRef = useRef<Array<{ path: string; name: string; mimeType: string; size: number }>>([]);
   const setAttachments = (list: Array<{ path: string; name: string; mimeType: string; size: number }>) => {
     attachmentsRef.current = list;
@@ -144,46 +144,61 @@ export function ChatWidget() {
     let uploadedUrls: string[] = [];
     const uploadedMeta: Array<{ path: string; name: string; mimeType: string; size: number }> = [];
 
-    try {
-      for (const file of accepted) {
-        // Sanitize filename
-        const sanitizedName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
+    const failures: string[] = [];
+
+    for (const file of accepted) {
+      // Sanitize filename
+      const sanitizedName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, "_");
+      let lastError: unknown = null;
+
+      for (let attempt = 0; attempt < 2; attempt++) {
         const randomStr = Math.random().toString(36).substring(2, 8);
-        const fileName = `${Date.now()}-${randomStr}-${sanitizedName}`;
-        const filePath = `chat-uploads/${fileName}`;
+        const filePath = `chat-uploads/${Date.now()}-${randomStr}-${sanitizedName}`;
+        try {
+          const { error } = await supabase.storage
+            .from("enquiry-attachments")
+            .upload(filePath, file, { contentType: file.type || "application/octet-stream" });
+          if (error) throw error;
 
-        const { error } = await supabase.storage
-          .from('enquiry-attachments')
-          .upload(filePath, file);
-
-        if (error) {
-          console.error("[OfficeNeed] Storage upload error:", error);
-          throw error;
+          // Bucket is private: store the storage path only. Staff/server code
+          // generates short-lived signed URLs when the attachment is needed.
+          uploadedUrls.push(filePath);
+          uploadedMeta.push({ path: filePath, name: file.name, mimeType: file.type, size: file.size });
+          setUploads((prev) =>
+            prev.map((u) => (u.name === file.name ? { name: u.name, size: u.size, status: "saved" as const } : u)),
+          );
+          lastError = null;
+          break;
+        } catch (err) {
+          lastError = err;
+          console.error(`[OfficeNeed] Storage upload error (attempt ${attempt + 1}) for ${file.name}:`, err);
+          await new Promise((r) => setTimeout(r, 600));
         }
+      }
 
-        // Bucket is private: store the storage path only. Staff/server code
-        // generates short-lived signed URLs when the attachment is needed.
-        uploadedUrls.push(filePath);
-        uploadedMeta.push({ path: filePath, name: file.name, mimeType: file.type, size: file.size });
+      if (lastError) {
+        const reason =
+          (lastError as { message?: string })?.message ??
+          (typeof lastError === "string" ? lastError : "Unknown upload error");
+        failures.push(`${file.name}: ${reason}`);
+        uploadedUrls.push(file.name);
         setUploads((prev) =>
-          prev.map((u) => (u.name === file.name ? { ...u, status: "saved" as const } : u)),
+          prev.map((u) => (u.name === file.name ? { ...u, status: "failed" as const, error: reason } : u)),
         );
       }
-    } catch (err) {
-      console.error("[OfficeNeed] Failed to upload files to Supabase:", err);
-      // Keep any files that already uploaded successfully.
-      uploadedUrls = uploadedMeta.length ? uploadedUrls : accepted.map(f => f.name);
+    }
 
-      setUploads((prev) => prev.map((u) => (u.status === "saved" ? u : { ...u, status: "failed" as const })));
+    if (failures.length) {
       setMessages((m) => [
         ...m,
         {
           id: uid(),
           role: "bot",
-          text: "I couldn't store your file right now, but I've noted its name and your enquiry will still be sent. Our team may ask you to re-share it.",
+          text: `I couldn't store ${failures.length === 1 ? "your file" : "some files"} (${failures.join("; ")}). Your enquiry will still be sent with the file name noted — our team may ask you to re-share it.`,
         },
       ]);
     }
+
 
 
     setTyping(false);
@@ -549,9 +564,15 @@ export function ChatWidget() {
                         <CheckCircle2 className="size-3.5" /> Saved
                       </span>
                     ) : (
-                      <span className="inline-flex shrink-0 items-center gap-1 font-semibold text-destructive">
+                      <span
+                        className="inline-flex shrink-0 items-center gap-1 font-semibold text-destructive"
+                        title={u.error ?? "Upload failed"}
+                      >
                         <X className="size-3.5" /> Failed
                       </span>
+                    )}
+                    {u.status === "failed" && u.error && (
+                      <span className="w-full basis-full text-[11.5px] font-normal text-destructive/80">{u.error}</span>
                     )}
                   </li>
                 ))}
