@@ -115,9 +115,11 @@ export const submitEnquiry = createServerFn({ method: "POST" })
       const storagePaths = paths.filter((p) => p.startsWith("chat-uploads/"));
       if (storagePaths.length) {
         try {
-          const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+          // Use the publishable (anon) client: the SELECT RLS policy on
+          // enquiry-attachments (chat-uploads folder) lets the anon role read
+          // objects, so createSignedUrl succeeds without the service-role key.
           for (const path of storagePaths) {
-            const { data: signed, error } = await supabaseAdmin.storage
+            const { data: signed, error } = await supabase.storage
               .from("enquiry-attachments")
               .createSignedUrl(path, 60 * 60 * 24 * 7);
             if (error || !signed?.signedUrl) continue;
