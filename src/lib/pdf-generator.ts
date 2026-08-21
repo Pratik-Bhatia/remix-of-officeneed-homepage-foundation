@@ -21,6 +21,7 @@ export interface EnquiryPDFData {
     timeline?: string;
     notes?: string;
     file?: string;
+    fileLinks?: Array<{ label: string; url: string }>;
   };
   products: Array<{
     name: string;
