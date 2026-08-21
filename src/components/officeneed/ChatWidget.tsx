@@ -364,6 +364,8 @@ export function ChatWidget() {
     setQuantitySliderVal(25);
     setExactQuantity("");
     setExactQuantityError("");
+    setUploads([]);
+    setAttachments([]);
     setMessages([{ id: uid(), role: "bot", text: GREETING }]);
     pushBot(chatSteps[0]!.question, 500);
   }
