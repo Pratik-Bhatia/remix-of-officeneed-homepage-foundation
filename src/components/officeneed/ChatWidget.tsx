@@ -111,11 +111,9 @@ export function ChatWidget() {
           throw error;
         }
 
-        const { data: { publicUrl } } = supabase.storage
-          .from('enquiry-attachments')
-          .getPublicUrl(filePath);
-
-        uploadedUrls.push(publicUrl);
+        // Bucket is private: store the storage path only. Staff/server code
+        // generates short-lived signed URLs when the attachment is needed.
+        uploadedUrls.push(filePath);
       }
     } catch (err) {
       console.error("[OfficeNeed] Failed to upload files to Supabase:", err);
