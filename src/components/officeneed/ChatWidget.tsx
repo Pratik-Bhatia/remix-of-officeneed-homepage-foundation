@@ -526,6 +526,35 @@ export function ChatWidget() {
 
           {/* Composer / Quick Replies */}
           <div className="border-t border-border bg-white p-4 shrink-0 shadow-[0_-5px_15px_-10px_rgba(0,0,0,0.05)]">
+            {uploads.length > 0 && (
+              <ul className="mb-3 flex flex-col gap-1.5" aria-live="polite">
+                {uploads.map((u) => (
+                  <li
+                    key={u.name}
+                    className="flex items-center gap-2 rounded-lg border border-border/70 bg-secondary/30 px-3 py-2 text-[12.5px]"
+                  >
+                    <Paperclip className="size-3.5 shrink-0 text-foreground/40" />
+                    <span className="min-w-0 flex-1 truncate font-medium text-foreground" title={u.name}>
+                      {u.name}
+                    </span>
+                    <span className="shrink-0 text-muted-foreground">{Math.max(1, Math.round(u.size / 1024))} KB</span>
+                    {u.status === "uploading" ? (
+                      <span className="inline-flex shrink-0 items-center gap-1 font-medium text-muted-foreground">
+                        <Loader2 className="size-3.5 animate-spin" /> Uploading
+                      </span>
+                    ) : u.status === "saved" ? (
+                      <span className="inline-flex shrink-0 items-center gap-1 font-semibold text-emerald-600">
+                        <CheckCircle2 className="size-3.5" /> Saved
+                      </span>
+                    ) : (
+                      <span className="inline-flex shrink-0 items-center gap-1 font-semibold text-destructive">
+                        <X className="size-3.5" /> Failed
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
             {phase === "done" ? (
               <div className="flex flex-col gap-2">
                 <button
