@@ -154,6 +154,7 @@ export const submitEnquiry = createServerFn({ method: "POST" })
             ...(data.timeline ? { timeline: data.timeline } : {}),
             ...(data.notes ? { notes: data.notes } : {}),
             ...(data.file ? { file: data.file } : {}),
+            ...(fileLinks.length ? { fileLinks } : {}),
           },
           products: data.selectedProducts.map(p => ({
             name: p.name,
