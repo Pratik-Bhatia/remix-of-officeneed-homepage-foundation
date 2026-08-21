@@ -139,6 +139,7 @@ export function ChatWidget() {
     if (!accepted.length) return;
 
     setTyping(true);
+    setUploads(accepted.map((f) => ({ name: f.name, size: f.size, status: "uploading" as const })));
 
     let uploadedUrls: string[] = [];
     const uploadedMeta: Array<{ path: string; name: string; mimeType: string; size: number }> = [];
@@ -164,12 +165,16 @@ export function ChatWidget() {
         // generates short-lived signed URLs when the attachment is needed.
         uploadedUrls.push(filePath);
         uploadedMeta.push({ path: filePath, name: file.name, mimeType: file.type, size: file.size });
+        setUploads((prev) =>
+          prev.map((u) => (u.name === file.name ? { ...u, status: "saved" as const } : u)),
+        );
       }
     } catch (err) {
       console.error("[OfficeNeed] Failed to upload files to Supabase:", err);
       // Upload failed: keep the file names for reference; the enquiry still goes through.
       uploadedUrls = accepted.map(f => f.name);
       uploadedMeta.length = 0;
+      setUploads((prev) => prev.map((u) => (u.status === "saved" ? u : { ...u, status: "failed" as const })));
       setMessages((m) => [
         ...m,
         {
@@ -179,6 +184,7 @@ export function ChatWidget() {
         },
       ]);
     }
+
 
     setTyping(false);
     
