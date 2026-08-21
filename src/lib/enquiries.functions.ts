@@ -115,11 +115,27 @@ export const submitEnquiry = createServerFn({ method: "POST" })
       const storagePaths = paths.filter((p) => p.startsWith("chat-uploads/"));
       if (storagePaths.length) {
         try {
-          // Use the publishable (anon) client: the SELECT RLS policy on
-          // enquiry-attachments (chat-uploads folder) lets the anon role read
-          // objects, so createSignedUrl succeeds without the service-role key.
+          // The bucket is fully private (no public SELECT policy). Use the
+          // service-role client, which bypasses RLS, to mint signed URLs.
+          let storageClient = supabase;
+          const serviceKey = process.env["SUPABASE_SERVICE_ROLE_KEY"];
+          if (serviceKey) {
+            storageClient = createClient(url, serviceKey, {
+              auth: { persistSession: false, autoRefreshToken: false },
+              global: {
+                fetch: (input, init) => {
+                  const headers = new Headers(init?.headers);
+                  if (serviceKey.startsWith("sb_") && headers.get("Authorization") === `Bearer ${serviceKey}`) {
+                    headers.delete("Authorization");
+                  }
+                  headers.set("apikey", serviceKey);
+                  return fetch(input, { ...init, headers });
+                },
+              },
+            });
+          }
           for (const path of storagePaths) {
-            const { data: signed, error } = await supabase.storage
+            const { data: signed, error } = await storageClient.storage
               .from("enquiry-attachments")
               .createSignedUrl(path, 60 * 60 * 24 * 7);
             if (error || !signed?.signedUrl) continue;
