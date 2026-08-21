@@ -135,23 +135,45 @@ export async function generateEnquiryPDF(data: EnquiryPDFData): Promise<Buffer> 
     currentY += (splitNotes.length * 6);
   }
 
-  if (data.requirements.file) {
+  const fileLinks = data.requirements.fileLinks;
+  if ((fileLinks && fileLinks.length) || data.requirements.file) {
     currentY += 4;
     doc.setFont("Roboto", "bold");
     doc.text("Reference Files", marginX, currentY);
     currentY += 6;
     doc.setFont("Roboto", "normal");
-    const files = data.requirements.file.split(", ");
-    if (files.length === 1) {
-      doc.text(`Customer attachment: ${files[0]}`, marginX, currentY);
+
+    if (fileLinks && fileLinks.length) {
+      doc.text(fileLinks.length === 1 ? "Customer attachment:" : "Customer attachments:", marginX, currentY);
       currentY += 6;
-    } else {
-      doc.text("Customer attachments:", marginX, currentY);
-      currentY += 6;
-      files.forEach(f => {
-        doc.text(f, marginX + 4, currentY);
+      fileLinks.forEach(({ label, url }) => {
+        doc.setTextColor(20, 80, 200);
+        doc.textWithLink(label, marginX + 4, currentY, { url });
+        const w = doc.getTextWidth(label);
+        doc.setDrawColor(20, 80, 200);
+        doc.line(marginX + 4, currentY + 1, marginX + 4 + w, currentY + 1);
+        doc.setTextColor(0, 0, 0);
         currentY += 6;
       });
+      doc.setFontSize(8);
+      doc.setTextColor(120, 120, 120);
+      doc.text("Download links are valid for 7 days.", marginX + 4, currentY);
+      doc.setTextColor(0, 0, 0);
+      doc.setFontSize(10);
+      currentY += 6;
+    } else {
+      const files = data.requirements.file!.split(", ");
+      if (files.length === 1) {
+        doc.text(`Customer attachment: ${files[0]}`, marginX, currentY);
+        currentY += 6;
+      } else {
+        doc.text("Customer attachments:", marginX, currentY);
+        currentY += 6;
+        files.forEach(f => {
+          doc.text(f, marginX + 4, currentY);
+          currentY += 6;
+        });
+      }
     }
   }
 
