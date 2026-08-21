@@ -50,6 +50,7 @@ export function ChatWidget() {
   const [selectedProductSlugs, setSelectedProductSlugs] = useState<Set<string>>(new Set());
   const [currentRecommendations, setCurrentRecommendations] = useState<Product[]>([]);
   
+  const [uploads, setUploads] = useState<Array<{ name: string; size: number; status: "uploading" | "saved" | "failed" }>>([]);
   const attachmentsRef = useRef<Array<{ path: string; name: string; mimeType: string; size: number }>>([]);
   const setAttachments = (list: Array<{ path: string; name: string; mimeType: string; size: number }>) => {
     attachmentsRef.current = list;
