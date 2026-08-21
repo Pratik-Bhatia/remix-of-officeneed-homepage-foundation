@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Send, X, MessageSquare, Plus, Check, Loader2, Paperclip, ChevronRight, CheckCircle2, Gift, Briefcase, Sparkles, Laptop, Printer } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { uploadEnquiryAttachment } from "@/lib/uploads.functions";
 import logoUrl from "@/assets/officeneed-logo.png";
 import { AiAssistantIcon } from "@/components/officeneed/AiAssistantIcon";
 import { cn } from "@/lib/utils";
@@ -146,24 +146,32 @@ export function ChatWidget() {
 
     const failures: string[] = [];
 
+    const toBase64 = (file: File) =>
+      new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = String(reader.result ?? "");
+          resolve(result.slice(result.indexOf(",") + 1));
+        };
+        reader.onerror = () => reject(reader.error ?? new Error("Could not read file"));
+        reader.readAsDataURL(file);
+      });
+
     for (const file of accepted) {
-      // Sanitize filename
-      const sanitizedName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, "_");
       let lastError: unknown = null;
 
       for (let attempt = 0; attempt < 2; attempt++) {
-        const randomStr = Math.random().toString(36).substring(2, 8);
-        const filePath = `chat-uploads/${Date.now()}-${randomStr}-${sanitizedName}`;
         try {
-          const { error } = await supabase.storage
-            .from("enquiry-attachments")
-            .upload(filePath, file, { contentType: file.type || "application/octet-stream" });
-          if (error) throw error;
+          const content = await toBase64(file);
+          const res = await uploadEnquiryAttachment({
+            data: { name: file.name, mimeType: file.type || "application/octet-stream", content },
+          });
+          if (!res.ok) throw new Error(res.error);
 
           // Bucket is private: store the storage path only. Staff/server code
           // generates short-lived signed URLs when the attachment is needed.
-          uploadedUrls.push(filePath);
-          uploadedMeta.push({ path: filePath, name: file.name, mimeType: file.type, size: file.size });
+          uploadedUrls.push(res.attachment.path);
+          uploadedMeta.push(res.attachment);
           setUploads((prev) =>
             prev.map((u) => (u.name === file.name ? { name: u.name, size: u.size, status: "saved" as const } : u)),
           );
