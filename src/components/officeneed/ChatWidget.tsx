@@ -162,7 +162,7 @@ export function ChatWidget() {
     } catch (err) {
       console.error("[OfficeNeed] Failed to upload files to Supabase:", err);
       // Fallback: just use file names if upload fails (e.g. bucket doesn't exist yet)
-      uploadedUrls = Array.from(files).map(f => f.name);
+      uploadedUrls = accepted.map(f => f.name);
     }
 
     setTyping(false);
@@ -173,7 +173,7 @@ export function ChatWidget() {
     setAnswers(next);
     
     // For UI display, keep it clean by showing only the file names instead of raw URLs
-    const fileNames = Array.from(files).map(f => f.name).join(", ");
+    const fileNames = accepted.map(f => f.name).join(", ");
     setMessages((m) => [...m, { id: uid(), role: "user", text: `📎 ${fileNames}` }]);
     
     await proceedEnquiry(next);
