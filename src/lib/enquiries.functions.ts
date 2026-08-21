@@ -31,6 +31,17 @@ const enquirySchema = z.object({
   notes: z.string().optional(),
   file: z.string().optional(),
   selectedProducts: z.array(productItemSchema).optional(),
+  attachments: z
+    .array(
+      z.object({
+        path: z.string().min(1),
+        name: z.string().min(1).max(200),
+        mimeType: z.string().max(160).optional(),
+        size: z.number().nonnegative().optional(),
+      }),
+    )
+    .max(5)
+    .optional(),
   enquiryId: z.string().optional(),
 });
 
@@ -76,6 +87,7 @@ export const submitEnquiry = createServerFn({ method: "POST" })
     });
 
     let dbEnquiryId = "";
+    let enquiryRowId = "";
     
     if (data.enquiryId) {
       // It's a retry of a partial failure, we skip inserting to avoid duplicates.
@@ -101,6 +113,7 @@ export const submitEnquiry = createServerFn({ method: "POST" })
         console.error("[OfficeNeed] enquiry insert failed", dbError);
         return { ok: false as const, error: "Could not submit your enquiry. Please try again." };
       }
+      enquiryRowId = generatedId;
       dbEnquiryId = generatedId.split("-")[0]!.toUpperCase(); // e.g. "2D9E0D9F"
     }
 
@@ -109,46 +122,39 @@ export const submitEnquiry = createServerFn({ method: "POST" })
     let pdfBuffer: Buffer | null = null;
     let pdfError = false;
 
-    // Create short-lived signed download links for any uploaded attachments.
-    let fileLinks: Array<{ label: string; url: string }> = [];
-    if (data.file) {
-      const paths = data.file.split(", ").map((p) => p.trim()).filter(Boolean);
-      const storagePaths = paths.filter((p) => p.startsWith("chat-uploads/"));
-      if (storagePaths.length) {
-        try {
-          // The bucket is fully private (no public SELECT policy). Use the
-          // service-role client, which bypasses RLS, to mint signed URLs.
-          let storageClient = supabase;
-          const serviceKey = process.env["SUPABASE_SERVICE_ROLE_KEY"];
-          if (serviceKey) {
-            storageClient = createClient(url, serviceKey, {
-              auth: { persistSession: false, autoRefreshToken: false },
-              global: {
-                fetch: (input, init) => {
-                  const headers = new Headers(init?.headers);
-                  if (serviceKey.startsWith("sb_") && headers.get("Authorization") === `Bearer ${serviceKey}`) {
-                    headers.delete("Authorization");
-                  }
-                  headers.set("apikey", serviceKey);
-                  return fetch(input, { ...init, headers });
-                },
-              },
-            });
-          }
-          for (const path of storagePaths) {
-            const { data: signed, error } = await storageClient.storage
-              .from("enquiry-attachments")
-              .createSignedUrl(path, 60 * 60 * 24 * 7);
-            if (error || !signed?.signedUrl) continue;
-            const base = path.split("/").pop() ?? path;
-            const label = base.replace(/^\d+-[a-z0-9]{6}-/i, "");
-            fileLinks.push({ label, url: signed.signedUrl });
-          }
-        } catch (err) {
-          console.error("[OfficeNeed] signed URL generation failed", err);
-        }
+    // Persist customer attachments into enquiry-attachments/{enquiryId}/...
+    type StoredAttachment = import("./attachments.server").StoredAttachment;
+    let stored: StoredAttachment[] = [];
+    if (enquiryRowId && data.attachments?.length) {
+      try {
+        const { persistEnquiryAttachments } = await import("./attachments.server");
+        stored = await persistEnquiryAttachments({
+          enquiryRowId,
+          enquiryRef: fullEnquiryId,
+          inputs: data.attachments,
+        });
+      } catch (err) {
+        console.error("[OfficeNeed] attachment persistence failed", err);
       }
     }
+
+    const pdfAttachments = stored.map((a) => ({
+      fileName: a.fileName,
+      mimeType: a.mimeType,
+      fileSize: a.fileSize,
+      status: a.status,
+      ...(a.signedUrl ? { signedUrl: a.signedUrl } : {}),
+      ...(a.bytes && (a.imageFormat === "PNG" || a.imageFormat === "JPEG")
+        ? {
+            imageFormat: a.imageFormat,
+            dataUrl: `data:${a.imageFormat === "PNG" ? "image/png" : "image/jpeg"};base64,${a.bytes.toString("base64")}`,
+          }
+        : {}),
+    }));
+
+    const fileLinks: Array<{ label: string; url: string }> = stored
+      .filter((a) => a.signedUrl)
+      .map((a) => ({ label: a.fileName, url: a.signedUrl! }));
 
     // 2. Generate PDF
     if (data.selectedProducts && data.selectedProducts.length > 0) {
@@ -175,6 +181,7 @@ export const submitEnquiry = createServerFn({ method: "POST" })
             ...(data.file ? { file: data.file } : {}),
             ...(fileLinks.length ? { fileLinks } : {}),
           },
+          ...(pdfAttachments.length ? { attachments: pdfAttachments } : {}),
           products: data.selectedProducts.map(p => ({
             name: p.name,
             category: p.category,
@@ -220,6 +227,9 @@ export const submitEnquiry = createServerFn({ method: "POST" })
         ...(data.notes ? { notes: data.notes } : {}),
         subtotal,
         pdfBuffer,
+        attachments: stored
+          .filter((a) => a.status === "stored" && a.bytes)
+          .map((a) => ({ filename: a.fileName, content: a.bytes! })),
       });
     }
 
@@ -228,6 +238,8 @@ export const submitEnquiry = createServerFn({ method: "POST" })
       enquiryId: fullEnquiryId,
       pdfGenerated: !pdfError && pdfBuffer !== null,
       customerEmailSent,
-      internalEmailSent
+      internalEmailSent,
+      attachmentsStored: stored.filter((a) => a.status === "stored").length,
+      attachmentsFailed: stored.filter((a) => a.status === "failed").length
     };
   });
