@@ -108,6 +108,29 @@ export const submitEnquiry = createServerFn({ method: "POST" })
     let pdfBuffer: Buffer | null = null;
     let pdfError = false;
 
+    // Create short-lived signed download links for any uploaded attachments.
+    let fileLinks: Array<{ label: string; url: string }> = [];
+    if (data.file) {
+      const paths = data.file.split(", ").map((p) => p.trim()).filter(Boolean);
+      const storagePaths = paths.filter((p) => p.startsWith("chat-uploads/"));
+      if (storagePaths.length) {
+        try {
+          const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+          for (const path of storagePaths) {
+            const { data: signed, error } = await supabaseAdmin.storage
+              .from("enquiry-attachments")
+              .createSignedUrl(path, 60 * 60 * 24 * 7);
+            if (error || !signed?.signedUrl) continue;
+            const base = path.split("/").pop() ?? path;
+            const label = base.replace(/^\d+-[a-z0-9]{6}-/i, "");
+            fileLinks.push({ label, url: signed.signedUrl });
+          }
+        } catch (err) {
+          console.error("[OfficeNeed] signed URL generation failed", err);
+        }
+      }
+    }
+
     // 2. Generate PDF
     if (data.selectedProducts && data.selectedProducts.length > 0) {
       try {
@@ -131,6 +154,7 @@ export const submitEnquiry = createServerFn({ method: "POST" })
             ...(data.timeline ? { timeline: data.timeline } : {}),
             ...(data.notes ? { notes: data.notes } : {}),
             ...(data.file ? { file: data.file } : {}),
+            ...(fileLinks.length ? { fileLinks } : {}),
           },
           products: data.selectedProducts.map(p => ({
             name: p.name,
