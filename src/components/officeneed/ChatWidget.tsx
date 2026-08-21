@@ -141,9 +141,8 @@ export function ChatWidget() {
       for (const file of accepted) {
         // Sanitize filename
         const sanitizedName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
-        const fileExt = sanitizedName.split('.').pop() || '';
         const randomStr = Math.random().toString(36).substring(2, 8);
-        const fileName = `${Date.now()}-${randomStr}.${fileExt}`;
+        const fileName = `${Date.now()}-${randomStr}-${sanitizedName}`;
         const filePath = `chat-uploads/${fileName}`;
 
         const { error } = await supabase.storage
