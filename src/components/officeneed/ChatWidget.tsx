@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Send, X, MessageSquare, Plus, Check, Loader2, Paperclip, ChevronRight, CheckCircle2, Gift, Briefcase, Sparkles, Laptop, Printer } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { uploadEnquiryAttachment } from "@/lib/uploads.functions";
 import logoUrl from "@/assets/officeneed-logo.png";
 import { AiAssistantIcon } from "@/components/officeneed/AiAssistantIcon";
 import { cn } from "@/lib/utils";
