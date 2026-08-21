@@ -89,12 +89,56 @@ export function ChatWidget() {
 
   async function handleFileUpload(files: FileList) {
     if (!step) return;
+
+    const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10 MB
+    const MAX_FILES = 5;
+    const ALLOWED_TYPES = new Set([
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+      "image/gif",
+      "application/pdf",
+      "application/msword",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "application/vnd.ms-excel",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "text/csv",
+      "text/plain",
+    ]);
+
+    const selected = Array.from(files).slice(0, MAX_FILES);
+    const rejected: string[] = [];
+    const accepted = selected.filter((file) => {
+      if (file.size > MAX_FILE_BYTES || file.size === 0) {
+        rejected.push(`${file.name} (size)`);
+        return false;
+      }
+      if (!ALLOWED_TYPES.has(file.type)) {
+        rejected.push(`${file.name} (type)`);
+        return false;
+      }
+      return true;
+    });
+
+    if (rejected.length) {
+      setMessages((m) => [
+        ...m,
+        {
+          id: uid(),
+          role: "bot",
+          text: `Sorry, I couldn't accept ${rejected.join(", ")}. Please upload images, PDFs, Office documents or CSV/text files up to 10 MB each (max 5 files).`,
+        },
+      ]);
+    }
+
+    if (!accepted.length) return;
+
     setTyping(true);
-    
+
     let uploadedUrls: string[] = [];
 
     try {
-      for (const file of Array.from(files)) {
+      for (const file of accepted) {
         // Sanitize filename
         const sanitizedName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
         const fileExt = sanitizedName.split('.').pop() || '';
