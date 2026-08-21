@@ -31,6 +31,16 @@ export interface EnquiryPDFData {
     unitPriceStr: string;
     unitPrice: number;
   }>;
+  attachments?: Array<{
+    fileName: string;
+    mimeType: string;
+    fileSize?: number;
+    /** Data URL for embeddable images (PNG/JPEG only). */
+    dataUrl?: string;
+    imageFormat?: "PNG" | "JPEG";
+    signedUrl?: string;
+    status: "stored" | "failed";
+  }>;
 }
 
 function sanitizeText(text: string | number | undefined): string {
@@ -136,7 +146,7 @@ export async function generateEnquiryPDF(data: EnquiryPDFData): Promise<Buffer> 
   }
 
   const fileLinks = data.requirements.fileLinks;
-  if ((fileLinks && fileLinks.length) || data.requirements.file) {
+  if (!data.attachments?.length && ((fileLinks && fileLinks.length) || data.requirements.file)) {
     currentY += 4;
     doc.setFont("Roboto", "bold");
     doc.text("Reference Files", marginX, currentY);
@@ -245,7 +255,92 @@ export async function generateEnquiryPDF(data: EnquiryPDFData): Promise<Buffer> 
   doc.setFontSize(12);
   doc.text("Grand Total:", summaryXLabel, finalY, { align: "right" });
   doc.text(formatCurrency(subtotal), summaryXValue, finalY, { align: "right" });
-  
+
+  // Customer Reference Files (attachments)
+  const attachments = data.attachments ?? [];
+  if (attachments.length) {
+    const contentBottom = 272; // keep clear of the footer at y=285
+    const contentWidth = 170;
+    let y = finalY + 14;
+
+    const ensureSpace = (needed: number) => {
+      if (y + needed > contentBottom) {
+        doc.addPage();
+        y = 20;
+      }
+    };
+
+    ensureSpace(16);
+    doc.setFontSize(14);
+    doc.setFont("Roboto", "bold");
+    doc.setTextColor(0, 0, 0);
+    doc.text("Customer Reference Files", marginX, y);
+    y += 8;
+
+    for (const att of attachments) {
+      // Measure the image up front so its caption never orphans on a page break.
+      let imgDims: { w: number; h: number } | null = null;
+      if (att.dataUrl && att.imageFormat) {
+        try {
+          const props = doc.getImageProperties(att.dataUrl);
+          const ratio = Math.min(Math.min(contentWidth, 120) / props.width, 110 / props.height, 1);
+          imgDims = { w: props.width * ratio, h: props.height * ratio };
+        } catch (err) {
+          console.error("[OfficeNeed] failed to read attachment image", att.fileName, err);
+        }
+      }
+      ensureSpace(23 + (imgDims ? imgDims.h + 8 : 0));
+      doc.setFontSize(10);
+      doc.setFont("Roboto", "bold");
+      doc.setTextColor(0, 0, 0);
+      doc.text(`Attachment: ${att.fileName}`, marginX, y);
+      y += 6;
+
+      doc.setFont("Roboto", "normal");
+      doc.setFontSize(9);
+      doc.setTextColor(90, 90, 90);
+      const typeLabel = att.mimeType.split("/").pop()?.toUpperCase() ?? "FILE";
+      const sizeLabel = att.fileSize ? ` · ${(att.fileSize / 1024).toFixed(0)} KB` : "";
+      doc.text(`File type: ${typeLabel}${sizeLabel}`, marginX, y);
+      y += 5;
+      doc.setTextColor(0, 0, 0);
+
+      if (att.status === "failed") {
+        doc.setTextColor(180, 40, 40);
+        doc.text("This attachment could not be stored. Please request it from the customer.", marginX, y);
+        doc.setTextColor(0, 0, 0);
+        y += 8;
+        continue;
+      }
+
+      if (att.signedUrl) {
+        doc.setTextColor(20, 80, 200);
+        const linkLabel = "Download original file (link valid for 7 days)";
+        doc.textWithLink(linkLabel, marginX, y, { url: att.signedUrl });
+        const w = doc.getTextWidth(linkLabel);
+        doc.setDrawColor(20, 80, 200);
+        doc.line(marginX, y + 1, marginX + w, y + 1);
+        doc.setTextColor(0, 0, 0);
+        y += 6;
+      } else {
+        doc.text("Available in the enquiry attachment storage.", marginX, y);
+        y += 6;
+      }
+
+      if (imgDims && att.dataUrl && att.imageFormat) {
+        try {
+          doc.addImage(att.dataUrl, att.imageFormat, marginX, y, imgDims.w, imgDims.h);
+          y += imgDims.h + 8;
+        } catch (err) {
+          console.error("[OfficeNeed] failed to embed attachment image", att.fileName, err);
+          y += 2;
+        }
+      } else {
+        y += 2;
+      }
+    }
+  }
+
   // Footer
   const pageCount = doc.getNumberOfPages();
   for (let i = 1; i <= pageCount; i++) {

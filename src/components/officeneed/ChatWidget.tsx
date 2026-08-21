@@ -50,6 +50,10 @@ export function ChatWidget() {
   const [selectedProductSlugs, setSelectedProductSlugs] = useState<Set<string>>(new Set());
   const [currentRecommendations, setCurrentRecommendations] = useState<Product[]>([]);
   
+  const attachmentsRef = useRef<Array<{ path: string; name: string; mimeType: string; size: number }>>([]);
+  const setAttachments = (list: Array<{ path: string; name: string; mimeType: string; size: number }>) => {
+    attachmentsRef.current = list;
+  };
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const navigate = useNavigate();
@@ -136,6 +140,7 @@ export function ChatWidget() {
     setTyping(true);
 
     let uploadedUrls: string[] = [];
+    const uploadedMeta: Array<{ path: string; name: string; mimeType: string; size: number }> = [];
 
     try {
       for (const file of accepted) {
@@ -157,11 +162,21 @@ export function ChatWidget() {
         // Bucket is private: store the storage path only. Staff/server code
         // generates short-lived signed URLs when the attachment is needed.
         uploadedUrls.push(filePath);
+        uploadedMeta.push({ path: filePath, name: file.name, mimeType: file.type, size: file.size });
       }
     } catch (err) {
       console.error("[OfficeNeed] Failed to upload files to Supabase:", err);
-      // Fallback: just use file names if upload fails (e.g. bucket doesn't exist yet)
+      // Upload failed: keep the file names for reference; the enquiry still goes through.
       uploadedUrls = accepted.map(f => f.name);
+      uploadedMeta.length = 0;
+      setMessages((m) => [
+        ...m,
+        {
+          id: uid(),
+          role: "bot",
+          text: "I couldn't store your file right now, but I've noted its name and your enquiry will still be sent. Our team may ask you to re-share it.",
+        },
+      ]);
     }
 
     setTyping(false);
@@ -170,6 +185,7 @@ export function ChatWidget() {
     const fileString = uploadedUrls.join(", ");
     const next: ChatAnswers = { ...answers, [step.id]: fileString };
     setAnswers(next);
+    setAttachments(uploadedMeta);
     
     // For UI display, keep it clean by showing only the file names instead of raw URLs
     const fileNames = accepted.map(f => f.name).join(", ");
@@ -296,6 +312,7 @@ export function ChatWidget() {
           timeline: final.timeline,
           notes: final.message,
           file: final.file,
+          ...(attachmentsRef.current.length ? { attachments: attachmentsRef.current } : {}),
           selectedProducts,
         },
       });

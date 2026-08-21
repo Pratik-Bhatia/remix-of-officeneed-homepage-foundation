@@ -56,6 +56,47 @@ export type Database = {
         }
         Relationships: []
       }
+      product_enquiry_attachments: {
+        Row: {
+          created_at: string
+          enquiry_id: string
+          file_name: string
+          file_size: number | null
+          id: string
+          mime_type: string | null
+          storage_path: string
+          upload_status: string
+        }
+        Insert: {
+          created_at?: string
+          enquiry_id: string
+          file_name: string
+          file_size?: number | null
+          id?: string
+          mime_type?: string | null
+          storage_path: string
+          upload_status?: string
+        }
+        Update: {
+          created_at?: string
+          enquiry_id?: string
+          file_name?: string
+          file_size?: number | null
+          id?: string
+          mime_type?: string | null
+          storage_path?: string
+          upload_status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_enquiry_attachments_enquiry_id_fkey"
+            columns: ["enquiry_id"]
+            isOneToOne: false
+            referencedRelation: "product_enquiries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never

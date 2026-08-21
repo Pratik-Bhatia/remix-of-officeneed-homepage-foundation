@@ -97,6 +97,7 @@ export async function sendInternalNotificationEmail(params: {
   notes?: string;
   subtotal: number;
   pdfBuffer: Buffer;
+  attachments?: Array<{ filename: string; content: Buffer }>;
 }): Promise<boolean> {
   const resend = getResendClient();
   if (!resend) {
@@ -133,6 +134,14 @@ export async function sendInternalNotificationEmail(params: {
           <h3>Additional Notes</h3>
           <p>${esc(params.notes)}</p>
           
+          <h3>Customer Reference Files</h3>
+          <p>${
+            params.attachments?.length
+              ? params.attachments.map((a) => `📎 ${esc(a.filename)}`).join("<br/>") +
+                "<br/><em>Original files are attached to this email and embedded in the enquiry PDF.</em>"
+              : "No files uploaded."
+          }</p>
+
           <p><em>The complete enquiry PDF (including product breakdown) is attached to this email.</em></p>
         </div>
       `,
@@ -141,6 +150,7 @@ export async function sendInternalNotificationEmail(params: {
           filename: `OfficeNeed-Enquiry-${params.enquiryId}.pdf`,
           content: params.pdfBuffer,
         },
+        ...(params.attachments ?? []).map((a) => ({ filename: a.filename, content: a.content })),
       ],
     });
     if (error) {
