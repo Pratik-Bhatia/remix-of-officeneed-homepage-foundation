@@ -171,9 +171,9 @@ export function ChatWidget() {
       }
     } catch (err) {
       console.error("[OfficeNeed] Failed to upload files to Supabase:", err);
-      // Upload failed: keep the file names for reference; the enquiry still goes through.
-      uploadedUrls = accepted.map(f => f.name);
-      uploadedMeta.length = 0;
+      // Keep any files that already uploaded successfully.
+      uploadedUrls = uploadedMeta.length ? uploadedUrls : accepted.map(f => f.name);
+
       setUploads((prev) => prev.map((u) => (u.status === "saved" ? u : { ...u, status: "failed" as const })));
       setMessages((m) => [
         ...m,
