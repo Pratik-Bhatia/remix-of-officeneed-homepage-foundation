@@ -4,6 +4,7 @@ import { Menu, MessageSquare, Search, User, X, ChevronDown } from "lucide-react"
 import logoUrl from "@/assets/officeneed-logo.png";
 import { primaryNavCategories as navCategories, navItemTarget } from "@/lib/navigation";
 import { CartDrawer } from "@/components/officeneed/CartDrawer";
+import { AiAssistantIcon } from "@/components/officeneed/AiAssistantIcon";
 import { cn } from "@/lib/utils";
 
 function Logo({ className }: { className?: string }) {
@@ -143,9 +144,9 @@ export function Navbar() {
             aria-label="Open OfficeNeed Chat"
             title="Chat with OfficeNeed"
             onClick={openChat}
-            className="chat-pulse inline-flex size-[26px] shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm transition-[transform,box-shadow] duration-200 hover:scale-105 hover:shadow-md md:size-10 xl:size-11"
+            className="chat-pulse inline-flex size-[26px] shrink-0 items-center justify-center rounded-full shadow-sm transition-[transform,box-shadow] duration-200 hover:scale-105 hover:shadow-md md:size-10 xl:size-11"
           >
-            <MessageSquare className="chat-icon-wiggle size-5 md:size-[22px] xl:size-5" strokeWidth={1.6} />
+            <AiAssistantIcon className="chat-icon-wiggle size-full rounded-full" />
           </button>
           <IconButton label="Search" className="size-[26px] md:size-10 xl:size-11">
             <Search className="size-5 md:size-[22px] xl:size-5" strokeWidth={1.6} />

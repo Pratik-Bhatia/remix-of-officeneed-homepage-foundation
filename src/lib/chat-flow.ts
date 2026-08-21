@@ -113,13 +113,16 @@ const purposeToCategories: Record<string, ProductCategory[]> = {
 };
 
 export function parseQuantity(label?: string): number | undefined {
+  if (!label) return undefined;
+  const num = parseInt(label, 10);
+  if (!isNaN(num) && num.toString() === label) return num;
   switch (label) {
     case "10–25": return 15;
     case "25–50": return 40;
     case "50–100": return 75;
     case "100–250": return 150;
     case "250+": return 500;
-    default: return undefined;
+    default: return isNaN(num) ? undefined : num;
   }
 }
 

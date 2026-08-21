@@ -29,6 +29,7 @@ const enquirySchema = z.object({
   budget: z.string().optional(),
   timeline: z.string().optional(),
   notes: z.string().optional(),
+  file: z.string().optional(),
   selectedProducts: z.array(productItemSchema).optional(),
   enquiryId: z.string().optional(),
 });
@@ -39,6 +40,18 @@ const enquirySchema = z.object({
 export const submitEnquiry = createServerFn({ method: "POST" })
   .validator((data) => enquirySchema.parse(data))
   .handler(async ({ data }) => {
+    // Custom Validation
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(data.email)) {
+      return { ok: false as const, error: "Invalid email format." };
+    }
+    if (data.phone) {
+      let digits = data.phone.replace(/\D/g, "");
+      if (digits.startsWith("91") && digits.length === 12) digits = digits.slice(2);
+      if (digits.length !== 10 || !/^[6-9]\d{9}$/.test(digits)) {
+        return { ok: false as const, error: "Invalid phone number format." };
+      }
+    }
+
     const url = process.env["SUPABASE_URL"] ?? process.env["VITE_SUPABASE_URL"];
     const key =
       process.env["SUPABASE_PUBLISHABLE_KEY"] ??
@@ -117,6 +130,7 @@ export const submitEnquiry = createServerFn({ method: "POST" })
             ...(data.budget ? { budget: data.budget } : {}),
             ...(data.timeline ? { timeline: data.timeline } : {}),
             ...(data.notes ? { notes: data.notes } : {}),
+            ...(data.file ? { file: data.file } : {}),
           },
           products: data.selectedProducts.map(p => ({
             name: p.name,

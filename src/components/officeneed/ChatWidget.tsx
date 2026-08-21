@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Send, X, MessageSquare, Plus, Check, Loader2, Paperclip, ChevronRight, CheckCircle2 } from "lucide-react";
+import { Send, X, MessageSquare, Plus, Check, Loader2, Paperclip, ChevronRight, CheckCircle2, Gift, Briefcase, Sparkles, Laptop, Printer } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 import logoUrl from "@/assets/officeneed-logo.png";
+import { AiAssistantIcon } from "@/components/officeneed/AiAssistantIcon";
 import { cn } from "@/lib/utils";
 import {
   buildEnquiryMessage,
@@ -28,7 +30,7 @@ let seq = 0;
 const uid = () => `m${++seq}`;
 
 const GREETING =
-  "Hi! I'm the OfficeNeed Assistant. I'll help you find the right products for your requirement.";
+  "Hi! I'm OfficeGPT. I'll help you find the right products for your requirement.";
 
 export function ChatWidget() {
   const [open, setOpen] = useState(false);
@@ -41,6 +43,9 @@ export function ChatWidget() {
   const [error, setError] = useState<string | null>(null);
   const [resultStatus, setResultStatus] = useState<{enquiryId: string, emailSent: boolean} | null>(null);
   const [draft, setDraft] = useState("");
+  const [quantitySliderVal, setQuantitySliderVal] = useState(25);
+  const [exactQuantity, setExactQuantity] = useState("");
+  const [exactQuantityError, setExactQuantityError] = useState("");
   
   const [selectedProductSlugs, setSelectedProductSlugs] = useState<Set<string>>(new Set());
   const [currentRecommendations, setCurrentRecommendations] = useState<Product[]>([]);
@@ -82,17 +87,52 @@ export function ChatWidget() {
     }, delay);
   }
 
-  async function handleFileUpload(file: File) {
+  async function handleFileUpload(files: FileList) {
     if (!step) return;
     setTyping(true);
-    // Mock file upload
-    await new Promise(r => setTimeout(r, 1500));
+    
+    let uploadedUrls: string[] = [];
+
+    try {
+      for (const file of Array.from(files)) {
+        // Sanitize filename
+        const sanitizedName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
+        const fileExt = sanitizedName.split('.').pop() || '';
+        const randomStr = Math.random().toString(36).substring(2, 8);
+        const fileName = `${Date.now()}-${randomStr}.${fileExt}`;
+        const filePath = `chat-uploads/${fileName}`;
+
+        const { error } = await supabase.storage
+          .from('enquiry-attachments')
+          .upload(filePath, file);
+
+        if (error) {
+          console.error("[OfficeNeed] Storage upload error:", error);
+          throw error;
+        }
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('enquiry-attachments')
+          .getPublicUrl(filePath);
+
+        uploadedUrls.push(publicUrl);
+      }
+    } catch (err) {
+      console.error("[OfficeNeed] Failed to upload files to Supabase:", err);
+      // Fallback: just use file names if upload fails (e.g. bucket doesn't exist yet)
+      uploadedUrls = Array.from(files).map(f => f.name);
+    }
+
     setTyping(false);
     
-    const filename = file.name;
-    const next: ChatAnswers = { ...answers, [step.id]: filename };
+    // The URLs will be passed to backend and inserted into the PDF
+    const fileString = uploadedUrls.join(", ");
+    const next: ChatAnswers = { ...answers, [step.id]: fileString };
     setAnswers(next);
-    setMessages((m) => [...m, { id: uid(), role: "user", text: `📎 ${filename}` }]);
+    
+    // For UI display, keep it clean by showing only the file names instead of raw URLs
+    const fileNames = Array.from(files).map(f => f.name).join(", ");
+    setMessages((m) => [...m, { id: uid(), role: "user", text: `📎 ${fileNames}` }]);
     
     await proceedEnquiry(next);
   }
@@ -106,10 +146,26 @@ export function ChatWidget() {
       setMessages((m) => [
         ...m,
         { id: uid(), role: "user", text: clean },
-        { id: uid(), role: "bot", text: "That email doesn't look right — could you re-enter it?" },
+        { id: uid(), role: "bot", text: "That email doesn't look quite right. Please enter a valid email address so I can send your enquiry confirmation." },
       ]);
       setDraft("");
       return;
+    }
+
+    if (step.inputType === "tel") {
+      let digits = clean.replace(/\D/g, "");
+      if (digits.startsWith("91") && digits.length === 12) {
+        digits = digits.slice(2);
+      }
+      if (digits.length !== 10 || !/^[6-9]\d{9}$/.test(digits)) {
+        setMessages((m) => [
+          ...m,
+          { id: uid(), role: "user", text: clean },
+          { id: uid(), role: "bot", text: "That phone number doesn't look correct. Please enter a valid 10-digit mobile number." },
+        ]);
+        setDraft("");
+        return;
+      }
     }
 
     const next: ChatAnswers = { ...answers, [step.id]: clean };
@@ -198,6 +254,7 @@ export function ChatWidget() {
           budget: final.budget,
           timeline: final.timeline,
           notes: final.message,
+          file: final.file,
           selectedProducts,
         },
       });
@@ -239,6 +296,9 @@ export function ChatWidget() {
     setSelectedProductSlugs(new Set());
     setError(null);
     setDraft("");
+    setQuantitySliderVal(25);
+    setExactQuantity("");
+    setExactQuantityError("");
     setMessages([{ id: uid(), role: "bot", text: GREETING }]);
     pushBot(chatSteps[0]!.question, 500);
   }
@@ -266,10 +326,10 @@ export function ChatWidget() {
       )}>
         <button
           onClick={() => setOpen(true)}
-          className="group flex items-center justify-center size-14 rounded-full bg-primary text-primary-foreground shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
-          aria-label="Open AI Shopping Assistant"
+          className="group flex items-center justify-center size-14 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+          aria-label="Open OfficeGPT"
         >
-          <MessageSquare className="size-6" />
+          <AiAssistantIcon className="size-full rounded-full" />
         </button>
       </div>
 
@@ -285,7 +345,7 @@ export function ChatWidget() {
         <div
           role="dialog"
           aria-modal="false"
-          aria-label="OfficeNeed AI Shopping Assistant"
+          aria-label="OfficeNeed OfficeGPT"
           aria-hidden={!open}
           className={cn(
             "flex h-[90svh] w-full flex-col overflow-hidden bg-background sm:h-[650px] sm:w-[420px] sm:rounded-2xl sm:border sm:border-border sm:shadow-[0_20px_40px_-15px_rgba(0,0,0,0.1)]",
@@ -296,7 +356,7 @@ export function ChatWidget() {
             <div className="flex items-center gap-3">
               <img src={logoUrl} alt="" width={640} height={122} className="h-4 w-auto object-contain" />
               <div className="leading-tight border-l border-border pl-3">
-                <p className="text-sm font-semibold text-foreground">Assistant</p>
+                <p className="text-sm font-semibold text-foreground">OfficeGPT</p>
                 <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">AI Shopping Guide</p>
               </div>
             </div>
@@ -418,6 +478,102 @@ export function ChatWidget() {
                   Close Assistant
                 </button>
               </div>
+            ) : step?.id === "purpose" && step.options ? (
+              <div className="flex flex-col gap-3 pb-2 pt-1 px-1">
+                <p className="text-[12px] font-semibold text-muted-foreground uppercase tracking-wider text-center">Choose a category</p>
+                <div className="grid grid-cols-2 gap-2.5">
+                  {step.options.map((opt) => {
+                    const iconMap: Record<string, any> = {
+                      "Corporate Gifting": Gift,
+                      "Employee Joining Kits": Briefcase,
+                      "Festive Gifts": Sparkles,
+                      "Office Supplies": Paperclip,
+                      "Hardware & IT": Laptop,
+                      "Printing & Branding": Printer,
+                    };
+                    const Icon = iconMap[opt] || ChevronRight;
+                    return (
+                      <button
+                        key={opt}
+                        type="button"
+                        disabled={typing}
+                        onClick={() => void answer(opt)}
+                        className="group flex flex-col items-center justify-center gap-1.5 rounded-xl border border-border/80 bg-white p-3 text-center shadow-sm transition-all hover:border-foreground/30 hover:shadow-md active:bg-primary active:text-primary-foreground disabled:opacity-50"
+                      >
+                        <Icon className="size-4 opacity-50 group-hover:opacity-80 group-active:opacity-100 transition-opacity" strokeWidth={1.5} />
+                        <span className="text-[12.5px] font-semibold leading-tight">{opt}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            ) : step?.id === "quantity" && step.options ? (
+              <div className="flex flex-col gap-4 px-2 pb-2 pt-2">
+                <div className="text-center mb-2">
+                  <span className="inline-block bg-foreground text-background px-4 py-1.5 rounded-full text-[15px] font-bold shadow-sm">
+                    {quantitySliderVal >= 250 ? "250+" : quantitySliderVal}
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="250"
+                  step="1"
+                  disabled={typing}
+                  value={quantitySliderVal}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value, 10);
+                    setQuantitySliderVal(val);
+                    if (val < 250) setExactQuantityError("");
+                  }}
+                  className="w-full h-2 bg-secondary rounded-lg appearance-none cursor-pointer accent-primary"
+                />
+                <div className="flex justify-between text-xs font-medium text-muted-foreground px-1">
+                  <span>0</span>
+                  <span>250+</span>
+                </div>
+
+                {quantitySliderVal >= 250 && (
+                  <div className="mt-2 flex flex-col gap-2">
+                    <label className="text-[13px] font-semibold text-foreground">Enter exact quantity</label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      disabled={typing}
+                      value={exactQuantity}
+                      onChange={(e) => {
+                        setExactQuantity(e.target.value);
+                        if (exactQuantityError) setExactQuantityError("");
+                      }}
+                      className="w-full rounded-xl border border-border/80 bg-white px-3 py-2.5 text-[14px] outline-none focus:border-foreground/40 focus:ring-2 focus:ring-foreground/5"
+                      placeholder="e.g. 500"
+                    />
+                    {exactQuantityError && <p className="text-[12px] font-medium text-destructive">{exactQuantityError}</p>}
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  disabled={typing}
+                  onClick={() => {
+                    if (quantitySliderVal >= 250) {
+                      const num = parseInt(exactQuantity, 10);
+                      if (!exactQuantity.trim() || isNaN(num) || num <= 250 || num.toString() !== exactQuantity.trim()) {
+                        setExactQuantityError("Please enter a valid whole number greater than 250.");
+                        return;
+                      }
+                      setExactQuantityError("");
+                      void answer(exactQuantity.trim());
+                    } else {
+                      void answer(quantitySliderVal.toString());
+                    }
+                  }}
+                  className="mt-2 w-full rounded-xl bg-foreground text-background py-2.5 text-[14px] font-semibold transition-colors hover:bg-foreground/90 disabled:opacity-50"
+                >
+                  Confirm Quantity
+                </button>
+              </div>
             ) : step?.options ? (
               <div className="flex flex-wrap gap-2 justify-end">
                 {step.options.map((opt) => (
@@ -437,8 +593,9 @@ export function ChatWidget() {
                 <div className="relative">
                   <input
                     type="file"
+                    multiple
                     disabled={typing}
-                    onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0])}
+                    onChange={(e) => e.target.files?.length && handleFileUpload(e.target.files)}
                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
                     accept="image/*,.pdf,.doc,.docx"
                   />

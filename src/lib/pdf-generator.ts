@@ -1,5 +1,7 @@
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
+import { officeneedLogoBase64 } from "./pdf-logo";
+import { robotoRegularBase64, robotoBoldBase64 } from "./pdf-fonts";
 
 export interface EnquiryPDFData {
   enquiryId: string;
@@ -18,6 +20,7 @@ export interface EnquiryPDFData {
     budget?: string;
     timeline?: string;
     notes?: string;
+    file?: string;
   };
   products: Array<{
     name: string;
@@ -30,20 +33,26 @@ export interface EnquiryPDFData {
 }
 
 function sanitizeText(text: string | number | undefined): string {
-  if (!text && text !== 0) return "-";
+  if (!text && text !== 0) return "—";
   return String(text)
-    .replace(/₹/g, "Rs. ")
     .replace(/[\u202F\u00A0]/g, " ")
     .trim();
 }
 
 function formatCurrency(amount: number) {
+  const isInteger = amount % 1 === 0;
   const formatted = new Intl.NumberFormat("en-IN", {
     style: "currency",
     currency: "INR",
-    maximumFractionDigits: 2,
+    maximumFractionDigits: isInteger ? 0 : 2,
+    minimumFractionDigits: isInteger ? 0 : 2,
   }).format(amount);
-  return sanitizeText(formatted);
+  
+  // Format precisely without breaking general text:
+  // 1. Convert any thin spaces to normal spaces
+  // 2. Remove all spaces in the entire string to ensure ₹1,38,000 (no spaces anywhere)
+  // Since it's just currency, removing all spaces is safe.
+  return formatted.replace(/[\u202F\u00A0\s]+/g, "");
 }
 
 export async function generateEnquiryPDF(data: EnquiryPDFData): Promise<Buffer> {
@@ -57,23 +66,26 @@ export async function generateEnquiryPDF(data: EnquiryPDFData): Promise<Buffer> 
   const marginX = 20;
   let currentY = 20;
 
+  // Setup Fonts
+  doc.addFileToVFS("Roboto-Regular.ttf", robotoRegularBase64);
+  doc.addFont("Roboto-Regular.ttf", "Roboto", "normal");
+  doc.addFileToVFS("Roboto-Bold.ttf", robotoBoldBase64);
+  doc.addFont("Roboto-Bold.ttf", "Roboto", "bold");
+
   // Header: Logo / Branding
-  doc.setFontSize(22);
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(30, 30, 30);
-  doc.text("OFFICENEED", marginX, currentY);
+  doc.addImage(officeneedLogoBase64, 'PNG', marginX, 12, 48, 10);
   
   doc.setFontSize(10);
-  doc.setFont("helvetica", "normal");
+  doc.setFont("Roboto", "normal");
   doc.setTextColor(100, 100, 100);
-  currentY += 6;
+  currentY = 28;
   doc.text("AI Shopping Recommendation / Enquiry", marginX, currentY);
   
   // Header: Right Side Metadata
   doc.setFontSize(10);
   doc.setTextColor(50, 50, 50);
-  doc.text(`Enquiry ID: ${data.enquiryId}`, 130, 20);
-  doc.text(`Date: ${data.date}`, 130, 26);
+  doc.text(`Enquiry ID: ${data.enquiryId}`, 190, 16, { align: "right" });
+  doc.text(`Date: ${data.date}`, 190, 22, { align: "right" });
   
   currentY += 15;
   doc.setDrawColor(220, 220, 220);
@@ -82,14 +94,14 @@ export async function generateEnquiryPDF(data: EnquiryPDFData): Promise<Buffer> 
 
   // Customer Details & Requirements (Two columns)
   doc.setFontSize(12);
-  doc.setFont("helvetica", "bold");
+  doc.setFont("Roboto", "bold");
   doc.setTextColor(0, 0, 0);
   doc.text("Customer Details", marginX, currentY);
   doc.text("Requirement Details", 110, currentY);
   
   currentY += 8;
   doc.setFontSize(10);
-  doc.setFont("helvetica", "normal");
+  doc.setFont("Roboto", "normal");
   
   const leftCol = [
     `Name: ${data.customer.name}`,
@@ -113,20 +125,40 @@ export async function generateEnquiryPDF(data: EnquiryPDFData): Promise<Buffer> 
   
   if (data.requirements.notes) {
     currentY += 4;
-    doc.setFont("helvetica", "bold");
+    doc.setFont("Roboto", "bold");
     doc.text("Additional Notes:", marginX, currentY);
     currentY += 6;
-    doc.setFont("helvetica", "normal");
+    doc.setFont("Roboto", "normal");
     const splitNotes = doc.splitTextToSize(data.requirements.notes, 170);
     doc.text(splitNotes, marginX, currentY);
     currentY += (splitNotes.length * 6);
+  }
+
+  if (data.requirements.file) {
+    currentY += 4;
+    doc.setFont("Roboto", "bold");
+    doc.text("Reference Files", marginX, currentY);
+    currentY += 6;
+    doc.setFont("Roboto", "normal");
+    const files = data.requirements.file.split(", ");
+    if (files.length === 1) {
+      doc.text(`Customer attachment: ${files[0]}`, marginX, currentY);
+      currentY += 6;
+    } else {
+      doc.text("Customer attachments:", marginX, currentY);
+      currentY += 6;
+      files.forEach(f => {
+        doc.text(f, marginX + 4, currentY);
+        currentY += 6;
+      });
+    }
   }
 
   currentY += 10;
 
   // Products Table
   doc.setFontSize(14);
-  doc.setFont("helvetica", "bold");
+  doc.setFont("Roboto", "bold");
   doc.text("Recommended Products", marginX, currentY);
   currentY += 6;
 
@@ -140,7 +172,7 @@ export async function generateEnquiryPDF(data: EnquiryPDFData): Promise<Buffer> 
       p.category,
       p.sku || "—",
       p.quantity.toString(),
-      p.unitPriceStr,
+      formatCurrency(p.unitPrice),
       formatCurrency(lineTotal)
     ];
   });
@@ -151,14 +183,17 @@ export async function generateEnquiryPDF(data: EnquiryPDFData): Promise<Buffer> 
     head: [['Product', 'Category', 'SKU', 'Qty', 'Unit Price', 'Total']],
     body: tableData,
     theme: 'grid',
-    headStyles: { fillColor: [40, 40, 40], textColor: 255 },
-    styles: { fontSize: 9, cellPadding: 4 },
+    headStyles: { fillColor: [40, 40, 40], textColor: 255, font: "Roboto", fontStyle: "bold" },
+    styles: { font: "Roboto", fontSize: 9, cellPadding: 4, valign: 'middle' },
     columnStyles: {
-      0: { cellWidth: 50 },
-      3: { halign: 'center' },
-      4: { halign: 'right' },
-      5: { halign: 'right' }
-    }
+      0: { cellWidth: 'auto' },
+      1: { cellWidth: 35 },
+      2: { cellWidth: 20 },
+      3: { cellWidth: 15, halign: 'center' },
+      4: { cellWidth: 22, halign: 'right' },
+      5: { cellWidth: 25, halign: 'right' }
+    },
+    margin: { left: marginX, right: 20 }
   });
 
   // @ts-expect-error autoTable adds lastAutoTable property
@@ -170,26 +205,29 @@ export async function generateEnquiryPDF(data: EnquiryPDFData): Promise<Buffer> 
     finalY = 20;
   }
   
+  const summaryXLabel = 155;
+  const summaryXValue = 190;
+
   doc.setFontSize(11);
-  doc.setFont("helvetica", "normal");
-  doc.text("Subtotal:", 140, finalY);
-  doc.text(formatCurrency(subtotal), 190, finalY, { align: "right" });
+  doc.setFont("Roboto", "normal");
+  doc.text("Subtotal:", summaryXLabel, finalY, { align: "right" });
+  doc.text(formatCurrency(subtotal), summaryXValue, finalY, { align: "right" });
   
   finalY += 6;
-  doc.text("GST (if applicable):", 140, finalY);
-  doc.text("Included", 190, finalY, { align: "right" }); // Using existing logic, assuming inclusive
+  doc.text("GST (if applicable):", summaryXLabel, finalY, { align: "right" });
+  doc.text("Included", summaryXValue, finalY, { align: "right" });
   
   finalY += 8;
-  doc.setFont("helvetica", "bold");
+  doc.setFont("Roboto", "bold");
   doc.setFontSize(12);
-  doc.text("Grand Total:", 140, finalY);
-  doc.text(formatCurrency(subtotal), 190, finalY, { align: "right" });
+  doc.text("Grand Total:", summaryXLabel, finalY, { align: "right" });
+  doc.text(formatCurrency(subtotal), summaryXValue, finalY, { align: "right" });
   
   // Footer
   const pageCount = doc.getNumberOfPages();
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
-    doc.setFont("helvetica", "normal");
+    doc.setFont("Roboto", "normal");
     doc.setFontSize(8);
     doc.setTextColor(150, 150, 150);
     const footerText = `Thank you for choosing OfficeNeed. This document is an enquiry summary and not a final tax invoice. | Page ${i} of ${pageCount}`;
