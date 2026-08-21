@@ -62,6 +62,34 @@ export function ChatWidget() {
   const currentStepList = phase === "qualification" ? chatSteps : phase === "enquiry" ? enquirySteps : [];
   const step: ChatStep | undefined = phase === "refinement" ? refineStep : currentStepList[stepIndex];
 
+  // Scroll lock for mobile fullscreen
+  useEffect(() => {
+    if (!open) return;
+    const isMobile = window.innerWidth < 640;
+    if (!isMobile) return;
+
+    const scrollY = window.scrollY;
+    const body = document.body;
+    
+    const originalPosition = body.style.position;
+    const originalTop = body.style.top;
+    const originalWidth = body.style.width;
+    const originalOverscroll = body.style.overscrollBehavior;
+
+    body.style.position = "fixed";
+    body.style.top = `-${scrollY}px`;
+    body.style.width = "100%";
+    body.style.overscrollBehavior = "none";
+
+    return () => {
+      body.style.position = originalPosition;
+      body.style.top = originalTop;
+      body.style.width = originalWidth;
+      body.style.overscrollBehavior = originalOverscroll;
+      window.scrollTo(0, scrollY);
+    };
+  }, [open]);
+
   useEffect(() => {
     const onOpen = () => setOpen(true);
     window.addEventListener("officeneed:open-chat", onOpen);
@@ -426,7 +454,7 @@ export function ChatWidget() {
       {/* Chat Widget Panel */}
       <div
         className={cn(
-          "fixed inset-x-0 bottom-0 z-[110] flex justify-end sm:inset-auto sm:bottom-6 sm:right-6 transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
+          "fixed inset-0 z-[110] flex flex-col justify-end sm:flex-row sm:inset-auto sm:bottom-6 sm:right-6 transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
           !open && "pointer-events-none",
           open ? "translate-y-0 opacity-100" : "translate-y-8 opacity-0"
         )}
@@ -438,7 +466,7 @@ export function ChatWidget() {
           aria-label="OfficeNeed OfficeGPT"
           aria-hidden={!open}
           className={cn(
-            "flex h-[90svh] w-full flex-col overflow-hidden bg-background sm:h-[650px] sm:w-[420px] sm:rounded-2xl sm:border sm:border-border sm:shadow-[0_20px_40px_-15px_rgba(0,0,0,0.1)]",
+            "flex h-[100dvh] w-full flex-col overflow-hidden bg-background sm:h-[650px] sm:w-[420px] sm:rounded-2xl sm:border sm:border-border sm:shadow-[0_20px_40px_-15px_rgba(0,0,0,0.1)]",
           )}
         >
           {/* Header */}
