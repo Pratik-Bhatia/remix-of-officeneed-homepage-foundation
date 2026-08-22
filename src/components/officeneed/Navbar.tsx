@@ -70,19 +70,27 @@ export function Navbar() {
   const [user, setUser] = useState<SupabaseUser | null>(null);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-    });
+    let unsubscribe = () => {};
+    try {
+      void supabase.auth.getSession()
+        .then(({ data: { session } }) => setUser(session?.user ?? null))
+        .catch(() => setUser(null));
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-    });
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+        setUser(session?.user ?? null);
+      });
+      unsubscribe = () => subscription.unsubscribe();
+    } catch {
+      // Authentication is optional for browsing. A missing client config must
+      // never prevent the storefront from rendering.
+      setUser(null);
+    }
 
     const handleOpenAuth = () => setAuthOpen(true);
     window.addEventListener("open-auth-modal", handleOpenAuth);
 
     return () => {
-      subscription.unsubscribe();
+      unsubscribe();
       window.removeEventListener("open-auth-modal", handleOpenAuth);
     };
   }, []);

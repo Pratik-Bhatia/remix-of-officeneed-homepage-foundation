@@ -12,12 +12,16 @@ import type { User } from "@supabase/supabase-js";
 
 export function AccountModal({ open, onOpenChange, user }: { open: boolean; onOpenChange: (open: boolean) => void, user: User }) {
   const handleSignOut = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) {
-      toast.error(error.message);
-    } else {
-      toast.success("Successfully signed out");
-      onOpenChange(false);
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        toast.error(error.message);
+      } else {
+        toast.success("Successfully signed out");
+        onOpenChange(false);
+      }
+    } catch {
+      toast.error("Sign out is temporarily unavailable. Please try again shortly.");
     }
   };
 
