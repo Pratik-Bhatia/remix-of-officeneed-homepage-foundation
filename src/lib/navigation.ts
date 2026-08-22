@@ -30,7 +30,7 @@ export const navCategories: NavCategory[] = [
   },
   {
     id: "fragrance-luxury",
-    label: "Fragrance & Luxury Gifting",
+    label: "Fragrance Gifting",
     blurb: "Considered luxury for leadership and landmark occasions.",
     items: [
       "Perfumes",
@@ -76,7 +76,7 @@ export type ProductsCategoryFilter =
   | "Office Supplies"
   | "Hardware & IT"
   | "Printing & Branding"
-  | "Fragrance & Luxury Gifting";
+  | "Fragrance Gifting";
 
 export type ProductsSortOption =
   | "Featured"
@@ -95,7 +95,7 @@ export type ProductsLinkTarget = {
 export const navCategoryToProductCategory: Record<string, ProductsCategoryFilter> = {
   "officeneed-exclusive": "All Products",
   "corporate-gifting": "Corporate Gifting",
-  "fragrance-luxury": "Fragrance & Luxury Gifting",
+  "fragrance-luxury": "Fragrance Gifting",
   "office-stationery": "Office Supplies",
   "hardware-supplies": "Hardware & IT",
   "printing-branding": "Printing & Branding",
@@ -125,5 +125,5 @@ export const footerShopTargets: Record<string, ProductsLinkTarget> = {
   "Corporate Gifting": { category: "Corporate Gifting" },
   "Office Stationery": { category: "Office Supplies" },
   "Hardware Supplies": { category: "Hardware & IT" },
-  "Fragrance & Luxury Gifting": { category: "Fragrance & Luxury Gifting" },
+  "Fragrance Gifting": { category: "Fragrance Gifting" },
 };

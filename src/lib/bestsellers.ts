@@ -2,7 +2,7 @@ export type BestsellerCategory =
   | "Corporate Gifting"
   | "Office Stationery"
   | "Hardware Supplies"
-  | "Fragrance & Luxury Gifting";
+  | "Fragrance Gifting";
 
 export type BestsellerProduct = {
   id: string;
@@ -23,7 +23,7 @@ export const bestsellerFilters: Array<"All" | BestsellerCategory> = [
   "Corporate Gifting",
   "Office Stationery",
   "Hardware Supplies",
-  "Fragrance & Luxury Gifting",
+  "Fragrance Gifting",
 ];
 
 const img = (id: string) =>
@@ -132,7 +132,7 @@ export const bestsellerProducts: BestsellerProduct[] = [
   {
     id: "bs-eastern-perfume",
     name: "Eastern Oud Perfume 100ml",
-    category: "Fragrance & Luxury Gifting",
+    category: "Fragrance Gifting",
     collection: "Eastern Perfumes",
     image: img("photo-1541643600914-78b084683601"),
     price: "₹6,750",
@@ -143,7 +143,7 @@ export const bestsellerProducts: BestsellerProduct[] = [
   {
     id: "bs-western-perfume",
     name: "Western Signature Eau de Parfum",
-    category: "Fragrance & Luxury Gifting",
+    category: "Fragrance Gifting",
     collection: "Western Perfumes",
     image: img("photo-1594035910387-fea47794261f"),
     price: "₹5,499",
@@ -154,7 +154,7 @@ export const bestsellerProducts: BestsellerProduct[] = [
   {
     id: "bs-luxury-set",
     name: "Luxury Fragrance Gift Set",
-    category: "Fragrance & Luxury Gifting",
+    category: "Fragrance Gifting",
     collection: "Luxury Gifting",
     image: img("photo-1615634260167-c8cdede054de"),
     price: "₹8,900",
