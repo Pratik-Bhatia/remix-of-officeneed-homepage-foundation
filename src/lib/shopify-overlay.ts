@@ -128,7 +128,7 @@ export function useShopifyIndex() {
 type Rule = { category: Product["category"]; sub: string; match: RegExp };
 
 const RULES: Rule[] = [
-  { category: "Fragrance & Luxury Gifting", sub: "Perfumes", match: /perfum|fragranc|attar|oud|eau de|deodor|cologne/ },
+  { category: "Fragrance Gifting", sub: "Perfumes", match: /perfum|fragranc|attar|oud|eau de|deodor|cologne/ },
   { category: "Hardware & IT", sub: "Mouse", match: /\bmouse\b/ },
   { category: "Hardware & IT", sub: "Keyboards", match: /keyboard/ },
   { category: "Hardware & IT", sub: "Printers", match: /printer|toner|cartridge/ },

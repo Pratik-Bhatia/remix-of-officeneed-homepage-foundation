@@ -104,9 +104,9 @@ export const enquirySteps: ChatStep[] = [
 export type ChatAnswers = Partial<Record<ChatStepId, string>>;
 
 const purposeToCategories: Record<string, ProductCategory[]> = {
-  "Corporate Gifting": ["Corporate Gifting", "Fragrance & Luxury Gifting"],
+  "Corporate Gifting": ["Corporate Gifting", "Fragrance Gifting"],
   "Employee Joining Kits": ["Corporate Gifting", "Office Supplies"],
-  "Festive Gifts": ["Fragrance & Luxury Gifting", "Corporate Gifting"],
+  "Festive Gifts": ["Fragrance Gifting", "Corporate Gifting"],
   "Office Supplies": ["Office Supplies"],
   "Hardware & IT": ["Hardware & IT"],
   "Printing & Branding": ["Printing & Branding"],

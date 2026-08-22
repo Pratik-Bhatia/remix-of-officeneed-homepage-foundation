@@ -454,7 +454,7 @@ export const products: Product[] = [
   {
     slug: "luxury-fragrance-gift-set",
     name: "Luxury Fragrance Gift Set",
-    category: "Fragrance & Luxury Gifting",
+    category: "Fragrance Gifting",
     subcategories: ["Luxury Gifting", "Gift Sets", "Premium Gifts"],
     filterAttributes: {"scent": ["oud", "citrus"], "volume": ["50ml", "100ml"]},
     summary: "Perfume, candle and diffuser presented as one luxury gifting set.",

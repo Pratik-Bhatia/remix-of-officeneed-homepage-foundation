@@ -52,7 +52,7 @@ export const categoryFilters: Record<ProductCategory, FilterGroup[]> = {
       ],
     },
   ],
-  "Fragrance & Luxury Gifting": [
+  "Fragrance Gifting": [
     {
       id: "scent",
       label: "Scent Family",
