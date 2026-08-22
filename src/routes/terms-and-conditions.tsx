@@ -27,13 +27,13 @@ export const Route = createFileRoute("/terms-and-conditions")({
       {
         name: "description",
         content:
-          "Read the Terms & Conditions governing the use of Officeneed's website, products, and services, including ordering, payments, deliveries, returns, and legal information.",
+          "Read the Terms & Conditions governing the use of Officeneed's website, products, and services, including ordering, online payments, Pan-India shipping, and our no-returns policy.",
       },
       { property: "og:title", content: "Terms & Conditions" },
       {
         property: "og:description",
         content:
-          "Read the Terms & Conditions governing the use of Officeneed's website, products, and services, including ordering, payments, deliveries, returns, and legal information.",
+          "Read the Terms & Conditions governing the use of Officeneed's website, products, and services, including ordering, online payments, Pan-India shipping, and our no-returns policy.",
       },
       { name: "twitter:title", content: "Terms & Conditions" },
     ],
@@ -63,7 +63,7 @@ const termsSections: SectionItem[] = [
     title: "Company Information",
     content: [
       "Officeneed operates as an enterprise B2B corporate procurement, branding, and gifting partner headquartered in Maharashtra, India. We specialize in printing solutions, corporate gifting, institutional apparel, luxury fragrances, office supplies, and hardware & IT products.",
-      "Our services cater to enterprise clients, institutions, and corporate organizations across India and global markets, providing end-to-end customization, warehousing, and logistics solutions.",
+      "Our services cater to enterprise clients, institutions, and corporate organizations across India, providing end-to-end customization, warehousing, and logistics solutions.",
     ],
   },
   {
@@ -108,7 +108,7 @@ const termsSections: SectionItem[] = [
     title: "Payment Terms",
     content: [
       "Standard commercial payment terms apply as stipulated in your formal quotation, invoice, or enterprise procurement agreement. Unless an approved credit facility has been established in writing, custom-branded orders require an agreed advance payment prior to commencing production.",
-      "All invoices are payable in Indian Rupees (INR) via bank transfer, NEFT/RTGS, or approved corporate payment methods. Late payments may incur interest or delay subsequent shipment schedules.",
+      "Cash on Delivery (COD) is not available; online payment is required for all orders. All invoices are payable in Indian Rupees (INR) via bank transfer, NEFT/RTGS, or approved online corporate payment methods. Late payments may incur interest or delay subsequent shipment schedules.",
     ],
   },
   {
@@ -116,7 +116,7 @@ const termsSections: SectionItem[] = [
     number: "08",
     title: "Shipping & Delivery",
     content: [
-      "We provide Pan-India and global fulfillment through vetted logistics partners. Estimated dispatch and delivery schedules are calculated from the date of final artwork approval and payment confirmation.",
+      "We currently ship across India only; international shipping is not available. Standard orders are dispatched within 24 hours of order placement, while custom-branded orders are dispatched from the date of final artwork approval and payment confirmation.",
       "While we strive to meet all targeted delivery timelines, Officeneed is not liable for delays resulting from force majeure events, severe weather disruptions, transit carrier delays, or statutory clearance holds beyond our reasonable control.",
     ],
   },
@@ -132,10 +132,10 @@ const termsSections: SectionItem[] = [
   {
     id: "returns-replacement",
     number: "10",
-    title: "Returns & Replacement Policy",
+    title: "Returns, Exchanges & Replacement Policy",
     content: [
       "We enforce strict multi-point quality assurance inspections prior to every dispatch. Upon receiving your shipment, you must inspect the goods and report any transit damage, quantity discrepancies, or manufacturing defects in writing within 48 hours of delivery.",
-      "Defective or damaged items verified by our quality assurance team will be promptly replaced or rectified at no additional expense to your organization. Customized products free from manufacturing defects cannot be returned.",
+      "All products are non-returnable and non-exchangeable. Defective or damaged items verified by our quality assurance team will be replaced or rectified at no additional expense to your organization, as required under applicable law.",
     ],
   },
   {
