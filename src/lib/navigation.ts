@@ -76,7 +76,7 @@ export type ProductsCategoryFilter =
   | "Office Supplies"
   | "Hardware & IT"
   | "Printing & Branding"
-  | "Fragrance & Luxury Gifting";
+  | "Fragrance Gifting";
 
 export type ProductsSortOption =
   | "Featured"
