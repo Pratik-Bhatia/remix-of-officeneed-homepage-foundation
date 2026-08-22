@@ -7,7 +7,11 @@ export const Route = createFileRoute('/shipping-delivery')({
   head: () => ({
     meta: [
       { title: 'Shipping & Delivery — OfficeNeed' },
-      { name: 'description', content: 'Information about our shipping and delivery processes.' },
+      { name: 'description', content: 'We currently ship across India only. Orders are dispatched within 24 hours.' },
+      { property: 'og:title', content: 'Shipping & Delivery — OfficeNeed' },
+      { property: 'og:description', content: 'We currently ship across India only. Orders are dispatched within 24 hours.' },
+      { property: 'og:type', content: 'website' },
+      { name: 'twitter:card', content: 'summary' },
     ],
   }),
 })
@@ -19,38 +23,42 @@ function ShippingDeliveryPage() {
       <main className="flex-1 w-full py-16 px-4 md:px-8">
         <div className="max-w-3xl mx-auto">
           <h1 className="text-4xl font-light tracking-tight mb-12">Shipping & Delivery</h1>
-          
+
           <div className="space-y-12">
             <section>
-              <h2 className="text-2xl font-medium mb-4">Processing Time</h2>
+              <h2 className="text-2xl font-medium mb-4">Shipping Coverage</h2>
               <p className="text-muted-foreground leading-relaxed">
-                [Placeholder for processing time policy. Explain how long it takes to process an order before it ships. E.g., All orders are processed within 1-2 business days. Orders are not shipped or delivered on weekends or holidays.]
+                We currently ship across India only. International shipping is not available at this time.
               </p>
             </section>
 
             <section>
-              <h2 className="text-2xl font-medium mb-4">Shipping Rates & Delivery Estimates</h2>
-              <p className="text-muted-foreground leading-relaxed mb-4">
-                [Placeholder for shipping rates. Mention that shipping charges for your order will be calculated and displayed at checkout.]
+              <h2 className="text-2xl font-medium mb-4">Dispatch Time</h2>
+              <p className="text-muted-foreground leading-relaxed">
+                Orders are dispatched within 24 hours of placing your order. Custom-branded orders are dispatched after
+                artwork approval and production, as confirmed on your order or quotation.
               </p>
-              <ul className="list-disc pl-6 text-muted-foreground space-y-2">
-                <li>Standard Shipping: [E.g., 3-5 business days]</li>
-                <li>Expedited Shipping: [E.g., 1-2 business days]</li>
-                <li>International Shipping: [E.g., 7-14 business days]</li>
-              </ul>
+            </section>
+
+            <section>
+              <h2 className="text-2xl font-medium mb-4">Shipping Charges</h2>
+              <p className="text-muted-foreground leading-relaxed">
+                Applicable shipping charges for your order are calculated and displayed before payment.
+              </p>
             </section>
 
             <section>
               <h2 className="text-2xl font-medium mb-4">Shipment Confirmation & Order Tracking</h2>
               <p className="text-muted-foreground leading-relaxed">
-                [Placeholder for tracking information. Explain that customers will receive a Shipment Confirmation email once their order has shipped containing their tracking number(s).]
+                You will receive a shipment confirmation with tracking details once your order has been dispatched.
               </p>
             </section>
 
             <section>
-              <h2 className="text-2xl font-medium mb-4">Damages</h2>
+              <h2 className="text-2xl font-medium mb-4">Damages in Transit</h2>
               <p className="text-muted-foreground leading-relaxed">
-                [Placeholder for damages policy. State that OfficeNeed is not liable for any products damaged or lost during shipping. If you received your order damaged, please contact the shipment carrier to file a claim.]
+                Please inspect your shipment on delivery and report any transit damage or discrepancy in writing within
+                48 hours so we can take it up with our logistics partner.
               </p>
             </section>
           </div>
