@@ -23,8 +23,10 @@ const faqCategories = [
   {
     name: "Office Supplies",
     faqs: [
-      { question: "What is the return policy for office supplies?", answer: "We accept returns within 30 days of purchase for unused items in their original packaging." },
-      { question: "Do you offer subscription services for regular supplies?", answer: "Yes, you can set up recurring deliveries for essential office supplies to ensure you never run out." },
+      { question: "What is the return policy for office supplies?", answer: "All products are non-returnable and non-exchangeable. If your order arrives damaged or defective, report it in writing within 48 hours of delivery." },
+      { question: "Do you offer subscription services for regular supplies?", answer: "Yes, you can set up recurring deliveries for essential office supplies across India to ensure you never run out." },
+      { question: "Do you offer Cash on Delivery?", answer: "No. Cash on Delivery (COD) is not available. We accept online payments only." },
+      { question: "Do you ship internationally?", answer: "We currently ship across India only. International shipping is not available." },
     ]
   },
   {

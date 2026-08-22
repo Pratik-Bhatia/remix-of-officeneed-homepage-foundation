@@ -6,8 +6,12 @@ export const Route = createFileRoute('/returns-refunds')({
   component: ReturnsRefundsPage,
   head: () => ({
     meta: [
-      { title: 'Returns & Refunds — OfficeNeed' },
-      { name: 'description', content: 'Our return and refund policy.' },
+      { title: 'Returns & Exchanges — OfficeNeed' },
+      { name: 'description', content: 'All products are non-returnable and non-exchangeable.' },
+      { property: 'og:title', content: 'Returns & Exchanges — OfficeNeed' },
+      { property: 'og:description', content: 'All products are non-returnable and non-exchangeable.' },
+      { property: 'og:type', content: 'website' },
+      { name: 'twitter:card', content: 'summary' },
     ],
   }),
 })
@@ -18,40 +22,36 @@ function ReturnsRefundsPage() {
       <Navbar />
       <main className="flex-1 w-full py-16 px-4 md:px-8">
         <div className="max-w-3xl mx-auto">
-          <h1 className="text-4xl font-light tracking-tight mb-12">Returns & Refunds</h1>
-          
+          <h1 className="text-4xl font-light tracking-tight mb-12">Returns & Exchanges</h1>
+
           <div className="space-y-12">
             <section>
-              <h2 className="text-2xl font-medium mb-4">Return Policy</h2>
-              <p className="text-muted-foreground leading-relaxed mb-4">
-                [Placeholder for return window. E.g., You have 30 calendar days to return an item from the date you received it.]
-              </p>
+              <h2 className="text-2xl font-medium mb-4">No Returns</h2>
               <p className="text-muted-foreground leading-relaxed">
-                [Explain the conditions for a return. E.g., To be eligible for a return, your item must be unused and in the same condition that you received it. Your item must be in the original packaging. Your item needs to have the receipt or proof of purchase.]
+                All products sold by OfficeNeed are non-returnable. We do not accept returns on any product.
               </p>
             </section>
 
             <section>
-              <h2 className="text-2xl font-medium mb-4">Refunds</h2>
-              <p className="text-muted-foreground leading-relaxed mb-4">
-                [Placeholder for refund process. E.g., Once we receive your item, we will inspect it and notify you that we have received your returned item. We will immediately notify you on the status of your refund after inspecting the item.]
-              </p>
+              <h2 className="text-2xl font-medium mb-4">No Exchanges</h2>
               <p className="text-muted-foreground leading-relaxed">
-                [Explain when and how they receive the refund. E.g., If your return is approved, we will initiate a refund to your credit card (or original method of payment). You will receive the credit within a certain amount of days, depending on your card issuer's policies.]
+                All products are non-exchangeable. We do not offer exchanges on any product.
               </p>
             </section>
 
             <section>
-              <h2 className="text-2xl font-medium mb-4">Shipping Returns</h2>
+              <h2 className="text-2xl font-medium mb-4">Damaged or Defective Goods</h2>
               <p className="text-muted-foreground leading-relaxed">
-                [Placeholder for return shipping costs. E.g., You will be responsible for paying for your own shipping costs for returning your item. Shipping costs are non-refundable. If you receive a refund, the cost of return shipping will be deducted from your refund.]
+                Please inspect your shipment on delivery. Transit damage, quantity discrepancies, or manufacturing
+                defects must be reported in writing within 48 hours of delivery, and will be handled as required under
+                applicable law.
               </p>
             </section>
 
             <section>
               <h2 className="text-2xl font-medium mb-4">Contact Us</h2>
               <p className="text-muted-foreground leading-relaxed">
-                [Provide contact information for returns. E.g., If you have any questions on how to return your item to us, contact us at returns@officeneed.com.]
+                For any questions about this policy, contact us at support@officeneed.in.
               </p>
             </section>
           </div>

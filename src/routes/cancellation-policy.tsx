@@ -24,32 +24,32 @@ function CancellationPolicyPage() {
             <section>
               <h2 className="text-2xl font-medium mb-4">Order Cancellation</h2>
               <p className="text-muted-foreground leading-relaxed mb-4">
-                [Placeholder for cancellation timeframe. E.g., You may cancel your order at any time before it has been processed for shipping. Once an order has been shipped, it cannot be cancelled.]
+                You may cancel your order at any time before it has been processed for dispatch. Once an order has been dispatched, it cannot be cancelled. Please note that all products are non-returnable and non-exchangeable.
               </p>
             </section>
 
             <section>
               <h2 className="text-2xl font-medium mb-4">How to Cancel</h2>
               <p className="text-muted-foreground leading-relaxed mb-4">
-                [Placeholder for cancellation process. E.g., To cancel your order, please contact our customer support team immediately with your order number. You can reach us via:]
+                To cancel your order, please contact our customer support team immediately with your order number. You can reach us via:
               </p>
               <ul className="list-disc pl-6 text-muted-foreground space-y-2">
-                <li>Email: cancellations@officeneed.com</li>
-                <li>Phone: 1-800-OFFICE-ND</li>
+                <li>Email: support@officeneed.in</li>
+                
               </ul>
             </section>
 
             <section>
               <h2 className="text-2xl font-medium mb-4">Refunds for Cancelled Orders</h2>
               <p className="text-muted-foreground leading-relaxed">
-                [Placeholder for refund details. E.g., If your order is successfully cancelled before it ships, we will issue a full refund to your original payment method. Please allow 3-5 business days for the refund to reflect in your account.]
+                If your order is successfully cancelled before dispatch, we will issue a refund to your original online payment method. Please allow 5-7 business days for the amount to reflect in your account.
               </p>
             </section>
 
             <section>
               <h2 className="text-2xl font-medium mb-4">Exceptions</h2>
               <p className="text-muted-foreground leading-relaxed">
-                [Placeholder for exceptions. E.g., Custom or personalized orders cannot be cancelled once production has begun. Digital products are non-refundable once downloaded or accessed.]
+                Custom, branded, or personalized orders cannot be cancelled once production has begun.
               </p>
             </section>
           </div>

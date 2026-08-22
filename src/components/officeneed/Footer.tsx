@@ -29,7 +29,7 @@ const benefits = [
   {
     icon: PackageCheck,
     title: "Next Day Dispatch",
-    description: "Dispatch within 24 hours of order",
+    description: "Orders are dispatched within 24 hours of placing your order.",
   },
   {
     icon: RefreshCcw,
@@ -39,7 +39,7 @@ const benefits = [
   {
     icon: ShieldCheck,
     title: "No Cash on Delivery",
-    description: "Pay securely online with our available digital payment options.",
+    description: "Cash on Delivery (COD) is not available. We accept online payments only.",
   },
 ];
 
@@ -62,7 +62,7 @@ const quickLinks = [
 
 const bottomLinks = [
   { label: "Shipping & Delivery", href: "/shipping-delivery" },
-  { label: "Returns & Refunds", href: "/returns-refunds" },
+  { label: "Returns & Exchanges", href: "/returns-refunds" },
   { label: "Cancellation Policy", href: "/cancellation-policy" },
   { label: "Terms & Conditions", href: "/terms-and-conditions" },
   { label: "Privacy Policy", href: "/privacy-policy" },
