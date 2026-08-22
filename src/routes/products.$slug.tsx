@@ -102,17 +102,17 @@ function ProductNotFound() {
 function ProductDetail() {
   const { product, node } = Route.useLoaderData();
   const [activeImage, setActiveImage] = useState(0);
-  const [quantity, setQuantity] = useState(product.minQuantity || 1);
+  const [quantity, setQuantity] = useState<number>(product.minimumOrderQuantity || 1);
   const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
   
   const addItem = useCartStore((s) => s.addItem);
   const isCartLoading = useCartStore((s) => s.isLoading);
 
-  const min = product.minQuantity || 1;
-  const step = product.stepQuantity || 1;
+  const min = product.minimumOrderQuantity || 1;
+  const step = 1;
 
   const related = useMemo(
-    () => getRelatedProducts(product.category, product.slug, 4),
+    () => getRelatedProducts(product, 4),
     [product]
   );
 
