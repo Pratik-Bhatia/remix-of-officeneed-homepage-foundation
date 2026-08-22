@@ -24,13 +24,20 @@ export function CartDrawer({ triggerClassName }: { triggerClassName?: string }) 
 
   useEffect(() => {
     setMounted(true);
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-    });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-    });
-    return () => subscription.unsubscribe();
+    let unsubscribe = () => {};
+    try {
+      void supabase.auth.getSession()
+        .then(({ data: { session } }) => setUser(session?.user ?? null))
+        .catch(() => setUser(null));
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+        setUser(session?.user ?? null);
+      });
+      unsubscribe = () => subscription.unsubscribe();
+    } catch {
+      // Keep guest cart browsing available if auth configuration is absent.
+      setUser(null);
+    }
+    return () => unsubscribe();
   }, []);
 
   const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);

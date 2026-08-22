@@ -23,25 +23,29 @@ export function AuthModal({ open, onOpenChange }: { open: boolean; onOpenChange:
     e.preventDefault();
     setLoading(true);
 
-    if (isSignUp) {
-      const { error } = await supabase.auth.signUp({ email, password });
-      if (error) {
-        toast.error(error.message);
+    try {
+      if (isSignUp) {
+        const { error } = await supabase.auth.signUp({ email, password });
+        if (error) {
+          toast.error(error.message);
+        } else {
+          toast.success("Registration successful. Please check your email if verification is required.");
+          onOpenChange(false);
+        }
       } else {
-        toast.success("Registration successful. Please check your email if verification is required.");
-        onOpenChange(false);
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) {
+          toast.error(error.message);
+        } else {
+          toast.success("Successfully logged in");
+          onOpenChange(false);
+        }
       }
-    } else {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) {
-        toast.error(error.message);
-      } else {
-        toast.success("Successfully logged in");
-        onOpenChange(false);
-      }
+    } catch {
+      toast.error("Sign in is temporarily unavailable. Please try again shortly.");
+    } finally {
+      setLoading(false);
     }
-    
-    setLoading(false);
   };
 
   return (
