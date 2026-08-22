@@ -30,7 +30,7 @@ export const navCategories: NavCategory[] = [
   },
   {
     id: "fragrance-luxury",
-    label: "Fragrance & Luxury Gifting",
+    label: "Fragrance Gifting",
     blurb: "Considered luxury for leadership and landmark occasions.",
     items: [
       "Perfumes",
