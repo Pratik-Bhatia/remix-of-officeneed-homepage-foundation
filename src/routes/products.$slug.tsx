@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
-import { Minus, Plus, ChevronLeft, ChevronRight } from "lucide-react";
+import { Minus, Plus, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { Navbar } from "@/components/officeneed/Navbar";
 import { Footer } from "@/components/officeneed/Footer";
 import { ProductCard } from "@/components/officeneed/ProductCard";
@@ -10,6 +10,8 @@ import { cn } from "@/lib/utils";
 import { getProductBySlug, getRelatedProducts } from "@/lib/products";
 import { fetchProductByHandle } from "@/lib/shopify";
 import { mergeProduct, shopifyNodeToProduct } from "@/lib/shopify-overlay";
+import { useCartStore } from "@/stores/cartStore";
+import { toast } from "sonner";
 
 const BASE = "https://officeneed-premier-launch.lovable.app";
 
@@ -25,8 +27,8 @@ export const Route = createFileRoute("/products/$slug")({
       node = null;
     }
 
-    if (staticProduct) return { product: mergeProduct(staticProduct, node ?? undefined) };
-    if (node) return { product: shopifyNodeToProduct(node) };
+    if (staticProduct) return { product: mergeProduct(staticProduct, node ?? undefined), node };
+    if (node) return { product: shopifyNodeToProduct(node), node };
     throw notFound();
   },
   head: ({ params, loaderData }) => {
@@ -98,20 +100,69 @@ function ProductNotFound() {
 }
 
 function ProductDetail() {
-  const { product } = Route.useLoaderData();
-
+  const { product, node } = Route.useLoaderData();
   const [activeImage, setActiveImage] = useState(0);
-  const [quantity, setQuantity] = useState(product.minimumOrderQuantity ?? 1);
+  const [quantity, setQuantity] = useState(product.minQuantity || 1);
+  const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
   
+  const addItem = useCartStore((s) => s.addItem);
+  const isCartLoading = useCartStore((s) => s.isLoading);
+
+  const min = product.minQuantity || 1;
+  const step = product.stepQuantity || 1;
+
+  const related = useMemo(
+    () => getRelatedProducts(product.category, product.slug, 4),
+    [product]
+  );
+
+  const handleBuyNow = async () => {
+    if (!node) {
+      toast.error("This product is currently available for enquiry only.");
+      return;
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const shopifyVariants = (node as any).variants?.edges?.map((e: any) => e.node) || [];
+    const hasMultipleVariants = shopifyVariants.length > 1;
+
+    if (hasMultipleVariants && !selectedVariantId) {
+      toast.error("Please select an option before adding to cart.");
+      return;
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const variantToUse = selectedVariantId 
+      ? shopifyVariants.find((v: any) => v.id === selectedVariantId)
+      : shopifyVariants[0];
+
+    if (!variantToUse) return;
+
+    try {
+      await addItem({
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        product: node as any,
+        variantId: variantToUse.id,
+        variantTitle: variantToUse.title,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        price: variantToUse.price || (node as any).priceRange?.minVariantPrice,
+        quantity: product.supportsQuantity ? quantity : 1,
+        selectedOptions: variantToUse.selectedOptions || [],
+      });
+      toast.success("Added to cart", { description: product.name });
+      window.dispatchEvent(new CustomEvent("open-overlays", { detail: "cart" }));
+    } catch (e) {
+      toast.error("Failed to add to cart");
+    }
+  };
+
   const nextImage = () => {
     setActiveImage((prev) => (prev + 1) % product.images.length);
   };
   const prevImage = () => {
     setActiveImage((prev) => (prev - 1 + product.images.length) % product.images.length);
   };
-  const related = useMemo(() => getRelatedProducts(product, 4), [product]);
-  const step = 1;
-  const min = product.minimumOrderQuantity ?? 1;
+  
   const numericPrice = product.price ? parseInt(product.price.replace(/\D/g, ""), 10) : 0;
   const displayPrice = numericPrice ? `₹${(numericPrice * quantity).toLocaleString("en-IN")}` : product.price;
 
@@ -277,7 +328,13 @@ function ProductDetail() {
               ) : null}
 
               <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-                <Button size="lg" className="w-full sm:w-auto font-medium text-background bg-foreground hover:bg-foreground/90">
+                <Button 
+                  size="lg" 
+                  onClick={handleBuyNow}
+                  disabled={isCartLoading}
+                  className="w-full sm:w-auto font-medium text-background bg-foreground hover:bg-foreground/90"
+                >
+                  {isCartLoading ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
                   Buy Now
                 </Button>
                 <EnquiryDialog
@@ -333,16 +390,44 @@ function ProductDetail() {
                 {product.variants?.length ? (
                   <section>
                     <h2 className="text-sm font-semibold text-foreground">Options</h2>
-                    <ul className="mt-3 flex flex-wrap gap-2">
-                      {product.variants.map((v) => (
-                        <li
-                          key={v}
-                          className="rounded-full bg-secondary px-3 py-1.5 text-xs text-secondary-foreground"
-                        >
-                          {v}
-                        </li>
-                      ))}
-                    </ul>
+                      <ul className="mt-3 flex flex-wrap gap-2">
+                        {product.variants.map((v) => {
+                          const isPurchasable = !!node;
+                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                          const shopifyVariants = (node as any)?.variants?.edges?.map((e: any) => e.node) || [];
+                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                          const matchedShopify = shopifyVariants.find((sv: any) => sv.title === v);
+                          const isSelected = selectedVariantId === matchedShopify?.id;
+
+                          if (isPurchasable && matchedShopify) {
+                            return (
+                              <li key={v}>
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedVariantId(matchedShopify.id)}
+                                  className={cn(
+                                    "rounded-full px-3 py-1.5 text-xs transition-colors border outline-none focus-visible:ring-2",
+                                    isSelected
+                                      ? "bg-foreground text-background border-foreground"
+                                      : "bg-secondary text-secondary-foreground border-transparent hover:border-border"
+                                  )}
+                                >
+                                  {v}
+                                </button>
+                              </li>
+                            );
+                          }
+
+                          return (
+                            <li
+                              key={v}
+                              className="rounded-full bg-secondary px-3 py-1.5 text-xs text-secondary-foreground"
+                            >
+                              {v}
+                            </li>
+                          );
+                        })}
+                      </ul>
                   </section>
                 ) : null}
 

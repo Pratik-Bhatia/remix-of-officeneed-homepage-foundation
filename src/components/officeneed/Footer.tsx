@@ -8,10 +8,10 @@ import {
   PackageCheck,
   RefreshCcw,
   ShieldCheck,
-  Youtube,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { footerShopTargets } from "@/lib/navigation";
+import { toast } from "sonner";
 import logoInverse from "@/assets/officeneed-logo-inverse.png";
 import visaAsset from "@/assets/payment-visa.png";
 import mastercardAsset from "@/assets/payment-mastercard.png";
@@ -69,10 +69,9 @@ const bottomLinks = [
 ];
 
 const socials = [
-  { icon: Facebook, label: "Facebook", href: "https://facebook.com/officeneed" },
-  { icon: Instagram, label: "Instagram", href: "https://instagram.com/officeneed" },
-  { icon: Linkedin, label: "LinkedIn", href: "https://linkedin.com/company/officeneed" },
-  { icon: Youtube, label: "YouTube", href: "https://youtube.com/@officeneed" },
+  { icon: Facebook, label: "Facebook", href: "https://www.facebook.com/share/19QDcgdY8n/" },
+  { icon: Instagram, label: "Instagram", href: "https://www.instagram.com/officeneed.in?igsh=Zm1taW1mOXJlY25x" },
+  { icon: Linkedin, label: "LinkedIn", href: "https://www.linkedin.com/company/officeneed-in/" },
 ];
 
 const paymentMethods = [
@@ -291,21 +290,62 @@ export function Footer() {
 
               <form
                 className="mt-7 flex max-w-lg items-center gap-3 rounded-full bg-background/10 py-2 pl-6 pr-2"
-                onSubmit={(e) => e.preventDefault()}
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  const form = e.currentTarget as HTMLFormElement;
+                  const input = form.elements.namedItem("email") as HTMLInputElement;
+                  const email = input.value.trim();
+                  
+                  if (!email) {
+                    toast.error("Please enter a valid email address.");
+                    return;
+                  }
+                  
+                  const btn = form.querySelector('button[type="submit"]') as HTMLButtonElement;
+                  btn.disabled = true;
+                  const originalContent = btn.innerHTML;
+                  btn.innerHTML = `<svg class="animate-spin h-5 w-5 text-foreground" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>`;
+
+                  try {
+                    const { submitEnquiry } = await import("@/lib/enquiries.functions");
+                    const result = await submitEnquiry({
+                      data: {
+                        name: "Newsletter Subscriber",
+                        email: email,
+                        message: "User subscribed to newsletter",
+                        category: "Newsletter Subscription"
+                      }
+                    });
+                    
+                    if (!result.ok) {
+                      toast.error(result.error || "Failed to subscribe.");
+                    } else {
+                      toast.success("Successfully subscribed to our newsletter!");
+                      form.reset();
+                    }
+                  } catch (err) {
+                    toast.error("An error occurred while subscribing.");
+                  } finally {
+                    btn.disabled = false;
+                    btn.innerHTML = originalContent;
+                  }
+                }}
               >
                 <label htmlFor="footer-email" className="sr-only">
                   Enter your email
                 </label>
                 <input
                   id="footer-email"
+                  name="email"
                   type="email"
                   placeholder="Enter your email"
-                  className="h-10 min-w-0 flex-1 bg-transparent text-xs text-background outline-none placeholder:text-background/50 sm:text-sm"
+                  required
+                  className="h-10 min-w-0 flex-1 bg-transparent text-xs text-background outline-none placeholder:text-background/50 sm:text-sm disabled:opacity-50"
                 />
                 <button
                   type="submit"
                   aria-label="Subscribe to the OfficeNeed newsletter"
-                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-background text-foreground transition-opacity hover:opacity-85"
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-background text-foreground transition-opacity hover:opacity-85 disabled:opacity-50"
                 >
                   <ArrowRight className="h-5 w-5" strokeWidth={1.75} />
                 </button>

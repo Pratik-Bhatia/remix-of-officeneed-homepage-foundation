@@ -1,7 +1,10 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { Navbar } from '@/components/officeneed/Navbar'
 import { Footer } from '@/components/officeneed/Footer'
-import { Mail, Phone, MapPin } from 'lucide-react'
+import { Mail, Phone, MapPin, Loader2 } from 'lucide-react'
+import { useState } from 'react'
+import { submitEnquiry } from '@/lib/enquiries.functions'
+import { toast } from 'sonner'
 
 export const Route = createFileRoute('/contact-us')({
   component: ContactUsPage,
@@ -14,6 +17,46 @@ export const Route = createFileRoute('/contact-us')({
 })
 
 function ContactUsPage() {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const data = {
+      name: String(formData.get('name') ?? '').trim(),
+      company: String(formData.get('company') ?? '').trim(),
+      email: String(formData.get('email') ?? '').trim(),
+      phone: String(formData.get('phone') ?? '').trim(),
+      message: String(formData.get('message') ?? '').trim(),
+    };
+
+    if (!data.name || !data.email || !data.message) {
+      toast.error('Please fill out all required fields.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const result = await submitEnquiry({
+        data: {
+          ...data,
+          category: 'Contact Form',
+        },
+      });
+
+      if (!result.ok) {
+        toast.error(result.error || 'Failed to submit form.');
+      } else {
+        toast.success('Message sent successfully! We will get back to you soon.');
+        (e.target as HTMLFormElement).reset();
+      }
+    } catch (err) {
+      toast.error('An error occurred. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <Navbar />
@@ -27,32 +70,37 @@ function ContactUsPage() {
 
         <section className="py-12 px-6 max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-16">
           <div>
-            <form className="space-y-6">
+            <form className="space-y-6" onSubmit={handleSubmit}>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <label htmlFor="name" className="text-sm font-medium text-foreground">Full Name</label>
-                  <input type="text" id="name" className="w-full p-3 border border-border rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-foreground" placeholder="John Doe" required />
+                  <input type="text" id="name" name="name" className="w-full p-3 border border-border rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-foreground" placeholder="John Doe" required />
                 </div>
                 <div className="space-y-2">
                   <label htmlFor="company" className="text-sm font-medium text-foreground">Company</label>
-                  <input type="text" id="company" className="w-full p-3 border border-border rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-foreground" placeholder="Acme Corp" required />
+                  <input type="text" id="company" name="company" className="w-full p-3 border border-border rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-foreground" placeholder="Acme Corp" required />
                 </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <label htmlFor="email" className="text-sm font-medium text-foreground">Email</label>
-                  <input type="email" id="email" className="w-full p-3 border border-border rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-foreground" placeholder="john@example.com" required />
+                  <input type="email" id="email" name="email" className="w-full p-3 border border-border rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-foreground" placeholder="john@example.com" required />
                 </div>
                 <div className="space-y-2">
                   <label htmlFor="phone" className="text-sm font-medium text-foreground">Phone Number</label>
-                  <input type="tel" id="phone" className="w-full p-3 border border-border rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-foreground" placeholder="+1 (555) 000-0000" />
+                  <input type="tel" id="phone" name="phone" className="w-full p-3 border border-border rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-foreground" placeholder="+1 (555) 000-0000" />
                 </div>
               </div>
               <div className="space-y-2">
                 <label htmlFor="message" className="text-sm font-medium text-foreground">Message</label>
-                <textarea id="message" rows={5} className="w-full p-3 border border-border rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-foreground resize-none" placeholder="How can we help you?" required></textarea>
+                <textarea id="message" name="message" rows={5} className="w-full p-3 border border-border rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-foreground resize-none" placeholder="How can we help you?" required></textarea>
               </div>
-              <button type="submit" className="px-8 py-3 bg-foreground text-background rounded-md text-sm font-medium hover:opacity-90 transition-opacity w-full md:w-auto">
+              <button 
+                type="submit" 
+                disabled={isSubmitting}
+                className="px-8 py-3 bg-foreground text-background rounded-md text-sm font-medium hover:opacity-90 transition-opacity w-full md:w-auto flex justify-center items-center"
+              >
+                {isSubmitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
                 Send Message
               </button>
             </form>

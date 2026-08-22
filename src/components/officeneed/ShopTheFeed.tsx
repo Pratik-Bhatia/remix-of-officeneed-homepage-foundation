@@ -109,7 +109,7 @@ export function ShopTheFeed() {
             Shop the Feed
           </h2>
           <a
-            href="https://instagram.com/officeneed"
+            href="https://www.instagram.com/officeneed.in?igsh=Zm1taW1mOXJlY25x"
             target="_blank"
             rel="noreferrer noopener"
             className="shrink-0 rounded-full border border-border px-5 py-2 text-xs font-medium text-foreground transition-colors hover:bg-secondary sm:text-sm"

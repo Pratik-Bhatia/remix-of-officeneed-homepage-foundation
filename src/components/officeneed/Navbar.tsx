@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { lockScroll, unlockScroll } from "@/lib/scroll-lock";
 import { Link } from "@tanstack/react-router";
 import { Menu, MessageSquare, Search, User, X, ChevronDown } from "lucide-react";
 import logoUrl from "@/assets/officeneed-logo.png";
@@ -6,6 +7,11 @@ import { primaryNavCategories as navCategories, navItemTarget } from "@/lib/navi
 import { CartDrawer } from "@/components/officeneed/CartDrawer";
 import { AiAssistantIcon } from "@/components/officeneed/AiAssistantIcon";
 import { cn } from "@/lib/utils";
+import { SearchModal } from "./SearchModal";
+import { AuthModal } from "./AuthModal";
+import { AccountModal } from "./AccountModal";
+import { supabase } from "@/integrations/supabase/client";
+import type { User as SupabaseUser } from "@supabase/supabase-js";
 
 function Logo({ className }: { className?: string }) {
   return (
@@ -58,6 +64,29 @@ export function Navbar() {
   const [expanded, setExpanded] = useState<string | null>(navCategories[0]?.id ?? null);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [authOpen, setAuthOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [user, setUser] = useState<SupabaseUser | null>(null);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+
+    const handleOpenAuth = () => setAuthOpen(true);
+    window.addEventListener("open-auth-modal", handleOpenAuth);
+
+    return () => {
+      subscription.unsubscribe();
+      window.removeEventListener("open-auth-modal", handleOpenAuth);
+    };
+  }, []);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -70,11 +99,24 @@ export function Navbar() {
   }, []);
 
   useEffect(() => {
-    document.body.style.overflow = mobileOpen ? "hidden" : "";
-    return () => {
-      document.body.style.overflow = "";
-    };
+    if (mobileOpen) lockScroll();
+    else unlockScroll();
+    return () => unlockScroll();
   }, [mobileOpen]);
+
+  useEffect(() => {
+    const handleCloseOverlays = (e: any) => {
+      if (e.detail !== "search") setSearchOpen(false);
+    };
+    window.addEventListener("close-overlays", handleCloseOverlays);
+    return () => window.removeEventListener("close-overlays", handleCloseOverlays);
+  }, []);
+
+  useEffect(() => {
+    if (searchOpen) {
+      window.dispatchEvent(new CustomEvent("close-overlays", { detail: "search" }));
+    }
+  }, [searchOpen]);
 
   const scheduleClose = () => {
     if (closeTimer.current) clearTimeout(closeTimer.current);
@@ -148,11 +190,11 @@ export function Navbar() {
           >
             <AiAssistantIcon className="chat-icon-wiggle size-full rounded-full" />
           </button>
-          <IconButton label="Search" className="size-[26px] md:size-10 xl:size-11">
+          <IconButton label="Search" className="size-[26px] md:size-10 xl:size-11" onClick={() => setSearchOpen(true)}>
             <Search className="size-5 md:size-[22px] xl:size-5" strokeWidth={1.6} />
           </IconButton>
           <span className="hidden xl:inline-flex">
-            <IconButton label="Account" className="size-[26px] md:size-10 xl:size-11">
+            <IconButton label="Account" className="size-[26px] md:size-10 xl:size-11" onClick={() => user ? setAccountOpen(true) : setAuthOpen(true)}>
               <User className="size-5 md:size-[22px] xl:size-5" strokeWidth={1.6} />
             </IconButton>
           </span>
@@ -224,7 +266,7 @@ export function Navbar() {
           </IconButton>
         </div>
 
-        <nav aria-label="Mobile" className="flex-1 overflow-y-auto overscroll-contain px-4 pb-10 sm:px-6">
+        <nav aria-label="Mobile" className="flex-1 overflow-y-auto overscroll-contain px-4 pb-10 sm:px-6" data-scrollable="true">
           <ul className="divide-y divide-border">
             {navCategories.map((cat, i) => {
               const isOpen = expanded === cat.id;
@@ -308,6 +350,10 @@ export function Navbar() {
           <button
             type="button"
             aria-label="Account"
+            onClick={() => {
+              setMobileOpen(false);
+              user ? setAccountOpen(true) : setAuthOpen(true);
+            }}
             className={cn(
               "mt-8 flex min-h-12 items-center gap-3 text-sm text-foreground/80 transition-[opacity,transform] duration-[420ms] ease-[cubic-bezier(0.22,1,0.36,1)]",
               mobileOpen ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0",
@@ -319,6 +365,10 @@ export function Navbar() {
           </button>
         </nav>
       </div>
+
+      <SearchModal open={searchOpen} onOpenChange={setSearchOpen} />
+      <AuthModal open={authOpen} onOpenChange={setAuthOpen} />
+      {user && <AccountModal open={accountOpen} onOpenChange={setAccountOpen} user={user} />}
     </>
   );
 }

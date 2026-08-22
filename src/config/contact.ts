@@ -10,7 +10,7 @@ export const contactConfig = {
   businessHours: "Mon–Sat, 10:00 AM – 6:00 PM",
   social: {
     linkedin: "https://www.linkedin.com/company/officeneed-in/",
-    instagram: "https://www.instagram.com/officeneed.in?igsh=MXJoMndsd2M3b215MA==",
-    facebook: "https://www.facebook.com/share/1CMb8twcLg/"
+    instagram: "https://www.instagram.com/officeneed.in?igsh=Zm1taW1mOXJlY25x",
+    facebook: "https://www.facebook.com/share/19QDcgdY8n/"
   }
 };

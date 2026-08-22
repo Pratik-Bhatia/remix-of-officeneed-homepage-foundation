@@ -29,7 +29,7 @@ export const socialFeedItems: SocialFeedItem[] = [
     id: "feed-desk-morning",
     image: lifestyle("photo-1521737604893-d14cc237f11d"),
     alt: "Team celebrating with branded corporate gifts in a modern office",
-    instagramUrl: "https://instagram.com/officeneed",
+    instagramUrl: "https://www.instagram.com/officeneed.in?igsh=Zm1taW1mOXJlY25x",
     products: [
       {
         id: "fp-signature-hamper",
@@ -44,7 +44,7 @@ export const socialFeedItems: SocialFeedItem[] = [
     id: "feed-stationery-flatlay",
     image: lifestyle("photo-1517842645767-c639042777db"),
     alt: "Notebook, pen and coffee on a warm editorial desk setup",
-    instagramUrl: "https://instagram.com/officeneed",
+    instagramUrl: "https://www.instagram.com/officeneed.in?igsh=Zm1taW1mOXJlY25x",
     products: [
       {
         id: "fp-leather-journal",
@@ -67,7 +67,7 @@ export const socialFeedItems: SocialFeedItem[] = [
     id: "feed-workspace-tech",
     image: lifestyle("photo-1498050108023-c5249f4df085"),
     alt: "Minimal workstation with keyboard, mouse and accessories",
-    instagramUrl: "https://instagram.com/officeneed",
+    instagramUrl: "https://www.instagram.com/officeneed.in?igsh=Zm1taW1mOXJlY25x",
     products: [
       {
         id: "fp-wireless-mouse",
@@ -97,7 +97,7 @@ export const socialFeedItems: SocialFeedItem[] = [
     id: "feed-luxury-fragrance",
     image: lifestyle("photo-1594035910387-fea47794261f"),
     alt: "Luxury perfume bottle styled on a neutral surface",
-    instagramUrl: "https://instagram.com/officeneed",
+    instagramUrl: "https://www.instagram.com/officeneed.in?igsh=Zm1taW1mOXJlY25x",
     products: [
       {
         id: "fp-oud-perfume",
