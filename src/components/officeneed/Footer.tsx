@@ -62,7 +62,7 @@ const quickLinks = [
 
 const bottomLinks = [
   { label: "Shipping & Delivery", href: "/shipping-delivery" },
-  { label: "Returns & Refunds", href: "/returns-refunds" },
+  { label: "Returns & Exchanges", href: "/returns-refunds" },
   { label: "Cancellation Policy", href: "/cancellation-policy" },
   { label: "Terms & Conditions", href: "/terms-and-conditions" },
   { label: "Privacy Policy", href: "/privacy-policy" },
