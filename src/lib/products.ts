@@ -11,7 +11,7 @@ export type ProductCategory =
   | "Office Supplies"
   | "Hardware & IT"
   | "Printing & Branding"
-  | "Fragrance & Luxury Gifting";
+  | "Fragrance Gifting";
 
 export type Product = {
   /** URL slug used by /products/$slug */
@@ -53,7 +53,7 @@ export const productCategories: Array<"All Products" | ProductCategory> = [
   "Office Supplies",
   "Hardware & IT",
   "Printing & Branding",
-  "Fragrance & Luxury Gifting",
+  "Fragrance Gifting",
 ];
 
 export const productSortOptions = [
@@ -405,7 +405,7 @@ export const products: Product[] = [
   {
     slug: "eastern-oud-perfume-100ml",
     name: "Eastern Oud Perfume 100ml",
-    category: "Fragrance & Luxury Gifting",
+    category: "Fragrance Gifting",
     subcategories: ["Eastern Perfumes", "Perfumes"],
     filterAttributes: {"scent": ["oud", "amber"], "volume": ["100ml"]},
     summary: "A deep oud composition with amber and saffron, in a weighted glass flacon.",
@@ -431,7 +431,7 @@ export const products: Product[] = [
   {
     slug: "western-signature-eau-de-parfum",
     name: "Western Signature Eau de Parfum",
-    category: "Fragrance & Luxury Gifting",
+    category: "Fragrance Gifting",
     subcategories: ["Western Perfumes", "Perfumes"],
     filterAttributes: {"scent": ["citrus", "musk"], "volume": ["100ml"]},
     summary: "A fresh citrus-cedar signature suited to daily corporate wear.",
