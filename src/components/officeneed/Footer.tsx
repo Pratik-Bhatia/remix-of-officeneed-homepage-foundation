@@ -23,8 +23,8 @@ import rupayAsset from "@/assets/payment-rupay.png";
 const benefits = [
   {
     icon: Globe,
-    title: "Global Shipping",
-    description: "Shipping to the US, UK and many more",
+    title: "All Over India Shipping",
+    description: "We currently ship across India.",
   },
   {
     icon: PackageCheck,
@@ -33,13 +33,13 @@ const benefits = [
   },
   {
     icon: RefreshCcw,
-    title: "Returns and Exchanges",
-    description: "Easy 30 days Returns and Exchanges",
+    title: "No Returns and Exchanges",
+    description: "All products are non-returnable and non-exchangeable.",
   },
   {
     icon: ShieldCheck,
-    title: "Cash on Delivery",
-    description: "Opt for COD among other payment methods",
+    title: "No Cash on Delivery",
+    description: "Pay securely online with our available digital payment options.",
   },
 ];
 
