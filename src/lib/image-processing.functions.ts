@@ -6,7 +6,7 @@ function arrayBufferToBase64(buffer: ArrayBuffer | Uint8Array) {
   const bytes = new Uint8Array(buffer);
   const len = bytes.byteLength;
   for (let i = 0; i < len; i++) {
-    binary += String.fromCharCode(bytes[i]);
+    binary += String.fromCharCode(bytes[i]!);
   }
   return btoa(binary);
 }
@@ -48,10 +48,10 @@ export const processLogoServer = createServerFn({ method: "POST" })
       const pixels = pngImage.data;
       
       for (let i = 0; i < pixels.length; i += 4) {
-        if (pixels[i + 3] > 0) {
-          const r = pixels[i];
-          const g = pixels[i + 1];
-          const b = pixels[i + 2];
+        if (pixels[i + 3]! > 0) {
+          const r = pixels[i]!;
+          const g = pixels[i + 1]!;
+          const b = pixels[i + 2]!;
           
           const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
           const silverBase = Math.floor(160 + (luminance / 255) * 60);
