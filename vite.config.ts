@@ -16,16 +16,33 @@ const supabasePublishableKey =
   process.env["SUPABASE_PUBLISHABLE_KEY"] ??
   fallbackSupabasePublishableKey;
 
+const supabaseEnvCompatibilityPlugin = () => ({
+  name: "officeneed-supabase-env-compat",
+  enforce: "pre" as const,
+  transform(code: string, id: string) {
+    const normalizedId = id.replaceAll("\\", "/");
+    if (!normalizedId.endsWith("/src/integrations/supabase/client.ts")) return null;
+
+    const updated = code
+      .replaceAll("import.meta.env['VITE_SUPABASE_URL']", "import.meta.env.VITE_SUPABASE_URL")
+      .replaceAll(
+        "import.meta.env['VITE_SUPABASE_PUBLISHABLE_KEY']",
+        "import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY",
+      );
+
+    return updated === code ? null : { code: updated, map: null };
+  },
+});
+
 if (supabaseUrl) process.env["VITE_SUPABASE_URL"] = supabaseUrl;
 if (supabasePublishableKey) process.env["VITE_SUPABASE_PUBLISHABLE_KEY"] = supabasePublishableKey;
 
 export default defineConfig({
   vite: {
+    plugins: [supabaseEnvCompatibilityPlugin()],
     define: {
-      "import.meta.env": JSON.stringify({
-        VITE_SUPABASE_URL: supabaseUrl,
-        VITE_SUPABASE_PUBLISHABLE_KEY: supabasePublishableKey,
-      }),
+      "import.meta.env.VITE_SUPABASE_URL": JSON.stringify(supabaseUrl),
+      "import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY": JSON.stringify(supabasePublishableKey),
     },
   },
   tanstackStart: {
