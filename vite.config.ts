@@ -22,11 +22,9 @@ if (supabasePublishableKey) process.env["VITE_SUPABASE_PUBLISHABLE_KEY"] = supab
 export default defineConfig({
   vite: {
     define: {
-      "import.meta.env.VITE_SUPABASE_URL": JSON.stringify(supabaseUrl),
-      "import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY": JSON.stringify(supabasePublishableKey),
-      "process.env": JSON.stringify({
-        SUPABASE_URL: supabaseUrl,
-        SUPABASE_PUBLISHABLE_KEY: supabasePublishableKey,
+      "import.meta.env": JSON.stringify({
+        VITE_SUPABASE_URL: supabaseUrl,
+        VITE_SUPABASE_PUBLISHABLE_KEY: supabasePublishableKey,
       }),
     },
   },
