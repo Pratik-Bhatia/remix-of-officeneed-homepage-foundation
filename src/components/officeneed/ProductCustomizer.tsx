@@ -55,7 +55,7 @@ const processLogos = (src: string): Promise<{ uvLogo: string; laserLogo: string 
           for (let x = 0; x < width; x++) {
             if (x < margin || x >= width - margin || y < margin || y >= height - margin) {
               const idx = y * width + x;
-              if (!visited[idx] && isNearWhite(data[idx * 4], data[idx * 4 + 1], data[idx * 4 + 2], data[idx * 4 + 3])) {
+              if (!visited[idx] && isNearWhite(data[idx * 4]!, data[idx * 4 + 1]!, data[idx * 4 + 2]!, data[idx * 4 + 3]!)) {
                 queue.push(idx);
                 visited[idx] = 1;
               }
@@ -65,19 +65,19 @@ const processLogos = (src: string): Promise<{ uvLogo: string; laserLogo: string 
         
         let head = 0;
         while (head < queue.length) {
-          const p = queue[head++];
+          const p = queue[head++]!;
           data[p * 4 + 3] = 0;
           
           const px = p % width;
           const py = Math.floor(p / width);
           
-          const neighbors = [[px - 1, py], [px + 1, py], [px, py - 1], [px, py + 1]];
+          const neighbors: [number, number][] = [[px - 1, py], [px + 1, py], [px, py - 1], [px, py + 1]];
           for (const [nx, ny] of neighbors) {
             if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
               const np = ny * width + nx;
               if (!visited[np]) {
                 const nIdx = np * 4;
-                if (isNearWhite(data[nIdx], data[nIdx+1], data[nIdx+2], data[nIdx+3])) {
+                if (isNearWhite(data[nIdx]!, data[nIdx+1]!, data[nIdx+2]!, data[nIdx+3]!)) {
                   visited[np] = 1;
                   queue.push(np);
                 }
@@ -92,8 +92,8 @@ const processLogos = (src: string): Promise<{ uvLogo: string; laserLogo: string 
         
         // Now convert remaining artwork to silver
         for (let i = 0; i < data.length; i += 4) {
-          if (data[i + 3] > 0) {
-            const r = data[i], g = data[i + 1], b = data[i + 2];
+          if (data[i + 3]! > 0) {
+            const r = data[i]!, g = data[i + 1]!, b = data[i + 2]!;
             const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
             const silverBase = Math.floor(160 + (luminance / 255) * 60);
             data[i] = silverBase;
@@ -205,7 +205,7 @@ export function ProductCustomizer({ product, open, onOpenChange }: ProductCustom
       reader.onloadend = async () => {
         const result = reader.result as string;
         setLogoDataUrl(result);
-        const base64 = result.split(",")[1];
+        const base64 = result.split(",")[1] ?? "";
         setLogoBase64(base64);
         
         setIsProcessingLaser(true);
@@ -311,11 +311,11 @@ export function ProductCustomizer({ product, open, onOpenChange }: ProductCustom
   const handleTouchStart = (e: React.TouchEvent) => {
     if (e.touches.length === 2) {
       e.stopPropagation(); 
-      const t1 = e.touches[0];
-      const t2 = e.touches[1];
+      const t1 = e.touches[0]!;
+      const t2 = e.touches[1]!;
       const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
       const angle = (Math.atan2(t2.clientY - t1.clientY, t2.clientX - t1.clientX) * 180) / Math.PI;
-      initialPinchRef.current = { dist, angle, initialScale: logoScale[0], initialRot: logoRotation[0] };
+      initialPinchRef.current = { dist, angle, initialScale: logoScale[0]!, initialRot: logoRotation[0]! };
     } else {
       initialPinchRef.current = null;
     }
@@ -325,8 +325,8 @@ export function ProductCustomizer({ product, open, onOpenChange }: ProductCustom
     if (e.touches.length === 2 && initialPinchRef.current) {
       e.preventDefault(); 
       e.stopPropagation();
-      const t1 = e.touches[0];
-      const t2 = e.touches[1];
+      const t1 = e.touches[0]!;
+      const t2 = e.touches[1]!;
       const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
       const scaleMultiplier = dist / initialPinchRef.current.dist;
       let newScale = initialPinchRef.current.initialScale * scaleMultiplier;
@@ -350,7 +350,7 @@ export function ProductCustomizer({ product, open, onOpenChange }: ProductCustom
     const centerX = rect.left + rect.width / 2;
     const centerY = rect.top + rect.height / 2;
     const startDist = Math.hypot(e.clientX - centerX, e.clientY - centerY);
-    const startScale = logoScale[0];
+    const startScale = logoScale[0]!;
     const onPointerMove = (moveEvent: PointerEvent) => {
       const dist = Math.hypot(moveEvent.clientX - centerX, moveEvent.clientY - centerY);
       const ratio = dist / startDist;
@@ -428,7 +428,7 @@ export function ProductCustomizer({ product, open, onOpenChange }: ProductCustom
                     style={{
                       width: `${logoScale[0]}%`,
                       maxWidth: "100%",
-                      rotate: logoRotation[0],
+                      rotate: logoRotation[0] ?? 0,
                       mixBlendMode: activeMixBlend,
                       touchAction: "none", 
                       opacity: 0.95,

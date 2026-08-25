@@ -24,8 +24,8 @@ function AdminQuotesPage() {
       setLoading(true);
       // Client-side fetch using anon key for demo purposes (assuming policies allow admin view)
       // In a real setup, this would be behind authentication.
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      const supabaseUrl = import.meta.env['VITE_SUPABASE_URL'];
+      const supabaseKey = import.meta.env['VITE_SUPABASE_ANON_KEY'];
       
       if (!supabaseUrl || !supabaseKey) {
         console.warn("Supabase credentials missing");
@@ -50,8 +50,8 @@ function AdminQuotesPage() {
 
   const updateStatus = async (id: string, status: string) => {
     try {
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      const supabaseUrl = import.meta.env['VITE_SUPABASE_URL'];
+      const supabaseKey = import.meta.env['VITE_SUPABASE_ANON_KEY'];
       const supabase = createClient(supabaseUrl, supabaseKey);
       
       await supabase
@@ -81,7 +81,7 @@ function AdminQuotesPage() {
   };
 
   const getPreviewUrl = (path: string) => {
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const supabaseUrl = import.meta.env['VITE_SUPABASE_URL'];
     return `${supabaseUrl}/storage/v1/object/public/corporate-quote-assets/${path}`;
   };
 
