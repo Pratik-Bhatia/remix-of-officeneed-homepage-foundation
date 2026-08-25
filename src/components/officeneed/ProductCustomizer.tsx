@@ -132,6 +132,7 @@ export function ProductCustomizer({ product, open, onOpenChange }: ProductCustom
   const [uvLogo, setUvLogo] = useState<string | null>(null);
   const [laserLogo, setLaserLogo] = useState<string | null>(null);
   const [isProcessingLaser, setIsProcessingLaser] = useState(false);
+  const [userSelectedPrintingMethod, setUserSelectedPrintingMethod] = useState<"Laser Engraving" | "UV Printing">("Laser Engraving");
   
   
 
@@ -157,7 +158,8 @@ export function ProductCustomizer({ product, open, onOpenChange }: ProductCustom
   const [refNumber, setRefNumber] = useState("");
 
   const quantityNum = parseInt(formData.quantity, 10) || 1;
-  const printingMethod = quantityNum <= 10 ? "Laser Engraving" : "UV Printing";
+  const isUvAvailable = quantityNum >= 25;
+  const printingMethod = isUvAvailable ? userSelectedPrintingMethod : "Laser Engraving";
   const currentDisplayLogo = printingMethod === "Laser Engraving" ? laserLogo : uvLogo;
   const laserDropShadow = "drop-shadow(0px -1px 0px rgba(0,0,0,0.3)) drop-shadow(0px 1px 1px rgba(255,255,255,0.2))";
   
@@ -608,14 +610,36 @@ export function ProductCustomizer({ product, open, onOpenChange }: ProductCustom
                   </div>
                 </div>
                 
-                <div className="mb-6 p-4 rounded-xl border border-primary/10 bg-primary/5 flex flex-col transition-all duration-300">
-                  <div className="flex justify-between items-center mb-1">
-                    <Label className="text-sm font-semibold">Printing Method</Label>
-                    <span className="text-sm font-bold text-primary">{printingMethod}</span>
+                <div className="mb-6 space-y-3">
+                  <Label className="text-sm font-semibold">Printing Method</Label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setUserSelectedPrintingMethod("Laser Engraving")}
+                      className={`p-3 rounded-lg border flex flex-col items-center justify-center text-sm font-medium transition-all ${
+                        printingMethod === "Laser Engraving"
+                          ? "border-primary bg-primary/5 text-primary ring-1 ring-primary/20"
+                          : "border-border bg-background hover:bg-muted/50 text-muted-foreground"
+                      }`}
+                    >
+                      Laser Engraving
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setUserSelectedPrintingMethod("UV Printing")}
+                      disabled={!isUvAvailable}
+                      className={`p-3 rounded-lg border flex flex-col items-center justify-center text-sm font-medium transition-all ${
+                        !isUvAvailable 
+                          ? "opacity-50 cursor-not-allowed bg-muted/50 border-border" 
+                          : printingMethod === "UV Printing"
+                            ? "border-primary bg-primary/5 text-primary ring-1 ring-primary/20"
+                            : "border-border bg-background hover:bg-muted/50 text-muted-foreground"
+                      }`}
+                    >
+                      <span>UV Printing</span>
+                      {!isUvAvailable && <span className="text-[10px] mt-1 font-normal">Min. 25 units</span>}
+                    </button>
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    *Automatically selected for orders {printingMethod === "Laser Engraving" ? "of 1–10 units" : "above 10 units"}.
-                  </p>
                 </div>
 
                 <Button 
@@ -813,6 +837,7 @@ export function ProductCustomizer({ product, open, onOpenChange }: ProductCustom
     </Dialog>
   );
 }
+
 
 
 

@@ -1,4 +1,4 @@
-﻿import { createServerFn } from "@tanstack/react-start";
+import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { getUploadClient } from "./attachments.server";
 import { sendCustomerHtmlEmail, sendInternalHtmlEmail } from "./email-service";
@@ -142,6 +142,12 @@ export const submitCorporateQuote = createServerFn({ method: "POST" })
         const { data: publicUrlData } = client.storage.from("corporate-quote-assets").getPublicUrl(previewPath);
         previewUrl = publicUrlData.publicUrl;
       }
+      
+      let logoUrl = "";
+      if (logoPath) {
+        const { data: publicLogoData } = client.storage.from("corporate-quote-assets").getPublicUrl(logoPath);
+        logoUrl = publicLogoData.publicUrl;
+      }
 
       // 5. Send Emails
       try {
@@ -161,6 +167,8 @@ export const submitCorporateQuote = createServerFn({ method: "POST" })
           <p><strong>Delivery Location:</strong> ${data.location}</p>
           <p><strong>Required By:</strong> ${data.deliveryDate || 'Not specified'}</p>
           <p><strong>Additional Notes:</strong> ${data.requirements || 'None'}</p>
+          
+          ${logoUrl ? `<h3>Attached Logo</h3><p><img src="${logoUrl}" alt="Logo" style="max-width: 300px; max-height: 300px; border: 1px solid #ccc; background-color: #f9f9f9; padding: 10px;" /></p><p><a href="${logoUrl}" target="_blank">Download Original Logo</a></p>` : '<p>No logo was attached.</p>'}
           
           ${previewUrl ? `<h3>Customization Preview</h3><img src="${previewUrl}" alt="Preview" style="max-width: 600px; width: 100%; border: 1px solid #eee; border-radius: 8px;" />` : '<p>No branding preview available.</p>'}
         `;
