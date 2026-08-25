@@ -10,6 +10,9 @@ const supabaseUrl = process.env["VITE_SUPABASE_URL"] ?? process.env["SUPABASE_UR
 const supabasePublishableKey =
   process.env["VITE_SUPABASE_PUBLISHABLE_KEY"] ?? process.env["SUPABASE_PUBLISHABLE_KEY"] ?? "";
 
+if (supabaseUrl) process.env["VITE_SUPABASE_URL"] = supabaseUrl;
+if (supabasePublishableKey) process.env["VITE_SUPABASE_PUBLISHABLE_KEY"] = supabasePublishableKey;
+
 export default defineConfig({
   vite: {
     define: {
