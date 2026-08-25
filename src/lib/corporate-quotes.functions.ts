@@ -1,7 +1,7 @@
 ﻿import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { getUploadClient } from "./attachments.server";
-import { sendCustomerConfirmationEmail, sendInternalNotificationEmail } from "./email-service";
+import { sendCustomerHtmlEmail, sendInternalHtmlEmail } from "./email-service";
 
 const MAX_BYTES = 10 * 1024 * 1024; // 10MB
 
@@ -165,7 +165,7 @@ export const submitCorporateQuote = createServerFn({ method: "POST" })
           ${previewUrl ? `<h3>Customization Preview</h3><img src="${previewUrl}" alt="Preview" style="max-width: 600px; width: 100%; border: 1px solid #eee; border-radius: 8px;" />` : '<p>No branding preview available.</p>'}
         `;
         
-        await sendInternalNotificationEmail(
+        await sendInternalHtmlEmail(
           `New Corporate Quote Request - ${data.company} - ${data.product.name}`,
           internalHtml
         );
@@ -186,7 +186,7 @@ export const submitCorporateQuote = createServerFn({ method: "POST" })
           ${previewUrl ? `<img src="${previewUrl}" alt="Preview" style="max-width: 400px; width: 100%; border: 1px solid #eee; border-radius: 8px; margin-top: 20px;" />` : ''}
         `;
 
-        await sendCustomerConfirmationEmail(
+        await sendCustomerHtmlEmail(
           data.email,
           `Quote Request Received: ${data.product.name}`,
           customerHtml

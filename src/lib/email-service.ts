@@ -29,6 +29,30 @@ function getInternalEmail() {
   return process.env["OFFICENEED_ENQUIRY_EMAIL"] || "marketing@officeneed.in";
 }
 
+/** Send a simple HTML email to the internal team inbox. */
+export async function sendInternalHtmlEmail(subject: string, html: string): Promise<boolean> {
+  const resend = getResendClient();
+  if (!resend) return false;
+  const { error } = await resend.emails.send({ from: getEmailFrom(), to: getInternalEmail(), subject, html });
+  if (error) {
+    console.error("[EmailService] Internal html email error:", error);
+    return false;
+  }
+  return true;
+}
+
+/** Send a simple HTML email to a customer. */
+export async function sendCustomerHtmlEmail(to: string, subject: string, html: string): Promise<boolean> {
+  const resend = getResendClient();
+  if (!resend) return false;
+  const { error } = await resend.emails.send({ from: getEmailFrom(), to, subject, html });
+  if (error) {
+    console.error("[EmailService] Customer html email error:", error);
+    return false;
+  }
+  return true;
+}
+
 export async function sendCustomerConfirmationEmail(params: {
   email: string;
   name: string;
