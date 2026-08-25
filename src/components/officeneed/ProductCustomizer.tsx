@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Upload, X, Check, Loader2, RotateCw, Move, Pencil, AlertCircle, FlipHorizontal2, FlipVertical2 } from "lucide-react";
+import { Upload, X, Check, Loader2, RotateCw, Move, Pencil, AlertCircle, FlipHorizontal2, FlipVertical2, ArrowLeft } from "lucide-react";
 import { motion } from "motion/react";
 import html2canvas from "html2canvas";
 import { submitCorporateQuote } from "@/lib/corporate-quotes.functions";
@@ -300,8 +300,10 @@ export function ProductCustomizer({ product, open, onOpenChange }: ProductCustom
         }
       });
       if (!result.ok) throw new Error(result.error);
-      setRefNumber(result.refNumber);
-      setStep("success");
+        setRefNumber(result.refNumber);
+        toast.success("Quote request submitted successfully! We will contact you shortly.");
+        onOpenChange(false);
+        setTimeout(() => setStep("customize"), 300);
     } catch (err: any) {
       console.error(err);
       setErrorMsg(err.message || "Failed to submit quote. Please try again.");
@@ -378,7 +380,7 @@ export function ProductCustomizer({ product, open, onOpenChange }: ProductCustom
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[1200px] w-[95vw] p-0 overflow-hidden h-[90vh] max-h-[900px] flex flex-col sm:rounded-2xl">
+      <DialogContent className="max-w-[1200px] w-screen h-[100dvh] max-h-none border-0 m-0 p-0 overflow-x-hidden overflow-y-auto flex flex-col rounded-none sm:rounded-2xl md:w-[95vw] md:h-[90vh] md:max-h-[900px] md:overflow-hidden md:border">
         {step === "customize" && (
           <div className="flex flex-col lg:flex-row h-full">
             <div 
@@ -472,9 +474,17 @@ export function ProductCustomizer({ product, open, onOpenChange }: ProductCustom
             </div>
             
             <div className="w-full lg:w-[450px] flex flex-col h-full bg-background relative shrink-0">
-              <div className="flex-1 overflow-y-auto">
+              <div className="flex-1 overflow-y-visible md:overflow-y-auto">
                 <div className="p-6 lg:p-8 lg:pb-4">
                   <DialogHeader className="mb-8">
+                    <button 
+                      type="button" 
+                      onClick={() => onOpenChange(false)}
+                      className="flex items-center text-sm font-medium text-muted-foreground hover:text-foreground mb-6 sm:hidden"
+                    >
+                      <ArrowLeft className="w-4 h-4 mr-2" />
+                      Back to Product
+                    </button>
                     <DialogTitle className="text-2xl font-bold tracking-tight">Customize Product</DialogTitle>
                     <DialogDescription className="mt-2 text-sm text-muted-foreground leading-relaxed">
                       Add your company branding and see how your corporate gift could look.
@@ -675,7 +685,15 @@ export function ProductCustomizer({ product, open, onOpenChange }: ProductCustom
             <div className="flex-1 overflow-y-auto">
               <div className="max-w-[1200px] mx-auto flex flex-col lg:flex-row h-full">
                 <div className="flex-1 p-6 md:p-10 lg:pr-12">
-                  <h3 className="font-semibold text-lg mb-6">Quote Details</h3>
+                  <button 
+                    type="button" 
+                    onClick={() => setStep("customize")}
+                    className="flex items-center text-sm font-medium text-muted-foreground hover:text-foreground mb-6 sm:hidden"
+                  >
+                    <ArrowLeft className="w-4 h-4 mr-2" />
+                    Back to Customization
+                  </button>
+                  <h3 className="font-semibold text-2xl sm:text-lg mb-6">Request a Quote</h3>
                   
                   {errorMsg && (
                     <div className="mb-6 p-4 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive flex gap-3 text-sm">
@@ -816,27 +834,12 @@ export function ProductCustomizer({ product, open, onOpenChange }: ProductCustom
           </div>
         )}
 
-        {step === "success" && (
-          <div className="flex flex-col items-center justify-center h-full p-8 text-center bg-background">
-            <div className="w-24 h-24 bg-primary/10 text-primary rounded-full flex items-center justify-center mb-8 shadow-sm">
-              <Check className="w-12 h-12" />
-            </div>
-            <h2 className="text-3xl font-bold mb-2 tracking-tight">Quote Request Received</h2>
-            <p className="font-mono text-sm bg-muted px-4 py-2 rounded-md border border-border mb-6">
-              {refNumber}
-            </p>
-            <p className="text-lg text-muted-foreground max-w-[500px] mb-10 leading-relaxed">
-              Your corporate gifting request has been successfully submitted. We've sent a confirmation to your email.
-            </p>
-            <Button size="lg" onClick={() => onOpenChange(false)} className="px-12 h-14 text-base font-medium shadow-sm">
-              Close Window
-            </Button>
-          </div>
-        )}
+        
       </DialogContent>
     </Dialog>
   );
 }
+
 
 
 
