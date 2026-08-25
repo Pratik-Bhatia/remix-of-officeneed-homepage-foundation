@@ -1,6 +1,7 @@
-﻿import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { createClient } from "@supabase/supabase-js";
+import { useServerFn } from "@tanstack/react-start";
+import { listCorporateQuotes, updateCorporateQuoteStatus } from "@/lib/admin-quotes.functions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -13,56 +14,39 @@ export const Route = createFileRoute("/admin/quotes")({
 function AdminQuotesPage() {
   const [requests, setRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [selectedQuote, setSelectedQuote] = useState<any | null>(null);
 
-  useEffect(() => {
-    fetchQuotes();
-  }, []);
+  const fetchQuotesFn = useServerFn(listCorporateQuotes);
+  const updateStatusFn = useServerFn(updateCorporateQuoteStatus);
 
-  const fetchQuotes = async () => {
-    try {
-      setLoading(true);
-      // Client-side fetch using anon key for demo purposes (assuming policies allow admin view)
-      // In a real setup, this would be behind authentication.
-      const supabaseUrl = import.meta.env['VITE_SUPABASE_URL'];
-      const supabaseKey = import.meta.env['VITE_SUPABASE_ANON_KEY'];
-      
-      if (!supabaseUrl || !supabaseKey) {
-        console.warn("Supabase credentials missing");
-        return;
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        setLoading(true);
+        const data = await fetchQuotesFn({});
+        if (active) {
+          setRequests(data ?? []);
+          setError(null);
+        }
+      } catch (e: any) {
+        if (active) setError(e?.message?.includes("Forbidden") || e?.message?.includes("Unauthorized")
+          ? "You need to be signed in with an admin account to view quote requests."
+          : "Unable to load quote requests.");
+      } finally {
+        if (active) setLoading(false);
       }
-      
-      const supabase = createClient(supabaseUrl, supabaseKey);
-      
-      const { data, error } = await supabase
-        .from("corporate_quote_requests")
-        .select("*")
-        .order("created_at", { ascending: false });
-        
-      if (error) throw error;
-      setRequests(data || []);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
-  };
+    })();
+    return () => { active = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const updateStatus = async (id: string, status: string) => {
     try {
-      const supabaseUrl = import.meta.env['VITE_SUPABASE_URL'];
-      const supabaseKey = import.meta.env['VITE_SUPABASE_ANON_KEY'];
-      const supabase = createClient(supabaseUrl, supabaseKey);
-      
-      await supabase
-        .from("corporate_quote_requests")
-        .update({ status })
-        .eq("id", id);
-        
+      await updateStatusFn({ data: { id, status } });
       setRequests(prev => prev.map(req => req.id === id ? { ...req, status } : req));
-      if (selectedQuote?.id === id) {
-        setSelectedQuote({ ...selectedQuote, status });
-      }
+      setSelectedQuote((prev: any) => (prev && prev.id === id ? { ...prev, status } : prev));
     } catch (e) {
       console.error(e);
     }
@@ -81,7 +65,7 @@ function AdminQuotesPage() {
   };
 
   const getPreviewUrl = (path: string) => {
-    const supabaseUrl = import.meta.env['VITE_SUPABASE_URL'];
+    const supabaseUrl = import.meta.env['VITE_SUPABASE_URL'] as string | undefined;
     return `${supabaseUrl}/storage/v1/object/public/corporate-quote-assets/${path}`;
   };
 
@@ -105,6 +89,8 @@ function AdminQuotesPage() {
           <tbody>
             {loading ? (
               <tr><td colSpan={7} className="px-6 py-8 text-center text-muted-foreground">Loading...</td></tr>
+            ) : error ? (
+              <tr><td colSpan={7} className="px-6 py-8 text-center text-muted-foreground">{error}</td></tr>
             ) : requests.length === 0 ? (
               <tr><td colSpan={7} className="px-6 py-8 text-center text-muted-foreground">No quote requests found.</td></tr>
             ) : (
