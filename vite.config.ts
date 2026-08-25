@@ -6,9 +6,15 @@
 // You can pass additional config via defineConfig({ vite: { ... }, etc... }) if needed.
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 
-const supabaseUrl = process.env["VITE_SUPABASE_URL"] ?? process.env["SUPABASE_URL"] ?? "";
+const fallbackSupabaseUrl = "https://kzyblydpvvbjmyzzflpr.supabase.co";
+const fallbackSupabasePublishableKey = "sb_publishable_zhueg5QBG3x9bT4eqhPQbw_JrD35kgw";
+
+const supabaseUrl =
+  process.env["VITE_SUPABASE_URL"] ?? process.env["SUPABASE_URL"] ?? fallbackSupabaseUrl;
 const supabasePublishableKey =
-  process.env["VITE_SUPABASE_PUBLISHABLE_KEY"] ?? process.env["SUPABASE_PUBLISHABLE_KEY"] ?? "";
+  process.env["VITE_SUPABASE_PUBLISHABLE_KEY"] ??
+  process.env["SUPABASE_PUBLISHABLE_KEY"] ??
+  fallbackSupabasePublishableKey;
 
 if (supabaseUrl) process.env["VITE_SUPABASE_URL"] = supabaseUrl;
 if (supabasePublishableKey) process.env["VITE_SUPABASE_PUBLISHABLE_KEY"] = supabasePublishableKey;
@@ -18,6 +24,10 @@ export default defineConfig({
     define: {
       "import.meta.env.VITE_SUPABASE_URL": JSON.stringify(supabaseUrl),
       "import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY": JSON.stringify(supabasePublishableKey),
+      "process.env": JSON.stringify({
+        SUPABASE_URL: supabaseUrl,
+        SUPABASE_PUBLISHABLE_KEY: supabasePublishableKey,
+      }),
     },
   },
   tanstackStart: {
