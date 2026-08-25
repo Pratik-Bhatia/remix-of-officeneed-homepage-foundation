@@ -15,7 +15,7 @@ export const processLogoServer = createServerFn({ method: "POST" })
   .validator((data: { imageBase64: string }) => data)
   .handler(async ({ data }) => {
     try {
-      const apiKey = process.env['REMOVE_BG_API_KEY'] || (import.meta as any).env?.REMOVE_BG_API_KEY;
+      const apiKey = process.env.REMOVE_BG_API_KEY || (import.meta as any).env?.REMOVE_BG_API_KEY || (import.meta as any).env?.VITE_REMOVE_BG_API_KEY || process.env.VITE_REMOVE_BG_API_KEY;
       
       if (!apiKey) {
         return { success: false, error: "REMOVE_BG_API_KEY environment variable is not set." };
