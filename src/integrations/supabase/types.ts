@@ -14,6 +14,90 @@ export type Database = {
   }
   public: {
     Tables: {
+      corporate_quote_requests: {
+        Row: {
+          additional_requirements: string | null
+          company_name: string
+          created_at: string
+          customer_name: string
+          delivery_location: string
+          id: string
+          logo_filename: string | null
+          logo_flip_horizontal: boolean
+          logo_flip_vertical: boolean
+          logo_position_x: number | null
+          logo_position_y: number | null
+          logo_rotation: number | null
+          logo_scale: number | null
+          logo_storage_path: string | null
+          phone: string
+          preview_image_path: string | null
+          printing_method: string | null
+          product_id: string
+          product_name: string
+          product_variant: string | null
+          quantity: number
+          required_delivery_date: string | null
+          status: string
+          updated_at: string
+          work_email: string
+        }
+        Insert: {
+          additional_requirements?: string | null
+          company_name: string
+          created_at?: string
+          customer_name: string
+          delivery_location: string
+          id?: string
+          logo_filename?: string | null
+          logo_flip_horizontal?: boolean
+          logo_flip_vertical?: boolean
+          logo_position_x?: number | null
+          logo_position_y?: number | null
+          logo_rotation?: number | null
+          logo_scale?: number | null
+          logo_storage_path?: string | null
+          phone: string
+          preview_image_path?: string | null
+          printing_method?: string | null
+          product_id: string
+          product_name: string
+          product_variant?: string | null
+          quantity: number
+          required_delivery_date?: string | null
+          status?: string
+          updated_at?: string
+          work_email: string
+        }
+        Update: {
+          additional_requirements?: string | null
+          company_name?: string
+          created_at?: string
+          customer_name?: string
+          delivery_location?: string
+          id?: string
+          logo_filename?: string | null
+          logo_flip_horizontal?: boolean
+          logo_flip_vertical?: boolean
+          logo_position_x?: number | null
+          logo_position_y?: number | null
+          logo_rotation?: number | null
+          logo_scale?: number | null
+          logo_storage_path?: string | null
+          phone?: string
+          preview_image_path?: string | null
+          printing_method?: string | null
+          product_id?: string
+          product_name?: string
+          product_variant?: string | null
+          quantity?: number
+          required_delivery_date?: string | null
+          status?: string
+          updated_at?: string
+          work_email?: string
+        }
+        Relationships: []
+      }
       product_enquiries: {
         Row: {
           category: string
