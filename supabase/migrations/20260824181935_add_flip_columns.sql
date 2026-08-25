@@ -1,0 +1,3 @@
+﻿ALTER TABLE corporate_quote_requests
+ADD COLUMN IF NOT EXISTS logo_flip_horizontal BOOLEAN DEFAULT FALSE,
+ADD COLUMN IF NOT EXISTS logo_flip_vertical BOOLEAN DEFAULT FALSE;

@@ -20,6 +20,7 @@ import { Route as PrivacyPolicyRouteImport } from './routes/privacy-policy'
 import { Route as ReturnsRefundsRouteImport } from './routes/returns-refunds'
 import { Route as ShippingDeliveryRouteImport } from './routes/shipping-delivery'
 import { Route as TermsAndConditionsRouteImport } from './routes/terms-and-conditions'
+import { Route as AdminQuotesRouteImport } from './routes/admin/quotes'
 import { Route as BlogSlugRouteImport } from './routes/blog.$slug'
 import { Route as ProductsIndexRouteImport } from './routes/products.index'
 import { Route as ProductsSlugRouteImport } from './routes/products.$slug'
@@ -81,6 +82,11 @@ const TermsAndConditionsRoute = TermsAndConditionsRouteImport.update({
   path: '/terms-and-conditions',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminQuotesRoute = AdminQuotesRouteImport.update({
+  id: '/admin/quotes',
+  path: '/admin/quotes',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const BlogSlugRoute = BlogSlugRouteImport.update({
   id: '/$slug',
   path: '/$slug',
@@ -119,6 +125,7 @@ export interface FileRoutesByFullPath {
   '/returns-refunds': typeof ReturnsRefundsRoute
   '/shipping-delivery': typeof ShippingDeliveryRoute
   '/terms-and-conditions': typeof TermsAndConditionsRoute
+  '/admin/quotes': typeof AdminQuotesRoute
   '/blog/$slug': typeof BlogSlugRoute
   '/products/$slug': typeof ProductsSlugRoute
   '/shop/$handle': typeof ShopHandleRoute
@@ -137,6 +144,7 @@ export interface FileRoutesByTo {
   '/returns-refunds': typeof ReturnsRefundsRoute
   '/shipping-delivery': typeof ShippingDeliveryRoute
   '/terms-and-conditions': typeof TermsAndConditionsRoute
+  '/admin/quotes': typeof AdminQuotesRoute
   '/blog/$slug': typeof BlogSlugRoute
   '/products/$slug': typeof ProductsSlugRoute
   '/shop/$handle': typeof ShopHandleRoute
@@ -156,6 +164,7 @@ export interface FileRoutesById {
   '/returns-refunds': typeof ReturnsRefundsRoute
   '/shipping-delivery': typeof ShippingDeliveryRoute
   '/terms-and-conditions': typeof TermsAndConditionsRoute
+  '/admin/quotes': typeof AdminQuotesRoute
   '/blog/$slug': typeof BlogSlugRoute
   '/products/$slug': typeof ProductsSlugRoute
   '/shop/$handle': typeof ShopHandleRoute
@@ -176,6 +185,7 @@ export interface FileRouteTypes {
     | '/returns-refunds'
     | '/shipping-delivery'
     | '/terms-and-conditions'
+    | '/admin/quotes'
     | '/blog/$slug'
     | '/products/$slug'
     | '/shop/$handle'
@@ -194,6 +204,7 @@ export interface FileRouteTypes {
     | '/returns-refunds'
     | '/shipping-delivery'
     | '/terms-and-conditions'
+    | '/admin/quotes'
     | '/blog/$slug'
     | '/products/$slug'
     | '/shop/$handle'
@@ -212,6 +223,7 @@ export interface FileRouteTypes {
     | '/returns-refunds'
     | '/shipping-delivery'
     | '/terms-and-conditions'
+    | '/admin/quotes'
     | '/blog/$slug'
     | '/products/$slug'
     | '/shop/$handle'
@@ -231,6 +243,7 @@ export interface RootRouteChildren {
   ReturnsRefundsRoute: typeof ReturnsRefundsRoute
   ShippingDeliveryRoute: typeof ShippingDeliveryRoute
   TermsAndConditionsRoute: typeof TermsAndConditionsRoute
+  AdminQuotesRoute: typeof AdminQuotesRoute
   ProductsSlugRoute: typeof ProductsSlugRoute
   ShopHandleRoute: typeof ShopHandleRoute
   ProductsIndexRoute: typeof ProductsIndexRoute
@@ -316,6 +329,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TermsAndConditionsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/quotes': {
+      id: '/admin/quotes'
+      path: '/admin/quotes'
+      fullPath: '/admin/quotes'
+      preLoaderRoute: typeof AdminQuotesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/blog/$slug': {
       id: '/blog/$slug'
       path: '/$slug'
@@ -376,6 +396,7 @@ const rootRouteChildren: RootRouteChildren = {
   ReturnsRefundsRoute: ReturnsRefundsRoute,
   ShippingDeliveryRoute: ShippingDeliveryRoute,
   TermsAndConditionsRoute: TermsAndConditionsRoute,
+  AdminQuotesRoute: AdminQuotesRoute,
   ProductsSlugRoute: ProductsSlugRoute,
   ShopHandleRoute: ShopHandleRoute,
   ProductsIndexRoute: ProductsIndexRoute,

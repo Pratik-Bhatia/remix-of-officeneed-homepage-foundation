@@ -5,6 +5,7 @@ import { Navbar } from "@/components/officeneed/Navbar";
 import { Footer } from "@/components/officeneed/Footer";
 import { ProductCard } from "@/components/officeneed/ProductCard";
 import { EnquiryDialog } from "@/components/officeneed/EnquiryDialog";
+import { ProductCustomizer } from "@/components/officeneed/ProductCustomizer";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { getProductBySlug, getRelatedProducts } from "@/lib/products";
@@ -104,6 +105,7 @@ function ProductDetail() {
   const [activeImage, setActiveImage] = useState(0);
   const [quantity, setQuantity] = useState<number>(product.minimumOrderQuantity || 1);
   const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
+  const [customizerOpen, setCustomizerOpen] = useState(false);
   
   const addItem = useCartStore((s) => s.addItem);
   const isCartLoading = useCartStore((s) => s.isLoading);
@@ -348,8 +350,33 @@ function ProductDetail() {
                 />
               </div>
 
+              {/* Corporate Gifting Customizer CTA */}
+              {product.category === "Corporate Gifting" && (
+                <div className="mt-8 rounded-xl bg-muted/30 border border-border p-6 flex flex-col items-center text-center sm:items-start sm:text-left sm:flex-row sm:justify-between gap-6">
+                  <div>
+                    <h3 className="text-lg font-semibold text-foreground">Make It Yours</h3>
+                    <p className="text-sm text-muted-foreground mt-1 max-w-sm">
+                      Add your company's branding and see how your gift could look before requesting a quote.
+                    </p>
+                  </div>
+                  <Button 
+                    size="lg" 
+                    className="w-full sm:w-auto shrink-0"
+                    onClick={() => setCustomizerOpen(true)}
+                  >
+                    Customize This Product
+                  </Button>
+                </div>
+              )}
+              
+              <ProductCustomizer 
+                product={product} 
+                open={customizerOpen} 
+                onOpenChange={setCustomizerOpen} 
+              />
+
               {/* Details */}
-              <div className="mt-6 space-y-6 border-t border-border pt-6">
+              <div className="mt-8 space-y-6 border-t border-border pt-8">
                 <section>
                   <h2 className="text-sm font-semibold text-foreground">Description</h2>
                   <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
