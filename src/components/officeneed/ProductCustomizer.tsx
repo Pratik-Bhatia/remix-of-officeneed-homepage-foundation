@@ -382,7 +382,7 @@ export function ProductCustomizer({ product, open, onOpenChange }: ProductCustom
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[1200px] w-screen h-[100dvh] max-h-none border-0 m-0 p-0 overflow-x-hidden overflow-y-auto flex flex-col rounded-none sm:rounded-2xl md:w-[95vw] md:h-[90vh] md:max-h-[900px] md:overflow-hidden md:border">
         {step === "customize" && (
-          <div className="flex flex-col lg:flex-row h-full">
+          <div className="flex flex-col lg:flex-row min-h-full">
             <div 
               className="w-full lg:flex-1 bg-[#F9FAFB] relative flex items-center justify-center p-4 lg:p-12 border-b lg:border-b-0 lg:border-r border-border min-h-[50vh] lg:min-h-full overflow-hidden"
               onClick={handleCanvasClick}
@@ -473,7 +473,7 @@ export function ProductCustomizer({ product, open, onOpenChange }: ProductCustom
               </div>
             </div>
             
-            <div className="w-full lg:w-[450px] flex flex-col h-full bg-background relative shrink-0">
+            <div className="w-full lg:w-[450px] flex flex-col bg-background relative shrink-0 lg:h-full">
               <div className="flex-1 overflow-y-visible md:overflow-y-auto">
                 <div className="p-6 lg:p-8 lg:pb-4">
                   <DialogHeader className="mb-8">
@@ -601,7 +601,7 @@ export function ProductCustomizer({ product, open, onOpenChange }: ProductCustom
                 </div>
               </div>
               
-              <div className="p-6 lg:p-8 border-t border-border bg-background shadow-[0_-4px_20px_-10px_rgba(0,0,0,0.05)] sticky bottom-0 z-20">
+              <div className="p-6 lg:p-8 border-t border-border bg-background shadow-[0_-4px_20px_-10px_rgba(0,0,0,0.05)] mt-auto lg:sticky lg:bottom-0 lg:z-20">
                 <div className="flex items-center justify-between mb-4">
                   <Label className="text-base font-semibold">Quantity</Label>
                   <div className="flex items-center gap-3">
@@ -683,7 +683,7 @@ export function ProductCustomizer({ product, open, onOpenChange }: ProductCustom
             </DialogHeader>
 
             <div className="flex-1 overflow-y-auto">
-              <div className="max-w-[1200px] mx-auto flex flex-col lg:flex-row h-full">
+              <div className="max-w-[1200px] mx-auto flex flex-col lg:flex-row min-h-full">
                 <div className="flex-1 p-6 md:p-10 lg:pr-12">
                   <button 
                     type="button" 
