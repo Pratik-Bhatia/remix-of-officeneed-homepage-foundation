@@ -47,7 +47,7 @@ const processLogos = (src: string): Promise<{ uvLogo: string; laserLogo: string 
         };
         
         const visited = new Uint8Array(width * height);
-        const queue = [];
+        const queue: number[] = [];
         
         // Seed from the outer 10 pixel margin to bypass JPEG artifact borders
         const margin = Math.min(10, Math.floor(width / 2), Math.floor(height / 2));
