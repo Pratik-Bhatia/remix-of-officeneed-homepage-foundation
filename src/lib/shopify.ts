@@ -4,9 +4,9 @@
 import { toast } from "sonner";
 
 export const SHOPIFY_API_VERSION = "2025-07";
-export const SHOPIFY_STORE_PERMANENT_DOMAIN = "officeneed-in.myshopify.com";
+export const SHOPIFY_STORE_PERMANENT_DOMAIN = "smb1m3-0k.myshopify.com";
 export const SHOPIFY_STOREFRONT_URL = `https://${SHOPIFY_STORE_PERMANENT_DOMAIN}/api/${SHOPIFY_API_VERSION}/graphql.json`;
-export const SHOPIFY_STOREFRONT_TOKEN = "1ef968906a4c6c3e3d20cdb1ee34243b";
+export const SHOPIFY_STOREFRONT_TOKEN = "3a2ae2d30877cebfeeeb9a7c1f923587";
 
 export interface ShopifyProductNode {
   id: string;
