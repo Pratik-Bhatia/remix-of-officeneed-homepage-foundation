@@ -113,7 +113,8 @@ export function useShopifyIndex() {
   const { data } = useQuery({
     queryKey: ["shopify", "catalog-index"],
     queryFn: async () => {
-      return new Map() as ShopifyIndex;
+      const edges = await fetchProducts(250);
+      return buildShopifyIndex(edges.map((e) => e.node));
     },
     staleTime: 5 * 60 * 1000,
     retry: 1,
@@ -202,7 +203,8 @@ export function useShopifyCatalogue(staticProducts: Product[]) {
   const { data } = useQuery({
     queryKey: ["shopify", "catalog"],
     queryFn: async () => {
-      return [] as ShopifyProductNode[];
+      const edges = await fetchProducts(250);
+      return edges.map((e) => e.node);
     },
     staleTime: 5 * 60 * 1000,
     retry: 1,
@@ -225,7 +227,8 @@ export function useShopifyBestsellers(staticItems: BestsellerProduct[]) {
   const { data } = useQuery({
     queryKey: ["shopify", "bestsellers"],
     queryFn: async () => {
-      return [] as ShopifyProductNode[];
+      const edges = await fetchProducts(50);
+      return edges.map((e) => e.node);
     },
     staleTime: 5 * 60 * 1000,
     retry: 1,
@@ -234,7 +237,7 @@ export function useShopifyBestsellers(staticItems: BestsellerProduct[]) {
   const nodes = data ?? [];
   if (nodes.length === 0) return staticItems;
 
-  return nodes.map((node): BestsellerProduct => {
+  const live = nodes.map((node): BestsellerProduct => {
     const p = shopifyNodeToProduct(node);
     const category: BestsellerProduct["category"] =
       p.category === "Office Supplies"
@@ -256,4 +259,15 @@ export function useShopifyBestsellers(staticItems: BestsellerProduct[]) {
       productUrl: `/products/${node.handle}`,
     };
   });
+
+  // Keep the static/demo bestsellers that have no live Shopify equivalent.
+  const index = buildShopifyIndex(nodes);
+  const liveHandles = new Set(live.map((item) => item.shopifyHandle));
+  const fallback = staticItems.filter(
+    (item) =>
+      !liveHandles.has(item.shopifyHandle) &&
+      !findShopifyMatch(index, item.shopifyHandle, item.name),
+  );
+
+  return [...live, ...fallback];
 }
