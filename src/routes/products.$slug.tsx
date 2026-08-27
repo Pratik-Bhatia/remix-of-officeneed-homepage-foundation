@@ -310,11 +310,11 @@ function ProductDetail() {
                 )}
                 
                 {/* Main Image */}
-                <div className="order-1 lg:order-2 flex-1 relative overflow-hidden rounded-2xl bg-secondary group">
+                <div className="order-1 lg:order-2 flex-1 relative overflow-hidden rounded-2xl bg-secondary group aspect-square flex items-center justify-center p-4 sm:p-8">
                   <img
                     src={activeMedia?.url ?? product.images[0]}
                     alt={activeMedia?.alt || `${product.name} — image ${activeImage + 1}`}
-                    className="aspect-square lg:aspect-[4/3] w-full object-contain p-6 sm:p-10"
+                    className="w-full h-full object-contain"
                   />
                   
                   {/* Arrows */}
