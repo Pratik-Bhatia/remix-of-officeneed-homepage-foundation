@@ -66,14 +66,22 @@ export function mergeProduct(product: Product, node?: ShopifyProductNode): Produ
   const description = node.description?.trim();
   const variants = node.variants?.edges?.map((e) => e.node) ?? [];
   const available = variants.some((v) => v.availableForSale);
+  const amount = parseFloat(node.priceRange?.minVariantPrice?.amount ?? "0");
 
   return {
     ...product,
     name: node.title?.trim() || product.name,
+    ...(node.descriptionHtml ? { descriptionHtml: node.descriptionHtml } : {}),
+    ...(node.vendor ? { vendor: node.vendor } : {}),
+    ...(node.tags?.length ? { tags: node.tags } : {}),
+    ...(Number.isFinite(amount) && amount > 0
+      ? { priceAmount: amount, currencyCode: node.priceRange.minVariantPrice.currencyCode }
+      : {}),
+    ...(variants[0]?.sku ? { sku: variants[0].sku } : {}),
     ...(description
       ? {
           description,
-          summary: product.summary || description.split("\n")[0]!.slice(0, 160),
+          summary: product.summary || truncateWords(description.replace(/\s+/g, " "), 160),
         }
       : {}),
     ...(price ? { price, startingPrice: variants.length > 1 } : {}),
@@ -154,6 +162,14 @@ function classify(node: ShopifyProductNode): { category: Product["category"]; su
   return { category: "Office Supplies", sub: "Office Supplies" };
 }
 
+/** Trim to a length without cutting mid-word. */
+function truncateWords(text: string, max: number): string {
+  if (text.length <= max) return text;
+  const cut = text.slice(0, max);
+  const lastSpace = cut.lastIndexOf(" ");
+  return `${(lastSpace > 40 ? cut.slice(0, lastSpace) : cut).replace(/[.,;:\-\s]+$/, "")}…`;
+}
+
 function priceBucket(amount: number): string {
   if (amount < 2000) return "under_2000";
   if (amount <= 5000) return "2000_5000";
@@ -169,7 +185,7 @@ export function shopifyNodeToProduct(node: ShopifyProductNode): Product {
   const images = nodeImages(node);
   const description = (node.description ?? "").trim();
   const summary = description
-    ? description.replace(/\s+/g, " ").slice(0, 150)
+    ? truncateWords(description.replace(/\s+/g, " "), 150)
     : `${node.title} — available through OfficeNeed.`;
   const amount = parseFloat(node.priceRange?.minVariantPrice?.amount ?? "0");
   const variants = node.variants?.edges?.map((e) => e.node) ?? [];
@@ -177,6 +193,13 @@ export function shopifyNodeToProduct(node: ShopifyProductNode): Product {
   return {
     slug: node.handle,
     name: node.title,
+    ...(node.descriptionHtml ? { descriptionHtml: node.descriptionHtml } : {}),
+    ...(node.tags?.length ? { tags: node.tags } : {}),
+    ...(node.vendor ? { vendor: node.vendor } : {}),
+    ...(amount > 0
+      ? { priceAmount: amount, currencyCode: node.priceRange.minVariantPrice.currencyCode }
+      : {}),
+    ...(variants[0]?.sku ? { sku: variants[0].sku } : {}),
     category,
     subcategories: [sub],
     filterAttributes: { price: [priceBucket(amount)] },

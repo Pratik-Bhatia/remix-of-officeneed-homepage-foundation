@@ -6,10 +6,11 @@ import { Footer } from "@/components/officeneed/Footer";
 import { ProductCard } from "@/components/officeneed/ProductCard";
 import { EnquiryDialog } from "@/components/officeneed/EnquiryDialog";
 import { ProductCustomizer } from "@/components/officeneed/ProductCustomizer";
+import { RichText } from "@/components/officeneed/RichText";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { getProductBySlug, getRelatedProducts } from "@/lib/products";
-import { fetchProductByHandle } from "@/lib/shopify";
+import { fetchProductByHandle, formatMoney, type ShopifyVariantNode } from "@/lib/shopify";
 import { mergeProduct, shopifyNodeToProduct } from "@/lib/shopify-overlay";
 import { useCartStore } from "@/stores/cartStore";
 import { toast } from "sonner";
@@ -102,21 +103,75 @@ function ProductNotFound() {
 
 function ProductDetail() {
   const { product, node } = Route.useLoaderData();
-  const [activeImage, setActiveImage] = useState(0);
   const [quantity, setQuantity] = useState<number>(product.minimumOrderQuantity || 1);
-  const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
   const [customizerOpen, setCustomizerOpen] = useState(false);
-  
+
   const addItem = useCartStore((s) => s.addItem);
   const isCartLoading = useCartStore((s) => s.isLoading);
 
   const min = product.minimumOrderQuantity || 1;
   const step = 1;
 
-  const related = useMemo(
-    () => getRelatedProducts(product, 4),
-    [product]
+  /* ---------------- Shopify-driven variant + gallery model ---------------- */
+
+  const variants = useMemo<ShopifyVariantNode[]>(
+    () => node?.variants?.edges?.map((e) => e.node) ?? [],
+    [node],
   );
+
+  /** Gallery = product media first, plus any variant media not already present. */
+  const gallery = useMemo(() => {
+    const seen = new Set<string>();
+    const items: Array<{ url: string; alt: string | null }> = [];
+    const push = (img?: { url?: string | null; altText?: string | null } | null) => {
+      const url = img?.url;
+      if (!url || seen.has(url)) return;
+      seen.add(url);
+      items.push({ url, alt: img?.altText ?? null });
+    };
+    push(node?.featuredImage);
+    node?.images?.edges?.forEach((e) => push(e.node));
+    variants.forEach((v) => push(v.image));
+    if (items.length === 0) {
+      product.images.forEach((url) => push({ url, altText: null }));
+    }
+    return items;
+  }, [node, variants, product.images]);
+
+  const indexForUrl = (url?: string | null) => {
+    if (!url) return -1;
+    return gallery.findIndex((g) => g.url === url);
+  };
+
+  const defaultVariant = useMemo(
+    () => variants.find((v) => v.availableForSale) ?? variants[0],
+    [variants],
+  );
+
+  const [selectedVariantId, setSelectedVariantId] = useState<string | null>(
+    defaultVariant?.id ?? null,
+  );
+  const selectedVariant =
+    variants.find((v) => v.id === selectedVariantId) ?? defaultVariant;
+
+  const [activeImage, setActiveImage] = useState(() => {
+    const i = indexForUrl(defaultVariant?.image?.url);
+    return i >= 0 ? i : 0;
+  });
+
+  const selectVariant = (variant: ShopifyVariantNode) => {
+    setSelectedVariantId(variant.id);
+    const i = indexForUrl(variant.image?.url);
+    if (i >= 0) setActiveImage(i);
+  };
+
+  /** Images belonging to a specific variant (used to highlight the gallery). */
+  const variantImageUrls = useMemo(
+    () => new Set(variants.map((v) => v.image?.url).filter(Boolean) as string[]),
+    [variants],
+  );
+
+  const hasVariantChoice = variants.length > 1;
 
   const handleBuyNow = async () => {
     if (!node) {
@@ -124,49 +179,68 @@ function ProductDetail() {
       return;
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const shopifyVariants = (node as any).variants?.edges?.map((e: any) => e.node) || [];
-    const hasMultipleVariants = shopifyVariants.length > 1;
-
-    if (hasMultipleVariants && !selectedVariantId) {
-      toast.error("Please select an option before adding to cart.");
+    const variantToUse = selectedVariant;
+    if (!variantToUse) return;
+    if (!variantToUse.availableForSale) {
+      toast.error("This option is currently sold out.");
       return;
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const variantToUse = selectedVariantId 
-      ? shopifyVariants.find((v: any) => v.id === selectedVariantId)
-      : shopifyVariants[0];
-
-    if (!variantToUse) return;
-
     try {
       await addItem({
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        product: node as any,
+        product: { node },
         variantId: variantToUse.id,
         variantTitle: variantToUse.title,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        price: variantToUse.price || (node as any).priceRange?.minVariantPrice,
+        price: variantToUse.price ?? node.priceRange?.minVariantPrice,
         quantity: product.supportsQuantity ? quantity : 1,
-        selectedOptions: variantToUse.selectedOptions || [],
+        selectedOptions: variantToUse.selectedOptions ?? [],
       });
       toast.success("Added to cart", { description: product.name });
       window.dispatchEvent(new CustomEvent("open-overlays", { detail: "cart" }));
-    } catch (e) {
+    } catch {
       toast.error("Failed to add to cart");
     }
   };
 
   const nextImage = () => {
-    setActiveImage((prev) => (prev + 1) % product.images.length);
+    setActiveImage((prev) => (prev + 1) % gallery.length);
   };
   const prevImage = () => {
-    setActiveImage((prev) => (prev - 1 + product.images.length) % product.images.length);
+    setActiveImage((prev) => (prev - 1 + gallery.length) % gallery.length);
   };
-  
-  const numericPrice = product.price ? parseInt(product.price.replace(/\D/g, ""), 10) : 0;
-  const displayPrice = numericPrice ? `₹${(numericPrice * quantity).toLocaleString("en-IN")}` : product.price;
+
+  /* ---------------- Price / availability / SKU (variant-aware) ------------ */
+
+  const currency = selectedVariant?.price.currencyCode ?? product.currencyCode ?? "INR";
+  const unitAmount = selectedVariant
+    ? parseFloat(selectedVariant.price.amount)
+    : (product.priceAmount ?? NaN);
+  const hasNumericPrice = Number.isFinite(unitAmount) && unitAmount > 0;
+  const qtyMultiplier = product.supportsQuantity ? quantity : 1;
+  const displayPrice = hasNumericPrice
+    ? formatMoney(unitAmount * qtyMultiplier, currency)
+    : product.price;
+  const compareAmount = selectedVariant?.compareAtPrice
+    ? parseFloat(selectedVariant.compareAtPrice.amount)
+    : NaN;
+  const showCompareAt = Number.isFinite(compareAmount) && compareAmount > unitAmount;
+
+  const availabilityLabel = selectedVariant
+    ? selectedVariant.availableForSale
+      ? typeof selectedVariant.quantityAvailable === "number" &&
+        selectedVariant.quantityAvailable > 0 &&
+        selectedVariant.quantityAvailable <= 5
+        ? `Only ${selectedVariant.quantityAvailable} left`
+        : "In stock"
+      : "Sold out"
+    : product.availability;
+
+  const skuLabel = selectedVariant?.sku || product.sku;
+
+  const activeMedia = gallery[activeImage] ?? gallery[0];
+
+  const related = useMemo(() => getRelatedProducts(product, 4), [product]);
+
 
 
   return (
@@ -201,26 +275,31 @@ function ProductDetail() {
             <div className="lg:sticky lg:top-[120px] self-start">
               <div className="flex flex-col lg:flex-row gap-4">
                 {/* Thumbnails */}
-                {product.images.length > 1 && (
+                {gallery.length > 1 && (
                   <div
                     role="group"
                     aria-label="Product thumbnails"
                     className="order-2 lg:order-1 flex lg:flex-col gap-3 overflow-x-auto lg:overflow-y-auto pb-2 lg:pb-0 lg:pr-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                   >
-                    {product.images.map((src, i) => (
+                    {gallery.map((media, i) => (
                       <button
-                        key={src}
+                        key={media.url}
                         type="button"
                         onClick={() => setActiveImage(i)}
-                        aria-label={`Show image ${i + 1} of ${product.images.length}`}
+                        aria-label={media.alt || `Show image ${i + 1} of ${gallery.length}`}
                         aria-current={activeImage === i}
                         className={cn(
                           "size-24 sm:size-32 shrink-0 overflow-hidden rounded-xl border bg-secondary transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground",
-                          activeImage === i ? "border-foreground ring-1 ring-foreground opacity-100" : "border-border opacity-70 hover:opacity-100",
+                          activeImage === i
+                            ? "border-foreground ring-1 ring-foreground opacity-100"
+                            : "border-border opacity-70 hover:opacity-100",
+                          variantImageUrls.has(media.url) && selectedVariant?.image?.url === media.url
+                            ? "ring-1 ring-foreground"
+                            : "",
                         )}
                       >
                         <img
-                          src={src}
+                          src={media.url}
                           alt=""
                           loading="lazy"
                           className="h-full w-full object-cover"
@@ -233,13 +312,13 @@ function ProductDetail() {
                 {/* Main Image */}
                 <div className="order-1 lg:order-2 flex-1 relative overflow-hidden rounded-2xl bg-secondary group">
                   <img
-                    src={product.images[activeImage]}
-                    alt={`${product.name} — image ${activeImage + 1}`}
+                    src={activeMedia?.url ?? product.images[0]}
+                    alt={activeMedia?.alt || `${product.name} — image ${activeImage + 1}`}
                     className="aspect-square lg:aspect-[4/3] w-full object-contain p-6 sm:p-10"
                   />
                   
                   {/* Arrows */}
-                  {product.images.length > 1 && (
+                  {gallery.length > 1 && (
                     <>
                       <button
                         onClick={prevImage}
@@ -271,23 +350,42 @@ function ProductDetail() {
                   {product.summary}
                 </p>
 
-                <p className="text-xl font-medium tabular-nums text-foreground">
-                  {product.price
-                    ? `${product.startingPrice ? "From " : ""}${displayPrice}`
-                    : "Price on enquiry"}
-                </p>
+                <div className="flex flex-wrap items-baseline gap-3">
+                  <p className="text-xl font-medium tabular-nums text-foreground">
+                    {displayPrice
+                      ? `${!selectedVariant && product.startingPrice ? "From " : ""}${displayPrice}`
+                      : "Price on enquiry"}
+                  </p>
+                  {showCompareAt ? (
+                    <p className="text-sm tabular-nums text-muted-foreground line-through">
+                      {formatMoney(compareAmount * qtyMultiplier, currency)}
+                    </p>
+                  ) : null}
+                </div>
 
                 <dl className="flex flex-wrap gap-x-6 gap-y-2 text-xs text-muted-foreground">
-                  {product.availability ? (
+                  {availabilityLabel ? (
                     <div className="flex items-center gap-1.5">
                       <dt className="font-medium text-foreground/80">Availability:</dt>
-                      <dd>{product.availability}</dd>
+                      <dd
+                        className={cn(
+                          availabilityLabel === "Sold out" ? "text-destructive" : undefined,
+                        )}
+                      >
+                        {availabilityLabel}
+                      </dd>
                     </div>
                   ) : null}
-                  {product.sku ? (
+                  {skuLabel ? (
                     <div className="flex items-center gap-1.5">
                       <dt className="font-medium text-foreground/80">Product code:</dt>
-                      <dd className="tabular-nums">{product.sku}</dd>
+                      <dd className="tabular-nums">{skuLabel}</dd>
+                    </div>
+                  ) : null}
+                  {product.vendor ? (
+                    <div className="flex items-center gap-1.5">
+                      <dt className="font-medium text-foreground/80">Brand:</dt>
+                      <dd>{product.vendor}</dd>
                     </div>
                   ) : null}
                 </dl>
@@ -329,15 +427,65 @@ function ProductDetail() {
                 </div>
               ) : null}
 
+              {hasVariantChoice ? (
+                <div className="mt-6">
+                  <p className="text-xs font-medium text-foreground/80" id="variant-label">
+                    {node?.options?.find((o) => o.name.toLowerCase() !== "title")?.name ?? "Options"}
+                    {selectedVariant ? (
+                      <span className="ml-1 text-muted-foreground">— {selectedVariant.title}</span>
+                    ) : null}
+                  </p>
+                  <div
+                    role="group"
+                    aria-labelledby="variant-label"
+                    className="mt-3 flex flex-wrap gap-3"
+                  >
+                    {variants.map((v) => {
+                      const isSelected = selectedVariant?.id === v.id;
+                      const thumb = v.image?.url;
+                      return (
+                        <button
+                          key={v.id}
+                          type="button"
+                          onClick={() => selectVariant(v)}
+                          aria-pressed={isSelected}
+                          className={cn(
+                            "flex items-center gap-2 rounded-full border py-1.5 pl-1.5 pr-3.5 text-xs transition-all outline-none focus-visible:ring-2 focus-visible:ring-foreground",
+                            thumb ? "" : "pl-3.5",
+                            isSelected
+                              ? "border-foreground bg-foreground text-background"
+                              : "border-border bg-background text-foreground hover:border-foreground",
+                            !v.availableForSale ? "opacity-50" : "",
+                          )}
+                        >
+                          {thumb ? (
+                            <img
+                              src={thumb}
+                              alt=""
+                              loading="lazy"
+                              className="size-8 shrink-0 rounded-full bg-secondary object-cover"
+                            />
+                          ) : null}
+                          <span className="whitespace-nowrap">{v.title}</span>
+                          {!v.availableForSale ? (
+                            <span className="whitespace-nowrap opacity-70">(Sold out)</span>
+                          ) : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
+
               <div className="mt-7 flex flex-col gap-3 sm:flex-row">
                 <Button 
                   size="lg" 
                   onClick={handleBuyNow}
-                  disabled={isCartLoading}
+                  disabled={isCartLoading || (!!selectedVariant && !selectedVariant.availableForSale)}
                   className="w-full sm:w-auto font-medium text-background bg-foreground hover:bg-foreground/90"
                 >
                   {isCartLoading ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
-                  Buy Now
+                  {selectedVariant && !selectedVariant.availableForSale ? "Sold out" : "Buy Now"}
                 </Button>
                 <EnquiryDialog
                   product={product}
@@ -379,9 +527,11 @@ function ProductDetail() {
               <div className="mt-8 space-y-6 border-t border-border pt-8">
                 <section>
                   <h2 className="text-sm font-semibold text-foreground">Description</h2>
-                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                    {product.description}
-                  </p>
+                  <RichText
+                    className="mt-2"
+                    html={product.descriptionHtml}
+                    text={product.description}
+                  />
                 </section>
 
                 {product.specifications?.length ? (
@@ -414,47 +564,19 @@ function ProductDetail() {
                   </section>
                 ) : null}
 
-                {product.variants?.length ? (
+                {!hasVariantChoice && product.variants?.length ? (
                   <section>
                     <h2 className="text-sm font-semibold text-foreground">Options</h2>
-                      <ul className="mt-3 flex flex-wrap gap-2">
-                        {product.variants.map((v) => {
-                          const isPurchasable = !!node;
-                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                          const shopifyVariants = (node as any)?.variants?.edges?.map((e: any) => e.node) || [];
-                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                          const matchedShopify = shopifyVariants.find((sv: any) => sv.title === v);
-                          const isSelected = selectedVariantId === matchedShopify?.id;
-
-                          if (isPurchasable && matchedShopify) {
-                            return (
-                              <li key={v}>
-                                <button
-                                  type="button"
-                                  onClick={() => setSelectedVariantId(matchedShopify.id)}
-                                  className={cn(
-                                    "rounded-full px-3 py-1.5 text-xs transition-colors border outline-none focus-visible:ring-2",
-                                    isSelected
-                                      ? "bg-foreground text-background border-foreground"
-                                      : "bg-secondary text-secondary-foreground border-transparent hover:border-border"
-                                  )}
-                                >
-                                  {v}
-                                </button>
-                              </li>
-                            );
-                          }
-
-                          return (
-                            <li
-                              key={v}
-                              className="rounded-full bg-secondary px-3 py-1.5 text-xs text-secondary-foreground"
-                            >
-                              {v}
-                            </li>
-                          );
-                        })}
-                      </ul>
+                    <ul className="mt-3 flex flex-wrap gap-2">
+                      {product.variants.map((v) => (
+                        <li
+                          key={v}
+                          className="rounded-full bg-secondary px-3 py-1.5 text-xs text-secondary-foreground"
+                        >
+                          {v}
+                        </li>
+                      ))}
+                    </ul>
                   </section>
                 ) : null}
 

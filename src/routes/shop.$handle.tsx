@@ -8,6 +8,7 @@ import { Navbar } from "@/components/officeneed/Navbar";
 import { Footer } from "@/components/officeneed/Footer";
 import { fetchProductByHandle, formatMoney } from "@/lib/shopify";
 import { useCartStore } from "@/stores/cartStore";
+import { RichText } from "@/components/officeneed/RichText";
 
 export const Route = createFileRoute("/shop/$handle")({
   component: ShopProductPage,
@@ -67,8 +68,28 @@ function ShopProductPage() {
   }
 
   const variants = product.variants.edges.map((e) => e.node);
-  const selected = variants.find((v) => v.id === variantId) ?? variants[0];
-  const images = product.images.edges.map((e) => e.node);
+  const selected =
+    variants.find((v) => v.id === variantId) ??
+    variants.find((v) => v.availableForSale) ??
+    variants[0];
+
+  // Gallery = product media + any variant-specific media, de-duplicated by URL.
+  const images = (() => {
+    const seen = new Set<string>();
+    const out: Array<{ url: string; altText: string | null }> = [];
+    const push = (img?: { url?: string | null; altText?: string | null } | null) => {
+      if (!img?.url || seen.has(img.url)) return;
+      seen.add(img.url);
+      out.push({ url: img.url, altText: img.altText ?? null });
+    };
+    push(product.featuredImage);
+    product.images.edges.forEach((e) => push(e.node));
+    variants.forEach((v) => push(v.image));
+    return out;
+  })();
+
+  // The selected variant's own media leads the gallery when it has one.
+  const heroImage = images.find((i) => i.url === selected?.image?.url) ?? images[0];
 
   const handleAdd = async () => {
     if (!selected) return;
@@ -93,17 +114,17 @@ function ShopProductPage() {
       <div className="mt-8 grid gap-10 lg:grid-cols-2">
         <div className="space-y-4">
           <div className="aspect-square overflow-hidden rounded-lg bg-secondary">
-            {images[0] ? (
+            {heroImage ? (
               <img
-                src={images[0].url}
-                alt={images[0].altText ?? product.title}
+                src={heroImage.url}
+                alt={heroImage.altText ?? product.title}
                 className="h-full w-full object-cover"
               />
             ) : null}
           </div>
           {images.length > 1 ? (
             <div className="grid grid-cols-4 gap-3">
-              {images.slice(1, 5).map((img) => (
+              {images.filter((img) => img.url !== heroImage?.url).slice(0, 4).map((img) => (
                 <div key={img.url} className="aspect-square overflow-hidden rounded-md bg-secondary">
                   <img
                     src={img.url}
@@ -124,6 +145,10 @@ function ShopProductPage() {
           <h1 className="mt-2 text-3xl font-semibold tracking-tight">{product.title}</h1>
           <p className="mt-4 text-2xl font-semibold tabular-nums">
             {selected ? formatMoney(selected.price.amount, selected.price.currencyCode) : null}
+          </p>
+          <p className="mt-2 text-xs text-muted-foreground">
+            {selected?.availableForSale ? "In stock" : "Sold out"}
+            {selected?.sku ? ` · SKU ${selected.sku}` : ""}
           </p>
 
           {variants.length > 1 ? (
@@ -164,11 +189,11 @@ function ShopProductPage() {
             )}
           </Button>
 
-          {product.description ? (
-            <p className="mt-10 whitespace-pre-line text-sm leading-relaxed text-muted-foreground">
-              {product.description}
-            </p>
-          ) : null}
+          <RichText
+            className="mt-10"
+            html={product.descriptionHtml}
+            text={product.description}
+          />
         </div>
       </div>
     </main>
