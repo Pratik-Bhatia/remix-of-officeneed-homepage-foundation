@@ -8,26 +8,40 @@ export const SHOPIFY_STORE_PERMANENT_DOMAIN = "smb1m3-0k.myshopify.com";
 export const SHOPIFY_STOREFRONT_URL = `https://${SHOPIFY_STORE_PERMANENT_DOMAIN}/api/${SHOPIFY_API_VERSION}/graphql.json`;
 export const SHOPIFY_STOREFRONT_TOKEN = "3a2ae2d30877cebfeeeb9a7c1f923587";
 
+export interface ShopifyImage {
+  id?: string | null;
+  url: string;
+  altText: string | null;
+}
+
+export interface ShopifyVariantNode {
+  id: string;
+  title: string;
+  sku?: string | null;
+  price: { amount: string; currencyCode: string };
+  compareAtPrice?: { amount: string; currencyCode: string } | null;
+  availableForSale: boolean;
+  quantityAvailable?: number | null;
+  currentlyNotInStock?: boolean | null;
+  image?: ShopifyImage | null;
+  selectedOptions: Array<{ name: string; value: string }>;
+}
+
 export interface ShopifyProductNode {
   id: string;
   title: string;
   description: string;
+  descriptionHtml?: string;
   handle: string;
   productType: string;
   vendor: string;
+  tags?: string[];
+  availableForSale?: boolean;
+  totalInventory?: number | null;
+  featuredImage?: ShopifyImage | null;
   priceRange: { minVariantPrice: { amount: string; currencyCode: string } };
-  images: { edges: Array<{ node: { url: string; altText: string | null } }> };
-  variants: {
-    edges: Array<{
-      node: {
-        id: string;
-        title: string;
-        price: { amount: string; currencyCode: string };
-        availableForSale: boolean;
-        selectedOptions: Array<{ name: string; value: string }>;
-      };
-    }>;
-  };
+  images: { edges: Array<{ node: ShopifyImage }> };
+  variants: { edges: Array<{ node: ShopifyVariantNode }> };
   options: Array<{ name: string; values: string[] }>;
 }
 
@@ -39,18 +53,26 @@ const PRODUCT_FIELDS = `
   id
   title
   description
+  descriptionHtml
   handle
   productType
   vendor
+  tags
+  availableForSale
+  featuredImage { id url altText }
   priceRange { minVariantPrice { amount currencyCode } }
-  images(first: 5) { edges { node { url altText } } }
-  variants(first: 20) {
+  images(first: 30) { edges { node { id url altText } } }
+  variants(first: 100) {
     edges {
       node {
         id
         title
+        sku
         price { amount currencyCode }
+        compareAtPrice { amount currencyCode }
         availableForSale
+        currentlyNotInStock
+        image { id url altText }
         selectedOptions { name value }
       }
     }
@@ -112,9 +134,11 @@ export async function fetchProductByHandle(handle: string): Promise<ShopifyProdu
 export function formatMoney(amount: string | number, currencyCode: string) {
   const value = typeof amount === "string" ? parseFloat(amount) : amount;
   try {
-    return new Intl.NumberFormat(undefined, {
+    const whole = Number.isInteger(value);
+    return new Intl.NumberFormat(currencyCode === "INR" ? "en-IN" : undefined, {
       style: "currency",
       currency: currencyCode,
+      minimumFractionDigits: whole ? 0 : 2,
       maximumFractionDigits: 2,
     }).format(value);
   } catch {

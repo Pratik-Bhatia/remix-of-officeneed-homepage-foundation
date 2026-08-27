@@ -66,10 +66,18 @@ export function mergeProduct(product: Product, node?: ShopifyProductNode): Produ
   const description = node.description?.trim();
   const variants = node.variants?.edges?.map((e) => e.node) ?? [];
   const available = variants.some((v) => v.availableForSale);
+  const amount = parseFloat(node.priceRange?.minVariantPrice?.amount ?? "0");
 
   return {
     ...product,
     name: node.title?.trim() || product.name,
+    ...(node.descriptionHtml ? { descriptionHtml: node.descriptionHtml } : {}),
+    ...(node.vendor ? { vendor: node.vendor } : {}),
+    ...(node.tags?.length ? { tags: node.tags } : {}),
+    ...(Number.isFinite(amount) && amount > 0
+      ? { priceAmount: amount, currencyCode: node.priceRange.minVariantPrice.currencyCode }
+      : {}),
+    ...(variants[0]?.sku ? { sku: variants[0].sku } : {}),
     ...(description
       ? {
           description,
@@ -177,6 +185,13 @@ export function shopifyNodeToProduct(node: ShopifyProductNode): Product {
   return {
     slug: node.handle,
     name: node.title,
+    ...(node.descriptionHtml ? { descriptionHtml: node.descriptionHtml } : {}),
+    ...(node.tags?.length ? { tags: node.tags } : {}),
+    ...(node.vendor ? { vendor: node.vendor } : {}),
+    ...(amount > 0
+      ? { priceAmount: amount, currencyCode: node.priceRange.minVariantPrice.currencyCode }
+      : {}),
+    ...(variants[0]?.sku ? { sku: variants[0].sku } : {}),
     category,
     subcategories: [sub],
     filterAttributes: { price: [priceBucket(amount)] },

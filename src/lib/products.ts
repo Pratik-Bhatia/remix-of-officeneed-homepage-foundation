@@ -44,6 +44,13 @@ export type Product = {
   variants?: string[];
   packaging?: string;
   customization?: string;
+  /** Rich-text (HTML) description straight from the commerce backend */
+  descriptionHtml?: string;
+  /** Numeric price of the default/selected variant, in major currency units */
+  priceAmount?: number;
+  currencyCode?: string;
+  vendor?: string;
+  tags?: string[];
 };
 
 /** Category tabs for the listing page. Mirrors the site catalogue naming. */
