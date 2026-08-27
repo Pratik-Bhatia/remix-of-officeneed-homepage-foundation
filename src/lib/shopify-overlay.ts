@@ -81,7 +81,7 @@ export function mergeProduct(product: Product, node?: ShopifyProductNode): Produ
     ...(description
       ? {
           description,
-          summary: product.summary || description.split("\n")[0]!.slice(0, 160),
+          summary: product.summary || truncateWords(description.replace(/\s+/g, " "), 160),
         }
       : {}),
     ...(price ? { price, startingPrice: variants.length > 1 } : {}),
