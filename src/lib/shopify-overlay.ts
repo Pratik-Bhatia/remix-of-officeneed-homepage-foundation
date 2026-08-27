@@ -162,6 +162,14 @@ function classify(node: ShopifyProductNode): { category: Product["category"]; su
   return { category: "Office Supplies", sub: "Office Supplies" };
 }
 
+/** Trim to a length without cutting mid-word. */
+function truncateWords(text: string, max: number): string {
+  if (text.length <= max) return text;
+  const cut = text.slice(0, max);
+  const lastSpace = cut.lastIndexOf(" ");
+  return `${(lastSpace > 40 ? cut.slice(0, lastSpace) : cut).replace(/[.,;:\-\s]+$/, "")}…`;
+}
+
 function priceBucket(amount: number): string {
   if (amount < 2000) return "under_2000";
   if (amount <= 5000) return "2000_5000";
@@ -177,7 +185,7 @@ export function shopifyNodeToProduct(node: ShopifyProductNode): Product {
   const images = nodeImages(node);
   const description = (node.description ?? "").trim();
   const summary = description
-    ? description.replace(/\s+/g, " ").slice(0, 150)
+    ? truncateWords(description.replace(/\s+/g, " "), 150)
     : `${node.title} — available through OfficeNeed.`;
   const amount = parseFloat(node.priceRange?.minVariantPrice?.amount ?? "0");
   const variants = node.variants?.edges?.map((e) => e.node) ?? [];
