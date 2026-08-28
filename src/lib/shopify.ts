@@ -4,9 +4,9 @@
 import { toast } from "sonner";
 
 export const SHOPIFY_API_VERSION = "2025-07";
-export const SHOPIFY_STORE_PERMANENT_DOMAIN = "smb1m3-0k.myshopify.com";
+export const SHOPIFY_STORE_PERMANENT_DOMAIN = "har1k4-di.myshopify.com";
 export const SHOPIFY_STOREFRONT_URL = `https://${SHOPIFY_STORE_PERMANENT_DOMAIN}/api/${SHOPIFY_API_VERSION}/graphql.json`;
-export const SHOPIFY_STOREFRONT_TOKEN = "3a2ae2d30877cebfeeeb9a7c1f923587";
+export const SHOPIFY_STOREFRONT_TOKEN = "f1e68506c43205c33a20d5d20d4916b8";
 
 export interface ShopifyImage {
   id?: string | null;
