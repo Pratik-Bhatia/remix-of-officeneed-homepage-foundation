@@ -1,9 +1,11 @@
+import { TAXONOMY, MainCategory, CollectionMapping } from './taxonomy';
+import type { ProductSort } from './products';
+
 export type NavCategory = {
   id: string;
   label: string;
   blurb: string;
   featured?: boolean;
-  /** Kept in the catalogue but hidden from the primary header navigation. */
   hiddenFromPrimaryNav?: boolean;
   items: string[];
 };
@@ -34,8 +36,6 @@ export const navCategories: NavCategory[] = [
     blurb: "Considered luxury for leadership and landmark occasions.",
     items: [
       "Perfumes",
-      "Eastern Perfumes",
-      "Western Perfumes",
       "Premium Gifts",
       "Luxury Gifting",
     ],
@@ -44,86 +44,56 @@ export const navCategories: NavCategory[] = [
     id: "office-stationery",
     label: "Office Stationery",
     blurb: "Everyday essentials, specified once and replenished on schedule.",
-    items: ["Writing Instruments", "Notebooks", "Desk Accessories", "Office Supplies"],
+    items: ["Writing Instruments", "Notebooks & Notepads", "Desk Accessories", "Other Stationery"],
   },
   {
     id: "hardware-supplies",
     label: "Hardware Supplies",
     blurb: "Workstation hardware and peripherals for growing teams.",
-    items: ["Mouse", "Keyboards", "Printers", "Computer Accessories"],
-  },
-  {
-    id: "printing-branding",
-    label: "Printing & Branding",
-    blurb: "Brand-consistent print and merchandise, produced to spec.",
-    hiddenFromPrimaryNav: true,
-    items: ["Custom Printing", "Corporate Branding", "Printed Materials", "Branded Merchandise"],
+    items: ["Computer Accessories", "Cables & Adapters", "Storage Devices", "Other Hardware"],
   },
 ];
 
-/** Categories shown in the header navigation (desktop mega menu + mobile drawer). */
 export const primaryNavCategories: NavCategory[] = navCategories.filter(
   (c) => !c.hiddenFromPrimaryNav,
 );
 
-/**
- * Destination for a header/footer navigation entry on the /products listing.
- * `category` maps to the listing's category filter, `sort` to its sort control.
- */
-export type ProductsCategoryFilter =
-  | "All Products"
-  | "Corporate Gifting"
-  | "Office Supplies"
-  | "Hardware & IT"
-  | "Printing & Branding"
-  | "Fragrance Gifting";
-
-export type ProductsSortOption =
-  | "Featured"
-  | "Newest"
-  | "Price: Low to High"
-  | "Price: High to Low"
-  | "Name: A–Z";
-
 export type ProductsLinkTarget = {
-  category?: ProductsCategoryFilter;
-  subcategory?: string;
-  sort?: ProductsSortOption;
+  collection?: string;
+  sort?: ProductSort;
+  missingMapping?: string;
 };
 
-/** Nav category id -> product listing category filter. */
-export const navCategoryToProductCategory: Record<string, ProductsCategoryFilter> = {
-  "officeneed-exclusive": "All Products",
-  "corporate-gifting": "Corporate Gifting",
-  "fragrance-luxury": "Fragrance Gifting",
-  "office-stationery": "Office Supplies",
-  "hardware-supplies": "Hardware & IT",
-  "printing-branding": "Printing & Branding",
-};
-
-/** Individual mega-menu / drawer items that need a target other than their category. */
-const navItemOverrides: Record<string, ProductsLinkTarget> = {
-  "Exclusive Products": { category: "All Products", sort: "Featured" },
-  "Featured Exclusives": { category: "All Products", sort: "Featured" },
-  "New Exclusives": { category: "All Products", sort: "Newest" },
-};
-
-/** Resolves the /products search params for a nav item inside a nav category. */
-export function navItemTarget(categoryId: string, item: string): ProductsLinkTarget {
-  const override = navItemOverrides[item];
-  if (override) return override;
-  return { 
-    category: navCategoryToProductCategory[categoryId] ?? "All Products",
-    subcategory: item 
-  };
+function getHandle(categoryLabel: string, itemLabel?: string): string | null {
+  for (const main of Object.values(TAXONOMY)) {
+    if (main.title === categoryLabel) {
+      if (!itemLabel) return main.handle;
+      const sub = main.subcategories[itemLabel];
+      if (sub) return sub.handle;
+      return null;
+    }
+  }
+  return null;
 }
 
-/** Footer "Shop" labels -> /products search params. */
+export function navItemTarget(categoryId: string, item: string): ProductsLinkTarget {
+  const category = navCategories.find(c => c.id === categoryId);
+  if (!category) return { missingMapping: item };
+
+  const handle = getHandle(category.label, item);
+  if (!handle) {
+    console.warn(`Missing Shopify collection mapping: ${category.label} -> ${item}`);
+    return { missingMapping: item };
+  }
+  
+  return { collection: handle };
+}
+
 export const footerShopTargets: Record<string, ProductsLinkTarget> = {
-  "Shop All": { category: "All Products" },
-  Bestsellers: { category: "All Products", sort: "Featured" },
-  "Corporate Gifting": { category: "Corporate Gifting" },
-  "Office Stationery": { category: "Office Supplies" },
-  "Hardware Supplies": { category: "Hardware & IT" },
-  "Fragrance Gifting": { category: "Fragrance Gifting" },
+  "Shop All": {},
+  Bestsellers: { sort: "Featured" },
+  "Corporate Gifting": { collection: TAXONOMY["Corporate Gifting"].handle! },
+  "Office Stationery": { collection: TAXONOMY["Office Stationery"].handle! },
+  "Hardware Supplies": { collection: TAXONOMY["Hardware Supplies"].handle! },
+  "Fragrance Gifting": { collection: TAXONOMY["Fragrance Gifting"].handle! },
 };

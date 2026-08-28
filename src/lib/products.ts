@@ -14,6 +14,7 @@ export type ProductCategory =
   | "Fragrance Gifting";
 
 export type Product = {
+  collectionHandles?: string[];
   /** URL slug used by /products/$slug */
   slug: string;
   name: string;
@@ -124,4 +125,5 @@ export function sortProducts(list: Product[], sort: ProductSort): Product[] {
       );
   }
 }
+
 

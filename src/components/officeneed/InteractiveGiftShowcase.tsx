@@ -1,4 +1,5 @@
 import { Link } from "@tanstack/react-router";
+import { TAXONOMY } from "@/lib/taxonomy";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import {
@@ -12,7 +13,7 @@ function SectionHeader() {
   return (
     <div className="w-full max-w-2xl text-left">
       <p className="text-eyebrow text-muted-foreground">Corporate Gifting</p>
-      <h2 className="text-section mt-3 text-balance sm:mt-4">
+      <h2 className="mt-2 text-balance font-display text-4xl font-semibold leading-[1.05] tracking-tight sm:mt-3 sm:text-5xl lg:text-[52px]">
         Designed to Gift.
         <br />
         Built to Impress.
@@ -162,7 +163,7 @@ function HamperCard({
     <article
       className={cn(
         "group relative shrink-0 snap-center transition-opacity duration-500",
-        "w-[86vw] sm:w-[70vw] lg:w-[54rem]",
+        "w-[86vw] sm:w-[70vw] lg:w-[58vw] xl:w-[54rem]",
         !active && "lg:opacity-70 lg:hover:opacity-100",
       )}
     >
@@ -174,8 +175,8 @@ function HamperCard({
           height={1200}
           loading="lazy"
           decoding="async"
-          sizes="(min-width: 1024px) 54rem, 86vw"
-          className="aspect-4/3 h-auto w-full object-cover transition-transform duration-700 ease-out"
+          sizes="(min-width: 1024px) 58vw, 86vw"
+          className="h-[60vh] sm:h-[55vh] lg:h-[48vh] w-full object-cover transition-transform duration-700 ease-out"
         />
 
         {hamper.products.map((product) => (
@@ -216,12 +217,12 @@ function HamperCard({
         )}
       </div>
 
-      <div className="mt-5 flex items-start justify-between gap-6">
+      <div className="mt-3 sm:mt-4 flex items-start justify-between gap-6">
         <div className="min-w-0">
           <h3 className="font-display text-base font-semibold tracking-tight">
             {hamper.title}
           </h3>
-          <p className="mt-1 text-xs leading-relaxed text-muted-foreground sm:text-sm">
+          <p className="mt-1.5 text-xs leading-[1.4] text-muted-foreground sm:text-sm">
             {hamper.description}
           </p>
         </div>
@@ -294,35 +295,17 @@ function HamperCarousel() {
     null;
 
   return (
-    <div ref={sectionRef}>
+    <div ref={sectionRef} className="relative">
       <div className="flex items-end justify-between gap-6">
         <div id="corporate-gifting-heading">
           <SectionHeader />
-        </div>
-        <div className="hidden shrink-0 items-center gap-3 sm:flex">
-          <button
-            type="button"
-            onClick={() => scrollBy(-1)}
-            aria-label="Previous hamper"
-            className="grid size-11 place-items-center rounded-full border border-border transition-colors duration-200 hover:bg-secondary"
-          >
-            <ChevronLeft className="size-4" aria-hidden="true" />
-          </button>
-          <button
-            type="button"
-            onClick={() => scrollBy(1)}
-            aria-label="Next hamper"
-            className="grid size-11 place-items-center rounded-full border border-border transition-colors duration-200 hover:bg-secondary"
-          >
-            <ChevronRight className="size-4" aria-hidden="true" />
-          </button>
         </div>
       </div>
 
       <div
         ref={scrollerRef}
         onScroll={onScroll}
-        className="-mx-5 mt-8 flex snap-x snap-mandatory gap-6 overflow-x-auto px-5 pb-4 sm:-mx-8 sm:mt-10 sm:gap-8 sm:px-8 lg:-mx-12 lg:px-12 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="-mx-5 mt-6 flex snap-x snap-mandatory gap-6 overflow-x-auto px-5 pb-4 sm:-mx-8 sm:mt-8 sm:gap-8 sm:px-8 lg:-mx-12 lg:px-12 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         {giftHampers.map((hamper, i) => (
           <HamperCard
@@ -339,22 +322,42 @@ function HamperCarousel() {
         ))}
       </div>
 
-      <div className="mt-6 flex items-center justify-center gap-2">
-        {giftHampers.map((h, i) => (
-          <span
-            key={h.id}
-            aria-hidden="true"
-            className={cn(
-              "h-1 rounded-full bg-foreground transition-all duration-300",
-              i === activeIndex ? "w-8 opacity-100" : "w-3 opacity-25",
-            )}
-          />
-        ))}
+      <div className="pointer-events-none absolute inset-y-0 left-0 right-0 hidden items-center justify-between px-4 lg:flex xl:px-8">
+        <button
+          type="button"
+          onClick={() => scrollBy(-1)}
+          aria-label="Previous hamper"
+          className="pointer-events-auto grid size-11 place-items-center rounded-full border border-border bg-background shadow-[0_4px_14px_-6px_rgb(0_0_0_/_0.2)] transition-colors duration-200 hover:bg-secondary"
+        >
+          <ChevronLeft className="size-5" aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          onClick={() => scrollBy(1)}
+          aria-label="Next hamper"
+          className="pointer-events-auto grid size-11 place-items-center rounded-full border border-border bg-background shadow-[0_4px_14px_-6px_rgb(0_0_0_/_0.2)] transition-colors duration-200 hover:bg-secondary"
+        >
+          <ChevronRight className="size-5" aria-hidden="true" />
+        </button>
       </div>
 
-      <p className="mt-4 text-center text-xs text-muted-foreground">
-        Hover or tap a marker to explore the products.
-      </p>
+      <div className="mt-4 flex flex-col items-center justify-center gap-2 sm:mt-5 sm:flex-row sm:gap-4">
+        <div className="flex items-center gap-1.5">
+          {giftHampers.map((h, i) => (
+            <span
+              key={h.id}
+              aria-hidden="true"
+              className={cn(
+                "h-1 rounded-full bg-foreground transition-all duration-300",
+                i === activeIndex ? "w-8 opacity-100" : "w-3 opacity-25",
+              )}
+            />
+          ))}
+        </div>
+        <p className="text-[11px] text-muted-foreground sm:text-xs">
+          Hover or tap a marker to explore the products.
+        </p>
+      </div>
 
       {/* Mobile: bottom sheet for the pinned product */}
       {pinnedProduct && (
@@ -374,18 +377,19 @@ function HamperCarousel() {
 
 function SectionCTA() {
   return (
-    <div className="mx-auto mt-12 max-w-xl border-t border-border pt-8 text-center sm:mt-14 sm:pt-10">
-      <h3 className="font-display text-lg font-semibold tracking-tight">
+    <div className="mx-auto mt-8 max-w-xl text-center sm:mt-10">
+      <div className="mx-auto mb-6 h-px w-12 bg-border sm:mb-8" />
+      <h3 className="font-display text-xl font-semibold tracking-tight sm:text-2xl">
         Explore Corporate Gifting
       </h3>
-      <p className="mt-3 text-xs leading-relaxed text-muted-foreground sm:text-sm">
+      <p className="mt-2 text-sm leading-relaxed text-muted-foreground sm:text-base">
         Discover curated gifts and custom gifting solutions for your team, clients and
         business partners.
       </p>
       <Link
         to="/products"
-        search={{ category: "Corporate Gifting" }}
-        className="mt-6 inline-flex min-h-11 items-center justify-center rounded-full border border-foreground/20 px-6 text-xs font-medium transition-colors duration-200 hover:border-foreground/40 hover:bg-secondary sm:text-sm"
+        search={{ collection: TAXONOMY["Corporate Gifting"].handle! }}
+        className="mt-5 inline-flex h-11 items-center justify-center rounded-full border border-foreground/20 bg-transparent px-6 text-sm font-medium transition-colors duration-200 hover:border-foreground/40 hover:bg-secondary sm:h-12 sm:px-8"
       >
         Explore Corporate Gifting →
       </Link>
@@ -398,7 +402,7 @@ export function InteractiveGiftShowcase() {
     <section
       id="corporate-gifting"
       aria-labelledby="corporate-gifting-heading"
-      className="w-full overflow-hidden bg-background py-14 sm:py-16 lg:py-20"
+      className="w-full overflow-hidden bg-background py-8 sm:py-10 lg:py-12"
     >
       <div className="mx-auto w-full max-w-[1600px] px-5 sm:px-8 lg:px-12">
         <HamperCarousel />
@@ -407,3 +411,5 @@ export function InteractiveGiftShowcase() {
     </section>
   );
 }
+
+

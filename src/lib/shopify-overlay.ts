@@ -159,7 +159,8 @@ function classify(node: ShopifyProductNode): { category: Product["category"]; su
   for (const rule of RULES) {
     if (rule.match.test(haystack)) return { category: rule.category, sub: rule.sub };
   }
-  return { category: "Office Supplies", sub: "Office Supplies" };
+  return {
+    category: "Office Supplies", sub: "Office Supplies" };
 }
 
 /** Trim to a length without cutting mid-word. */
@@ -186,11 +187,12 @@ export function shopifyNodeToProduct(node: ShopifyProductNode): Product {
   const description = (node.description ?? "").trim();
   const summary = description
     ? truncateWords(description.replace(/\s+/g, " "), 150)
-    : `${node.title} — available through OfficeNeed.`;
+    : `${node.title} � available through OfficeNeed.`;
   const amount = parseFloat(node.priceRange?.minVariantPrice?.amount ?? "0");
   const variants = node.variants?.edges?.map((e) => e.node) ?? [];
 
   return {
+    collectionHandles: node.collections?.edges.map(e => e.node.handle) ?? [],
     slug: node.handle,
     name: node.title,
     ...(node.descriptionHtml ? { descriptionHtml: node.descriptionHtml } : {}),
@@ -271,7 +273,7 @@ export function useShopifyBestsellers(staticItems: BestsellerProduct[]) {
             ? "Corporate Gifting"
             : p.category;
     return {
-      id: node.id,
+    id: node.id,
       name: p.name,
       category,
       collection: node.vendor || p.subcategories[0] || category,
@@ -294,3 +296,4 @@ export function useShopifyBestsellers(staticItems: BestsellerProduct[]) {
 
   return [...live, ...fallback];
 }
+

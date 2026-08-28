@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useRef, useEffect } from "react";
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
-import { Minus, Plus, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import { Minus, Plus, ChevronLeft, ChevronRight, Loader2, ZoomIn, X } from "lucide-react";
 import { Navbar } from "@/components/officeneed/Navbar";
 import { Footer } from "@/components/officeneed/Footer";
 import { ProductCard } from "@/components/officeneed/ProductCard";
@@ -105,6 +105,29 @@ function ProductDetail() {
   const { product, node } = Route.useLoaderData();
   const [quantity, setQuantity] = useState<number>(product.minimumOrderQuantity || 1);
   const [customizerOpen, setCustomizerOpen] = useState(false);
+  const [zoomOpen, setZoomOpen] = useState(false);
+  const purchaseSectionRef = useRef<HTMLDivElement>(null);
+  const [showStickyBar, setShowStickyBar] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      if (!purchaseSectionRef.current) return;
+      // When the bottom of the purchase section scrolls above the viewport, show the sticky bar.
+      const rect = purchaseSectionRef.current.getBoundingClientRect();
+      if (rect.bottom < 0) {
+        setShowStickyBar(true);
+      } else {
+        setShowStickyBar(false);
+      }
+    };
+    
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    // Trigger once on mount in case the user loads the page already scrolled down
+    handleScroll();
+    
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
 
   const addItem = useCartStore((s) => s.addItem);
   const isCartLoading = useCartStore((s) => s.isLoading);
@@ -248,38 +271,18 @@ function ProductDetail() {
       <Navbar />
       <main className="w-full overflow-clip">
         <div className="mx-auto w-full max-w-[1600px] px-5 py-8 sm:px-8 sm:py-10 lg:px-12 lg:py-14">
-          <nav aria-label="Breadcrumb" className="mb-6">
-            <ol className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
-              <li>
-                <Link to="/" className="transition-colors hover:text-foreground">
-                  Home
-                </Link>
-              </li>
-              <li aria-hidden>/</li>
-              <li>
-                <Link to="/products" className="transition-colors hover:text-foreground">
-                  Products
-                </Link>
-              </li>
-              <li aria-hidden>/</li>
-              <li className="max-w-full truncate">{product.category}</li>
-              <li aria-hidden>/</li>
-              <li aria-current="page" className="max-w-full truncate text-foreground">
-                {product.name}
-              </li>
-            </ol>
-          </nav>
 
-          <div className="grid gap-10 lg:grid-cols-2 lg:gap-16">
+          <div className="product-detail flex flex-col lg:grid lg:grid-cols-[minmax(0,1.15fr)_minmax(min(420px,100%),0.85fr)] gap-8 lg:gap-12 items-start w-full">
             {/* Gallery Wrapper (Sticky on desktop) */}
-            <div className="lg:sticky lg:top-[120px] self-start">
-              <div className="flex flex-col lg:flex-row gap-4">
+            <div className="w-full min-w-0 max-w-full lg:sticky lg:top-[120px]">
+              <div className="product-gallery grid grid-cols-1 lg:grid-cols-[80px_minmax(0,1fr)] gap-4 lg:gap-5 w-full items-start">
+                
                 {/* Thumbnails */}
-                {gallery.length > 1 && (
+                
                   <div
                     role="group"
                     aria-label="Product thumbnails"
-                    className="order-2 lg:order-1 flex lg:flex-col gap-3 overflow-x-auto lg:overflow-y-auto pb-2 lg:pb-0 lg:pr-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                    className="product-thumbnails order-2 lg:order-1 flex lg:flex-col gap-3 w-full lg:w-[80px] overflow-x-auto lg:overflow-y-auto pb-2 lg:pb-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                   >
                     {gallery.map((media, i) => (
                       <button
@@ -289,10 +292,10 @@ function ProductDetail() {
                         aria-label={media.alt || `Show image ${i + 1} of ${gallery.length}`}
                         aria-current={activeImage === i}
                         className={cn(
-                          "size-24 sm:size-32 shrink-0 overflow-hidden rounded-xl border bg-secondary transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground",
+                          "product-thumbnail w-20 h-20 sm:w-24 sm:h-24 lg:w-[80px] lg:h-[80px] shrink-0 overflow-hidden rounded-xl border bg-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground",
                           activeImage === i
                             ? "border-foreground ring-1 ring-foreground opacity-100"
-                            : "border-border opacity-70 hover:opacity-100",
+                            : "border-border opacity-60 hover:opacity-100",
                           variantImageUrls.has(media.url) && selectedVariant?.image?.url === media.url
                             ? "ring-1 ring-foreground"
                             : "",
@@ -302,19 +305,19 @@ function ProductDetail() {
                           src={media.url}
                           alt=""
                           loading="lazy"
-                          className="h-full w-full object-cover"
+                          className="h-full w-full object-contain p-1"
                         />
                       </button>
                     ))}
                   </div>
-                )}
+                
                 
                 {/* Main Image */}
-                <div className="order-1 lg:order-2 flex-1 relative overflow-hidden rounded-2xl bg-secondary group aspect-square flex items-center justify-center p-4 sm:p-8">
+                <div className="product-main-image order-1 lg:order-2 w-full max-w-[1080px] aspect-square lg:aspect-auto lg:h-[calc(100vh-200px)] lg:max-h-[1080px] relative overflow-hidden rounded-2xl bg-secondary/30 border border-border/50 group flex items-center justify-center p-4 sm:p-8">
                   <img
                     src={activeMedia?.url ?? product.images[0]}
-                    alt={activeMedia?.alt || `${product.name} — image ${activeImage + 1}`}
-                    className="w-full h-full object-contain"
+                    alt={activeMedia?.alt || `${product.name} - image ${activeImage + 1}`}
+                    className="w-full h-full object-contain mix-blend-multiply block" style={{ maxHeight: "1080px" }}
                   />
                   
                   {/* Arrows */}
@@ -323,27 +326,35 @@ function ProductDetail() {
                       <button
                         onClick={prevImage}
                         aria-label="Previous product image"
-                        className="absolute left-3 lg:left-4 top-1/2 -translate-y-1/2 flex items-center justify-center size-9 lg:size-10 rounded-full bg-background/80 backdrop-blur border border-border text-foreground opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity hover:bg-background focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground shadow-sm"
+                        className="absolute left-3 lg:left-4 top-1/2 -translate-y-1/2 flex items-center justify-center size-10 lg:size-11 rounded-full bg-background/90 backdrop-blur border border-border text-foreground opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity hover:bg-background focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground shadow-sm"
                       >
-                        <ChevronLeft className="size-4 lg:size-5" />
+                        <ChevronLeft className="size-5 lg:size-6" />
                       </button>
                       <button
                         onClick={nextImage}
                         aria-label="Next product image"
-                        className="absolute right-3 lg:right-4 top-1/2 -translate-y-1/2 flex items-center justify-center size-9 lg:size-10 rounded-full bg-background/80 backdrop-blur border border-border text-foreground opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity hover:bg-background focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground shadow-sm"
+                        className="absolute right-3 lg:right-4 top-1/2 -translate-y-1/2 flex items-center justify-center size-10 lg:size-11 rounded-full bg-background/90 backdrop-blur border border-border text-foreground opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity hover:bg-background focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground shadow-sm"
                       >
-                        <ChevronRight className="size-4 lg:size-5" />
+                        <ChevronRight className="size-5 lg:size-6" />
                       </button>
                     </>
                   )}
+                  {/* Zoom Button */}
+                  <button
+                    onClick={() => setZoomOpen(true)}
+                    aria-label="Zoom image"
+                    className="absolute bottom-4 right-4 lg:bottom-6 lg:right-6 flex items-center justify-center size-10 lg:size-11 rounded-full bg-background/90 backdrop-blur border border-border text-foreground opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity hover:bg-background focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground shadow-sm"
+                  >
+                    <ZoomIn className="size-5" />
+                  </button>
                 </div>
               </div>
             </div>
 
             {/* Information */}
-            <div>
+            <div className="w-full min-w-0 max-w-full overflow-wrap-break-word">
               <p className="text-eyebrow text-muted-foreground">{product.category}</p>
-              <h1 className="mt-2 text-2xl md:text-3xl font-light tracking-tight text-foreground leading-tight">{product.name}</h1>
+              <h1 className="mt-2 text-3xl md:text-4xl lg:text-[40px] font-semibold tracking-tight text-foreground leading-[1.1] text-balance">{product.name}</h1>
               
               <div className="mt-4 space-y-3">
                 <p className="text-sm leading-relaxed text-muted-foreground sm:text-base">
@@ -463,7 +474,7 @@ function ProductDetail() {
                               src={thumb}
                               alt=""
                               loading="lazy"
-                              className="size-8 shrink-0 rounded-full bg-secondary object-cover"
+                              className="size-8 shrink-0 rounded-full bg-transparent object-cover"
                             />
                           ) : null}
                           <span className="whitespace-nowrap">{v.title}</span>
@@ -477,7 +488,7 @@ function ProductDetail() {
                 </div>
               ) : null}
 
-              <div className="mt-7 flex flex-col gap-3 sm:flex-row">
+              <div ref={purchaseSectionRef} className="mt-7 flex flex-col gap-3 sm:flex-row">
                 <Button 
                   size="lg" 
                   onClick={handleBuyNow}
@@ -522,6 +533,72 @@ function ProductDetail() {
                 open={customizerOpen} 
                 onOpenChange={setCustomizerOpen} 
               />
+
+              
+              {/* Zoom Lightbox */}
+              {zoomOpen && (
+                <div 
+                  className="fixed inset-0 z-50 flex items-center justify-center bg-background/95 backdrop-blur-sm"
+                  role="dialog"
+                  aria-modal="true"
+                >
+                  <button
+                    onClick={() => setZoomOpen(false)}
+                    className="absolute top-4 right-4 lg:top-8 lg:right-8 z-50 flex items-center justify-center size-12 rounded-full bg-secondary text-foreground hover:bg-secondary/80 transition-colors"
+                    aria-label="Close zoom"
+                  >
+                    <X className="size-6" />
+                  </button>
+                  
+                  <div className="relative w-full h-full max-w-[90vw] max-h-[90vh] flex items-center justify-center">
+                    <img
+                      src={activeMedia?.url ?? product.images[0]}
+                      alt={activeMedia?.alt || `${product.name} - zoomed`}
+                      className="w-full h-full object-contain"
+                    />
+
+                    {gallery.length > 1 && (
+                      <>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); prevImage(); }}
+                          aria-label="Previous product image"
+                          className="absolute left-0 lg:left-8 top-1/2 -translate-y-1/2 flex items-center justify-center size-12 lg:size-14 rounded-full bg-background border border-border text-foreground hover:bg-secondary transition-colors shadow-lg"
+                        >
+                          <ChevronLeft className="size-6 lg:size-8" />
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); nextImage(); }}
+                          aria-label="Next product image"
+                          className="absolute right-0 lg:right-8 top-1/2 -translate-y-1/2 flex items-center justify-center size-12 lg:size-14 rounded-full bg-background border border-border text-foreground hover:bg-secondary transition-colors shadow-lg"
+                        >
+                          <ChevronRight className="size-6 lg:size-8" />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                  
+                  {/* Lightbox Thumbnails (Desktop only) */}
+                  {gallery.length > 1 && (
+                    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 hidden lg:flex gap-3 px-4 py-3 rounded-2xl bg-background border border-border shadow-xl">
+                      {gallery.map((media, i) => (
+                        <button
+                          key={media.url + "-zoom"}
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setActiveImage(i); }}
+                          className={cn(
+                            "size-16 shrink-0 overflow-hidden rounded-lg border transition-all",
+                            activeImage === i
+                              ? "border-foreground ring-1 ring-foreground opacity-100"
+                              : "border-border opacity-50 hover:opacity-100",
+                          )}
+                        >
+                          <img src={media.url} alt="" className="h-full w-full object-contain p-1" />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Details */}
               <div className="mt-8 space-y-6 border-t border-border pt-8">
@@ -635,9 +712,97 @@ function ProductDetail() {
               </div>
             </section>
           ) : null}
-        </div>
+              </div>
       </main>
       <Footer />
+
+      {/* Sticky Purchase Bar */}
+      <div 
+        className={cn(
+          "fixed bottom-0 left-0 right-0 z-50 bg-background border-t border-border shadow-[0_-8px_30px_rgba(0,0,0,0.12)] transition-transform duration-300 ease-in-out",
+          showStickyBar ? "translate-y-0" : "translate-y-full"
+        )}
+      >
+        <div className="mx-auto w-full max-w-[1600px] px-5 sm:px-8 lg:px-12 py-3 lg:py-4">
+          
+          {/* Desktop layout */}
+          <div className="hidden lg:flex w-full items-center justify-between gap-6">
+            <div className="flex items-center gap-4 flex-1 min-w-0">
+              <img src={activeMedia?.url ?? product.images[0]} className="size-12 shrink-0 rounded-md object-contain bg-secondary/30 border border-border p-0.5" alt="" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate text-foreground">{product.name}</p>
+                <p className="text-sm font-medium text-muted-foreground">{displayPrice}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 shrink-0">
+              {hasVariantChoice && (
+                <div className="relative">
+                  <select 
+                    className="h-11 pl-3 pr-8 rounded-md border border-border bg-background text-sm appearance-none outline-none focus-visible:ring-1 focus-visible:ring-foreground w-[180px] xl:w-[220px]"
+                    value={selectedVariantId ?? ""}
+                    onChange={(e) => {
+                      const v = variants.find(x => x.id === e.target.value);
+                      if (v) selectVariant(v);
+                    }}
+                  >
+                    {variants.map(v => (
+                      <option key={v.id} value={v.id}>{v.title}</option>
+                    ))}
+                  </select>
+                  <ChevronRight className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none rotate-90" />
+                </div>
+              )}
+              <Button 
+                onClick={handleBuyNow}
+                disabled={isCartLoading || (!!selectedVariant && !selectedVariant.availableForSale)}
+                className="h-11 w-[220px] xl:w-[280px] font-medium"
+              >
+                {isCartLoading ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+                {selectedVariant && !selectedVariant.availableForSale ? "Sold out" : "Add to Cart"}
+              </Button>
+            </div>
+          </div>
+
+          {/* Mobile layout */}
+          <div className="flex flex-col lg:hidden w-full gap-2.5 py-0.5">
+            <div className="flex items-center gap-3">
+              <img src={activeMedia?.url ?? product.images[0]} className="size-10 shrink-0 rounded-md object-contain bg-secondary/30 border border-border p-0.5" alt="" />
+              <div className="flex-1 min-w-0 flex items-center justify-between gap-3">
+                <p className="text-sm font-medium truncate text-foreground">{product.name}</p>
+                <p className="text-sm font-medium text-foreground shrink-0">{displayPrice}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 pl-[52px]">
+              {hasVariantChoice && (
+                <div className="relative flex-1">
+                  <select 
+                    className="h-10 w-full pl-3 pr-8 rounded-md border border-border bg-background text-sm appearance-none outline-none focus-visible:ring-1 focus-visible:ring-foreground"
+                    value={selectedVariantId ?? ""}
+                    onChange={(e) => {
+                      const v = variants.find(x => x.id === e.target.value);
+                      if (v) selectVariant(v);
+                    }}
+                  >
+                    {variants.map(v => (
+                      <option key={v.id} value={v.id}>{v.title}</option>
+                    ))}
+                  </select>
+                  <ChevronRight className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none rotate-90" />
+                </div>
+              )}
+              <Button 
+                onClick={handleBuyNow}
+                disabled={isCartLoading || (!!selectedVariant && !selectedVariant.availableForSale)}
+                className="h-10 flex-[1.5] font-medium"
+              >
+                {isCartLoading ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+                {selectedVariant && !selectedVariant.availableForSale ? "Sold out" : "Add"}
+              </Button>
+            </div>
+          </div>
+
+        </div>
+      </div>
     </div>
   );
 }

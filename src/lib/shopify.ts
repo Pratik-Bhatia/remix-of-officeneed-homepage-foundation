@@ -43,6 +43,7 @@ export interface ShopifyProductNode {
   images: { edges: Array<{ node: ShopifyImage }> };
   variants: { edges: Array<{ node: ShopifyVariantNode }> };
   options: Array<{ name: string; values: string[] }>;
+  collections?: { edges: Array<{ node: { handle: string } }> };
 }
 
 export interface ShopifyProduct {
@@ -78,6 +79,7 @@ const PRODUCT_FIELDS = `
     }
   }
   options { name values }
+  collections(first: 50) { edges { node { handle } } }
 `;
 
 export const STOREFRONT_QUERY = `
@@ -145,3 +147,5 @@ export function formatMoney(amount: string | number, currencyCode: string) {
     return `${currencyCode} ${value.toFixed(2)}`;
   }
 }
+
+

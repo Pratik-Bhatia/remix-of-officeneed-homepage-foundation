@@ -247,7 +247,7 @@ export function Footer() {
                   <li key={label}>
                     <Link
                       to="/products"
-                      search={footerShopTargets[label] ?? { category: "All Products" }}
+                      search={footerShopTargets[label] ?? {}}
                       className="text-xs text-background/80 transition-colors hover:text-background sm:text-sm"
                     >
                       {label}
@@ -409,3 +409,4 @@ export function Footer() {
     </footer>
   );
 }
+

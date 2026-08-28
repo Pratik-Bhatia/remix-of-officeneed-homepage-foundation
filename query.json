@@ -1,0 +1,1 @@
+{"query": "query { c1: collection(handle: \"exclusive-products\") { title products(first: 5) { edges { node { title } } } } c2: collection(handle: \"office-stationary\") { title products(first: 5) { edges { node { title } } } } }"}
