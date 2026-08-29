@@ -21,7 +21,7 @@ export const TAXONOMY: Record<MainCategory, CategoryNode> = {
     id: "gid://shopify/Collection/498084970724",
     handle: "exclusive-products",
     subcategories: {
-      "Exclusive Products": { title: "Exclusive Products", id: null, handle: null },
+      "Exclusive Products": { title: "Exclusive Products", id: "gid://shopify/Collection/498084970724", handle: "exclusive-products" },
       "Featured Exclusives": { title: "Featured Exclusives", id: null, handle: null },
       "New Exclusives": { title: "New Exclusives", id: null, handle: null },
       "Notebooks & Notepads": { title: "Notebooks & Notepads", id: "gid://shopify/Collection/498206998756", handle: "notebooks-notepads" },
