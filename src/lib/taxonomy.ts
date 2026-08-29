@@ -19,7 +19,7 @@ export const TAXONOMY: Record<MainCategory, CategoryNode> = {
   "Officeneed Exclusive": {
     title: "Officeneed Exclusive",
     id: "gid://shopify/Collection/498084970724",
-    handle: "office-stationary",
+    handle: "exclusive-products",
     subcategories: {
       "Exclusive Products": { title: "Exclusive Products", id: null, handle: null },
       "Featured Exclusives": { title: "Featured Exclusives", id: null, handle: null },
@@ -59,7 +59,7 @@ export const TAXONOMY: Record<MainCategory, CategoryNode> = {
   "Office Stationery": {
     title: "Office Stationery",
     id: "gid://shopify/Collection/498084806884",
-    handle: "exclusive-products",
+    handle: null,
     subcategories: {
       "Notebooks & Notepads": { title: "Notebooks & Notepads", id: "gid://shopify/Collection/498206998756", handle: "notebooks-notepads" },
       "Pens & Writing Instruments": { title: "Pens & Writing Instruments", id: null, handle: null },
