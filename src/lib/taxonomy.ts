@@ -37,7 +37,7 @@ export const TAXONOMY: Record<MainCategory, CategoryNode> = {
     id: "gid://shopify/Collection/497947345124",
     handle: "frontpage",
     subcategories: {
-      "Gift Sets": { title: "Gift Sets", id: null, handle: null },
+      "Gift Sets": { title: "Gift Sets", id: null, handle: "gift-sets" },
       "Premium Gifts": { title: "Premium Gifts", id: null, handle: null },
       "Corporate Gifts": { title: "Corporate Gifts", id: null, handle: null },
       "Drinkware & Utensils": { title: "Drinkware & Utensils", id: null, handle: null },
