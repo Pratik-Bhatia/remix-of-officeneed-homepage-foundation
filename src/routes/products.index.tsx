@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { Search, SlidersHorizontal } from "lucide-react";
+import { Search, SlidersHorizontal, PackageSearch } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { categoryFilters } from "@/lib/filters";
@@ -8,6 +8,7 @@ import { Navbar } from "@/components/officeneed/Navbar";
 import { Footer } from "@/components/officeneed/Footer";
 import { ProductCard } from "@/components/officeneed/ProductCard";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -316,11 +317,22 @@ function ProductsPage() {
             
             <div className="flex-1">
               {missingMapping ? (
-                <div className="py-12 text-center border rounded-lg bg-secondary/20">
-                  <h3 className="text-lg font-medium text-foreground mb-2">Configuration Missing</h3>
-                  <p className="text-sm text-muted-foreground max-w-md mx-auto">
-                    The Shopify collection mapping for <strong>"{missingMapping}"</strong> is not yet configured. Please create a collection in Shopify and map its handle in the taxonomy.
+                <div className="py-16 sm:py-20 text-center border rounded-2xl bg-secondary/20">
+                  <div className="mx-auto mb-5 flex size-14 items-center justify-center rounded-full bg-secondary text-muted-foreground">
+                    <PackageSearch className="size-6" aria-hidden />
+                  </div>
+                  <h3 className="text-xl sm:text-2xl font-display font-medium text-foreground mb-2">This collection is coming soon</h3>
+                  <p className="text-sm sm:text-base text-muted-foreground max-w-md mx-auto leading-relaxed">
+                    We're curating something special for this category. In the meantime, explore our other collections or get in touch and we'll help you find what you need.
                   </p>
+                  <div className="mt-7 flex flex-col sm:flex-row items-center justify-center gap-3">
+                    <Button asChild>
+                      <Link to="/products">Browse all products</Link>
+                    </Button>
+                    <Button asChild variant="outline">
+                      <Link to="/contact-us">Talk to us</Link>
+                    </Button>
+                  </div>
                 </div>
               ) : catalogue.length === 0 ? (
                 <div className="grid grid-cols-2 gap-x-5 gap-y-10 sm:gap-x-6 md:grid-cols-3 xl:grid-cols-3">

@@ -24,6 +24,7 @@ export type ChatStep = {
   inputType?: "text" | "email" | "tel" | "file";
   placeholder?: string;
   optional?: boolean;
+  disclaimer?: string;
 };
 
 export const chatSteps: ChatStep[] = [
@@ -188,7 +189,10 @@ export function recommendProducts(catalogue: Product[], answers: ChatAnswers, re
   // Shuffle array to ensure ties (or premium rerolls) display varying options
   for (let i = scored.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
-    [scored[i], scored[j]] = [scored[j], scored[i]];
+    const a = scored[i]!;
+    const b = scored[j]!;
+    scored[i] = b;
+    scored[j] = a;
   }
 
   scored.sort((a, b) => b.score - a.score || (a.product.featuredRank ?? 99) - (b.product.featuredRank ?? 99));

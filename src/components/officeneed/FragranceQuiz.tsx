@@ -138,13 +138,7 @@ export function FragranceQuiz({ products, onClose, onReset }: { products: Produc
                       selected ? "is-selected" : "border-border hover:border-primary/30 hover:bg-secondary"
                     )}
                   >
-                    {note.image ? (
-                        <img src={note.image} alt={note.id} className="w-8 h-8 object-contain opacity-80" />
-                      ) : note.LucideIcon ? (
-                        <note.LucideIcon className="w-8 h-8 opacity-80" strokeWidth={1.5} />
-                      ) : (
-                        <span className="text-2xl">{note.icon}</span>
-                      )}
+                    <img src={note.image} alt={note.id} className="w-8 h-8 object-contain opacity-80" />
                     <span className="font-medium text-sm">{note.id}</span>
                   </button>
                 );
@@ -256,6 +250,8 @@ export function FragranceQuiz({ products, onClose, onReset }: { products: Produc
             </button>
           </div>
         );
+      default:
+        return null;
     }
   };
 
@@ -278,7 +274,7 @@ export function FragranceQuiz({ products, onClose, onReset }: { products: Produc
   );
 }
 
-function SingleChoice({ title, options, onSelect, value }: { title: string, options: string[], onSelect: (v: string) => void, value?: string }) {
+function SingleChoice({ title, options, onSelect, value }: { title: string, options: string[], onSelect: (v: string) => void, value: string | undefined }) {
   return (
     <div className="flex flex-col h-full animate-in slide-in-from-right-4 duration-300">
       <h3 className="text-2xl font-bold mb-6 leading-tight">{title}</h3>
