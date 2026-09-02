@@ -8,8 +8,8 @@
 
 export type ProductCategory =
   | "Corporate Gifting"
-  | "Office Supplies"
-  | "Hardware & IT"
+  | "Office Stationery"
+  | "Computer Peripherals"
   | "Printing & Branding"
   | "Fragrance Gifting";
 
@@ -28,6 +28,19 @@ export type Product = {
   /** Display price string, e.g. "₹1,299" — omitted when quote-only */
   price?: string;
   /** True when `price` is a starting/from price */
+  fragranceProfile?: {
+    notes?: string[];
+    occasion?: string[];
+    personality?: string[];
+    mood?: string[];
+    intensity?: string;
+    weather?: string[];
+    time_of_day?: string[];
+    recipient?: string[];
+    age_group?: string[];
+    corporate?: boolean;
+    gift_suitable?: boolean;
+  };
   startingPrice?: boolean;
   sku?: string;
   availability?: string;
@@ -42,6 +55,14 @@ export type Product = {
   minimumOrderQuantity?: number;
   specifications?: Array<{ label: string; value: string }>;
   features?: string[];
+  materials?: string[];
+  dimensions?: string;
+  careInstructions?: string;
+  fragranceNotes?: { top?: string; heart?: string; base?: string };
+  ingredients?: string;
+  compatibility?: string;
+  whatsIncluded?: string[];
+  customSections?: Array<{ title: string; contentHtml: string }>;
   variants?: string[];
   packaging?: string;
   customization?: string;
@@ -58,8 +79,8 @@ export type Product = {
 export const productCategories: Array<"All Products" | ProductCategory> = [
   "All Products",
   "Corporate Gifting",
-  "Office Supplies",
-  "Hardware & IT",
+  "Office Stationery",
+  "Computer Peripherals",
   "Printing & Branding",
   "Fragrance Gifting",
 ];

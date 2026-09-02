@@ -157,7 +157,7 @@ export const submitEnquiry = createServerFn({ method: "POST" })
       .map((a) => ({ label: a.fileName, url: a.signedUrl! }));
 
     // 2. Generate PDF
-    if (data.selectedProducts && data.selectedProducts.length > 0) {
+    if (true) {
       try {
         const today = new Date().toLocaleDateString("en-IN", {
           day: "2-digit", month: "long", year: "numeric"
@@ -212,7 +212,7 @@ export const submitEnquiry = createServerFn({ method: "POST" })
         pdfBuffer,
       });
 
-      const subtotal = data.selectedProducts!.reduce((acc, p) => acc + (p.priceNum * p.quantity), 0);
+      const subtotal = (data.selectedProducts || []).reduce((acc, p) => acc + (p.priceNum * p.quantity), 0);
       
       internalEmailSent = await sendInternalNotificationEmail({
         enquiryId: fullEnquiryId,

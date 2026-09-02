@@ -92,7 +92,7 @@ export function CartDrawer({ triggerClassName }: { triggerClassName?: string }) 
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        aria-label={`Cart, ${totalItems} item${totalItems === 1 ? "" : "s"}`}
+        aria-label="Open shopping bag"
         className={cn(
           "relative inline-flex shrink-0 items-center justify-center rounded-full text-foreground transition-colors duration-200 hover:text-primary",
           triggerClassName,
@@ -128,7 +128,7 @@ export function CartDrawer({ triggerClassName }: { triggerClassName?: string }) 
                 <button 
                   onClick={() => setIsOpen(false)}
                   className="rounded-full p-2 -mr-2 text-muted-foreground/70 hover:bg-muted hover:text-foreground transition-colors"
-                  aria-label="Close bag"
+                  aria-label="Close shopping bag"
                 >
                   <X className="size-5" strokeWidth={1.5} />
                 </button>
@@ -220,7 +220,7 @@ export function CartDrawer({ triggerClassName }: { triggerClassName?: string }) 
                                 </button>
                               </div>
                               <button
-                                aria-label={`Remove ${item.product.node.title}`}
+                                aria-label="Remove item from bag"
                                 onClick={() => removeItem(item.variantId)}
                                 className="text-[11px] md:text-xs font-medium text-muted-foreground hover:text-destructive transition-colors"
                               >
@@ -228,10 +228,15 @@ export function CartDrawer({ triggerClassName }: { triggerClassName?: string }) 
                               </button>
                             </div>
                           </div>
-                          <div className="flex shrink-0 items-start justify-end pt-1">
+                          <div className="flex shrink-0 items-start justify-end pt-1 flex-col items-end gap-0.5">
                             <p className="text-[14px] md:text-[15px] font-medium tabular-nums text-foreground">
-                              {formatMoney(item.price.amount, item.price.currencyCode)}
+                              {formatMoney(parseFloat(item.price.amount) * item.quantity, item.price.currencyCode)}
                             </p>
+                            {item.quantity > 1 && (
+                              <p className="text-[11px] text-muted-foreground tabular-nums">
+                                {formatMoney(item.price.amount, item.price.currencyCode)} each
+                              </p>
+                            )}
                           </div>
                         </div>
                       );

@@ -71,7 +71,7 @@ export function mergeProduct(product: Product, node?: ShopifyProductNode): Produ
   return {
     ...product,
     name: node.title?.trim() || product.name,
-    ...(node.descriptionHtml ? { descriptionHtml: node.descriptionHtml } : {}),
+    ...node.descriptionHtml ? { descriptionHtml: node.descriptionHtml } : {},
     ...(node.vendor ? { vendor: node.vendor } : {}),
     ...(node.tags?.length ? { tags: node.tags } : {}),
     ...(Number.isFinite(amount) && amount > 0
@@ -137,33 +137,118 @@ export function useShopifyIndex() {
 type Rule = { category: Product["category"]; sub: string; match: RegExp };
 
 const RULES: Rule[] = [
-  { category: "Fragrance Gifting", sub: "Perfumes", match: /perfum|fragranc|attar|oud|eau de|deodor|cologne/ },
-  { category: "Hardware & IT", sub: "Mouse", match: /\bmouse\b/ },
-  { category: "Hardware & IT", sub: "Keyboards", match: /keyboard/ },
-  { category: "Hardware & IT", sub: "Printers", match: /printer|toner|cartridge/ },
-  { category: "Hardware & IT", sub: "Computer Accessories", match: /bluetooth|speaker|headphone|earph|headset|usb|pen ?drive|flash drive|hdd|ssd|hard disk|sd card|jbl|cable|charger|adapter|dock|webcam|monitor|router|laptop|power bank/ },
+  { category: "Officeneed Exclusive", sub: "Featured Exclusives", match: /featured exclusive/ },
+  { category: "Officeneed Exclusive", sub: "New Exclusives", match: /new exclusive/ },
+  { category: "Corporate Gifting", sub: "Premium Gifts", match: /premium gift/ },
+  { category: "Corporate Gifting", sub: "Customized Gifts", match: /customized gift|custom gift/ },
+  { category: "Fragrance Gifting", sub: "Perfume Gift Sets", match: /perfume gift set|fragrance gift set|perfume set/ },
+  { category: "Fragrance Gifting", sub: "Middle Eastern Perfume", match: /attar|oud|arab|middle east/ },
+  { category: "Fragrance Gifting", sub: "European Perfume", match: /perfum|fragranc|eau de|deodor|cologne/ },
+  { category: "Computer Peripherals", sub: "Computer Accessories", match: /mouse|keyboard|printer|toner|cartridge|bluetooth|speaker|headphone|earph|headset|jbl|webcam|monitor|laptop|dock/ },
+  { category: "Computer Peripherals", sub: "Cables & Adapters", match: /cable|charger|adapter|usb|power bank/ },
+  { category: "Computer Peripherals", sub: "Storage Devices", match: /pen ?drive|flash drive|hdd|ssd|hard disk|sd card/ },
+  { category: "Computer Peripherals", sub: "Other Hardware", match: /router/ },
   { category: "Printing & Branding", sub: "Custom Printing", match: /printing|branding|banner|business card|visiting card|letterhead|brochure/ },
+  { category: "Office Stationery", sub: "Files and Folders", match: /sheet protector/ },
   { category: "Corporate Gifting", sub: "Corporate Gifts", match: /corporate gift|gift set|hamper|gifting/ },
   { category: "Corporate Gifting", sub: "Drinkware & Utensils", match: /bottle|flask|mug|tumbler|borosil|drinkware|lunch box|casserole/ },
-  { category: "Office Supplies", sub: "Writing Instruments", match: /\bpen\b|pencil|marker|highlighter|sketch pen|refill|ball ?point/ },
-  { category: "Office Supplies", sub: "Notebooks", match: /notebook|diary|register|notepad|journal/ },
-  { category: "Office Supplies", sub: "Desk Accessories", match: /stapler|punch|scissor|calculator|organiser|organizer|clip|pin|tape|glue|desk/ },
+  { category: "Hidden" as any, sub: "Hidden", match: /notebook|notepad|diary|register|journal|wiro book/ },
+  { category: "Office Stationery", sub: "Staplers and Punching", match: /stapler|punch|staple|hole punch/ },
+  { category: "Office Stationery", sub: "Files and Folders", match: /file|folder|binder|document case|portfolio/ },
+  { category: "Office Stationery", sub: "Printing Papers", match: /copier paper|printing paper|printer paper|bond paper|photocopy|a4 paper|a3 paper|rim|excel bond/ },
+  { category: "Office Stationery", sub: "Pen", match: /\bpen\b|pencil|marker|highlighter|sketch pen|refill|ball ?point/ },
 ];
 
 function classify(node: ShopifyProductNode): { category: Product["category"]; sub: string } {
+  // First, respect Shopify tags if they exactly match a known subcategory
+  if (node.tags && node.tags.length > 0) {
+    for (const rule of RULES) {
+      if (node.tags.some(tag => tag.toLowerCase() === rule.sub.toLowerCase())) {
+        return { category: rule.category, sub: rule.sub };
+      }
+    }
+  }
+
   const haystack = normalize(
-    [node.title, node.productType, node.vendor, node.description?.slice(0, 120)]
+    [node.title, node.productType, node.vendor, node.description?.slice(0, 120), ...(node.tags || [])]
       .filter(Boolean)
       .join(" "),
   );
   for (const rule of RULES) {
     if (rule.match.test(haystack)) return { category: rule.category, sub: rule.sub };
   }
-  return {
-    category: "Office Supplies", sub: "Office Supplies" };
+  return { category: "Office Stationery", sub: "Pen" };
 }
 
 /** Trim to a length without cutting mid-word. */
+
+function extractStructuredData(html: string) {
+  if (!html) return { descriptionHtml: html };
+
+  const sections: { title: string; contentHtml: string }[] = [];
+  
+  // Safe regex to find headers like <h3>Features</h3>, <b>Product Details:</b>, <strong>Specifications</strong>, or simply <p>WHAT'S INCLUDED</p>
+  // We use a robust pattern that matches common block-level or bold headers.
+  const headerRegex = /<(h[2-6]|b|strong|p)[^>]*>(?:\s*<[^>]+>)*\s*(Product Features|Key Features|Features|Specifications|Fragrance Notes|Product Details|Material|Dimensions|Compatibility|What\'s Included(?: in the Box)?|Customization|Care Information|Technical Specifications)[\s:;<]*(?:<\/[^>]+>\s*)*<\/\1>/gi;
+  
+  let lastIndex = 0;
+  let match;
+  let currentSection = { title: "DESCRIPTION", contentHtml: "" };
+  
+  while ((match = headerRegex.exec(html)) !== null) {
+    if (match.index > lastIndex) {
+      currentSection.contentHtml += html.substring(lastIndex, match.index);
+    }
+    
+    if (currentSection.contentHtml.trim()) {
+      sections.push({ ...currentSection });
+    }
+    
+    currentSection = { title: (match[2] || "").toUpperCase().trim(), contentHtml: "" };
+    lastIndex = headerRegex.lastIndex;
+  }
+  
+  currentSection.contentHtml += html.substring(lastIndex);
+  if (currentSection.contentHtml.trim()) {
+    sections.push(currentSection);
+  }
+  
+  // If no sections were found (other than the main description), return it as is.
+  if (sections.length <= 1) {
+    return { descriptionHtml: html };
+  }
+  
+  // Otherwise, map them to our structured fields.
+  const result: any = {};
+  
+  for (const sec of sections) {
+    const title = sec.title;
+    const content = sec.contentHtml.trim();
+    if (!content) continue;
+    
+    if (title === "DESCRIPTION") {
+      result.descriptionHtml = content;
+    } else if (title.includes("FEATURE")) {
+      result.customSections = result.customSections || [];
+      result.customSections.push({ title: "KEY FEATURES", contentHtml: content });
+    } else if (title.includes("SPECIFICATION") || title.includes("DETAIL")) {
+      result.customSections = result.customSections || [];
+      result.customSections.push({ title: "PRODUCT DETAILS", contentHtml: content });
+    } else if (title.includes("FRAGRANCE NOTE")) {
+      result.customSections = result.customSections || [];
+      result.customSections.push({ title: "FRAGRANCE NOTES", contentHtml: content });
+    } else if (title.includes("INCLUDED")) {
+      result.customSections = result.customSections || [];
+      result.customSections.push({ title: "WHAT'S INCLUDED", contentHtml: content });
+    } else {
+      result.customSections = result.customSections || [];
+      result.customSections.push({ title, contentHtml: content });
+    }
+  }
+  
+  return result;
+}
+
 function truncateWords(text: string, max: number): string {
   if (text.length <= max) return text;
   const cut = text.slice(0, max);
@@ -181,13 +266,46 @@ const PLACEHOLDER_IMAGE =
   "https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=1200&q=75";
 
 /** Convert a live Shopify product into the site's static `Product` shape. */
+
+function parseFragranceProfile(node: ShopifyProductNode) {
+  if (!node.metafields) return undefined;
+  
+  const profile: any = {};
+  let hasData = false;
+
+  for (const m of node.metafields) {
+    if (!m || !m.key) continue;
+    try {
+      if (m.type === "list.single_line_text_field" || m.type === "json") {
+        profile[m.key] = JSON.parse(m.value);
+      } else if (m.type === "boolean") {
+        profile[m.key] = m.value === "true";
+      } else {
+        profile[m.key] = m.value;
+      }
+      hasData = true;
+        if (m.key === "ai_subtitle") {
+          profile.ai_subtitle = m.value;
+        }
+    } catch (e) {
+      console.warn("Failed to parse metafield", m.key, m.value);
+    }
+  }
+  
+  return hasData ? profile : undefined;
+}
+
 export function shopifyNodeToProduct(node: ShopifyProductNode): Product {
   const { category, sub } = classify(node);
   const images = nodeImages(node);
+  
   const description = (node.description ?? "").trim();
   const summary = description
     ? truncateWords(description.replace(/\s+/g, " "), 150)
-    : `${node.title} � available through OfficeNeed.`;
+    : `${node.title}  available through OfficeNeed.`;
+  
+  const extracted = extractStructuredData(node.descriptionHtml || "");
+
   const amount = parseFloat(node.priceRange?.minVariantPrice?.amount ?? "0");
   const variants = node.variants?.edges?.map((e) => e.node) ?? [];
 
@@ -195,7 +313,7 @@ export function shopifyNodeToProduct(node: ShopifyProductNode): Product {
     collectionHandles: node.collections?.edges.map(e => e.node.handle) ?? [],
     slug: node.handle,
     name: node.title,
-    ...(node.descriptionHtml ? { descriptionHtml: node.descriptionHtml } : {}),
+    ...extracted,
     ...(node.tags?.length ? { tags: node.tags } : {}),
     ...(node.vendor ? { vendor: node.vendor } : {}),
     ...(amount > 0
@@ -214,7 +332,6 @@ export function shopifyNodeToProduct(node: ShopifyProductNode): Product {
     availability: variants.some((v) => v.availableForSale) ? "In stock" : "Made to order",
     images: images.length ? images : [PLACEHOLDER_IMAGE],
     addedOn: "2024-01-01",
-    ...(node.vendor ? { specifications: [{ label: "Brand", value: node.vendor }] } : {}),
     ...(variants.length > 1 ? { variants: variants.map((v) => v.title) } : {}),
   };
 }
@@ -265,10 +382,10 @@ export function useShopifyBestsellers(staticItems: BestsellerProduct[]) {
   const live = nodes.map((node): BestsellerProduct => {
     const p = shopifyNodeToProduct(node);
     const category: BestsellerProduct["category"] =
-      p.category === "Office Supplies"
+      p.category === "Office Stationery"
         ? "Office Stationery"
-        : p.category === "Hardware & IT"
-          ? "Hardware Supplies"
+        : p.category === "Computer Peripherals"
+          ? "Computer Peripherals"
           : p.category === "Printing & Branding"
             ? "Corporate Gifting"
             : p.category;

@@ -455,3 +455,12 @@
     transition-duration: 0.001ms !important;
   }
 }
+
+/* OfficeGPT Fragrance Quiz Interactions */
+.is-selected {
+  border: 1.5px solid #000000 !important;
+  background-color: #f7f7f7 !important;
+}
+.is-selected svg {
+  stroke: #000000 !important;
+}

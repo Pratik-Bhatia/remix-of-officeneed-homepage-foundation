@@ -33,8 +33,8 @@ const benefits = [
   },
   {
     icon: RefreshCcw,
-    title: "No Returns and Exchanges",
-    description: "All products are non-returnable and non-exchangeable.",
+    title: "Quality Assured",
+    description: "All items undergo rigorous quality checks. Sales are final with no returns.",
   },
   {
     icon: ShieldCheck,

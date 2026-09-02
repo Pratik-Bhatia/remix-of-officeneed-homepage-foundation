@@ -22,11 +22,11 @@ function getResendClient() {
 }
 
 function getEmailFrom() {
-  return process.env["EMAIL_FROM"] || "OfficeNeed Assistant <assistant@officeneed.in>";
+  return process.env["EMAIL_FROM"] || "OfficeNeed Assistant <contact@officeneed.in>";
 }
 
 function getInternalEmail() {
-  return process.env["OFFICENEED_ENQUIRY_EMAIL"] || "marketing@officeneed.in";
+  return process.env["OFFICENEED_ENQUIRY_EMAIL"] || "contact@officeneed.in";
 }
 
 /** Send a simple HTML email to the internal team inbox. */

@@ -3,7 +3,7 @@ import { lockScroll, unlockScroll } from "@/lib/scroll-lock";
 import { Link } from "@tanstack/react-router";
 import { Menu, MessageSquare, Search, User, X, ChevronDown } from "lucide-react";
 import logoUrl from "@/assets/officeneed-logo.png";
-import { primaryNavCategories as navCategories, navItemTarget } from "@/lib/navigation";
+import { primaryNavCategories as navCategories, navItemTarget, navCategoryTarget } from "@/lib/navigation";
 import { CartDrawer } from "@/components/officeneed/CartDrawer";
 import { AiAssistantIcon } from "@/components/officeneed/AiAssistantIcon";
 import { cn } from "@/lib/utils";
@@ -149,7 +149,7 @@ export function Navbar() {
         {/* Left zone: hamburger on mobile/tablet, hidden on desktop */}
         <div className="flex justify-start xl:hidden">
           <IconButton
-            label="Open menu"
+            label="Open navigation menu"
             onClick={() => setMobileOpen(true)}
             className="size-[26px] md:size-10"
           >
@@ -167,21 +167,21 @@ export function Navbar() {
           <ul className="flex min-w-0 items-center gap-4 xl:gap-8">
             {navCategories.map((cat) => (
               <li key={cat.id} onMouseEnter={() => { cancelClose(); setOpenId(cat.id); }} onMouseLeave={scheduleClose}>
-                <button
-                  type="button"
+                <Link
+                  to="/products"
+                  search={navCategoryTarget(cat.id)}
                   aria-expanded={openId === cat.id}
                   aria-controls={`menu-${cat.id}`}
                   data-open={openId === cat.id}
-                  onClick={() => setOpenId(openId === cat.id ? null : cat.id)}
                   onFocus={() => setOpenId(cat.id)}
+                  onClick={() => setOpenId(null)}
                   className={cn(
                     "nav-link h-16 xl:h-20",
                     cat.featured && "font-semibold text-foreground",
                   )}
-
                 >
                   <span className="whitespace-nowrap">{cat.label}</span>
-                </button>
+                </Link>
               </li>
             ))}
           </ul>
@@ -198,7 +198,7 @@ export function Navbar() {
           >
             <AiAssistantIcon className="chat-icon-wiggle size-full rounded-full" />
           </button>
-          <IconButton label="Search" className="size-[26px] md:size-10 xl:size-11" onClick={() => setSearchOpen(true)}>
+          <IconButton label="Search store" className="size-[26px] md:size-10 xl:size-11" onClick={() => setSearchOpen(true)}>
             <Search className="size-5 md:size-[22px] xl:size-5" strokeWidth={1.6} />
           </IconButton>
           <span className="hidden xl:inline-flex">

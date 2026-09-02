@@ -21,7 +21,7 @@ const faqCategories = [
     ]
   },
   {
-    name: "Office Supplies",
+    name: "Office Stationery",
     faqs: [
       { question: "What is the return policy for office supplies?", answer: "All products are non-returnable and non-exchangeable. If your order arrives damaged or defective, report it in writing within 48 hours of delivery." },
       { question: "Do you offer subscription services for regular supplies?", answer: "Yes, you can set up recurring deliveries for essential office supplies across India to ensure you never run out." },

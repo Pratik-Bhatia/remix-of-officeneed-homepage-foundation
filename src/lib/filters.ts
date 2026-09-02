@@ -32,7 +32,7 @@ export const categoryFilters: Record<ProductCategory, FilterGroup[]> = {
       ],
     },
   ],
-  "Hardware & IT": [
+  "Computer Peripherals": [
     {
       id: "connectivity",
       label: "Connectivity",
@@ -72,7 +72,7 @@ export const categoryFilters: Record<ProductCategory, FilterGroup[]> = {
       ],
     },
   ],
-  "Office Supplies": [
+  "Office Stationery": [
     {
       id: "type",
       label: "Type",

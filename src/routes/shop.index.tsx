@@ -9,13 +9,13 @@ export const Route = createFileRoute("/shop/")({
   component: ShopPage,
   head: () => ({
     meta: [
-      { title: "Shop Office Supplies & Corporate Gifts | OfficeNeed" },
+      { title: "Shop Office Stationery & Corporate Gifts | OfficeNeed" },
       {
         name: "description",
         content:
           "Browse the full OfficeNeed catalogue — stationery, hardware, fragrances and curated corporate gifting, with secure Shopify checkout.",
       },
-      { property: "og:title", content: "Shop Office Supplies & Corporate Gifts | OfficeNeed" },
+      { property: "og:title", content: "Shop Office Stationery & Corporate Gifts | OfficeNeed" },
       {
         property: "og:description",
         content: "Browse the full OfficeNeed catalogue with secure Shopify checkout.",

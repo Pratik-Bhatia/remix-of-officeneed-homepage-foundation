@@ -5,6 +5,7 @@ import { products, type Product, type ProductCategory } from "./products";
 
 export type ChatStepId =
   | "purpose"
+  | "corporateOccasion"
   | "quantity"
   | "budget"
   | "timeline"
@@ -31,11 +32,18 @@ export const chatSteps: ChatStep[] = [
     question: "What are you shopping for?",
     options: [
       "Corporate Gifting",
-      "Employee Joining Kits",
-      "Festive Gifts",
-      "Office Supplies",
-      "Hardware & IT",
-      "Printing & Branding",
+      "Fragrance Gifting",
+    ],
+  },
+  {
+    id: "corporateOccasion",
+    question: "What is the occasion for the gift?",
+    options: [
+      "Employee Onboarding / Joining Kits",
+      "Festive & Seasonal Gifting",
+      "Client & Executive Appreciation",
+      "Conferences & Corporate Events",
+      "General Corporate Gifting"
     ],
   },
   {
@@ -51,7 +59,8 @@ export const chatSteps: ChatStep[] = [
   {
     id: "timeline",
     question: "When do you need them?",
-    options: ["This week", "1–2 weeks", "2–4 weeks", "Flexible"],
+    options: ["This week", "1-2 weeks", "2-4 weeks", "Flexible"],
+    disclaimer: "Delivery timelines for bulk or custom orders will be coordinated directly with you via email or message based on exact quantity and location.",
   },
 ];
 
@@ -104,12 +113,10 @@ export const enquirySteps: ChatStep[] = [
 export type ChatAnswers = Partial<Record<ChatStepId, string>>;
 
 const purposeToCategories: Record<string, ProductCategory[]> = {
-  "Corporate Gifting": ["Corporate Gifting", "Fragrance Gifting"],
-  "Employee Joining Kits": ["Corporate Gifting", "Office Supplies"],
-  "Festive Gifts": ["Fragrance Gifting", "Corporate Gifting"],
-  "Office Supplies": ["Office Supplies"],
-  "Hardware & IT": ["Hardware & IT"],
-  "Printing & Branding": ["Printing & Branding"],
+  "Corporate Gifting": ["Corporate Gifting"],
+  "Fragrance Gifting": ["Fragrance Gifting"],
+  "Office Stationery": ["Office Stationery"],
+  "Computer Peripherals": ["Computer Peripherals"],
 };
 
 export function parseQuantity(label?: string): number | undefined {
@@ -126,11 +133,45 @@ export function parseQuantity(label?: string): number | undefined {
   }
 }
 
-export function recommendProducts(answers: ChatAnswers, refinement?: string, limit = 4): Product[] {
+export function recommendProducts(catalogue: Product[], answers: ChatAnswers, refinement?: string, limit = 4): Product[] {
   const wanted = purposeToCategories[answers.purpose ?? ""] ?? [];
   const qty = parseQuantity(answers.quantity) ?? 0;
 
-  const scored = products.map((product) => {
+  let minPrice = 0;
+  let maxPrice = Infinity;
+
+  // Apply strict budget only if we are not explicitly breaking out of it via Premium/Budget refinement buttons
+  if (answers.budget && !refinement) {
+    if (answers.budget.includes("Under")) maxPrice = 500;
+    else if (answers.budget.includes("2,500+")) minPrice = 2500;
+    else if (answers.budget.includes("500") && answers.budget.includes("1,000")) { minPrice = 500; maxPrice = 1000; }
+    else if (answers.budget.includes("1,000") && answers.budget.includes("2,500")) { minPrice = 1000; maxPrice = 2500; }
+  }
+
+  let filtered = catalogue.filter(p => {
+    // RULE 1: Strict Category Bounding
+    if (wanted.length > 0 && !wanted.includes(p.category)) return false;
+
+    // RULE 2: Budget filtering with Price On Enquiry grace
+    const rawPrice = p.price?.replace(/\D/g, "") ?? "";
+    const priceNum = rawPrice ? parseInt(rawPrice, 10) : 0;
+    
+    // Graceful handling of POA (price = 0 or null)
+    if (priceNum === 0) return true;
+
+    return priceNum >= minPrice && priceNum <= maxPrice;
+  });
+
+  let isFallback = false;
+  if (filtered.length === 0) {
+    isFallback = true;
+    // Smart Fallback (Intra-Category Only)
+    filtered = catalogue.filter(p => wanted.length === 0 || wanted.includes(p.category));
+    // Ultra fallback if somehow category is literally empty
+    if (filtered.length === 0) filtered = catalogue;
+  }
+
+  const scored = filtered.map((product) => {
     let score = 0;
     const rank = wanted.indexOf(product.category);
     if (rank === 0) score += 6;
@@ -141,23 +182,40 @@ export function recommendProducts(answers: ChatAnswers, refinement?: string, lim
     if (qty && (product.minimumOrderQuantity ?? 0) <= qty) score += 2;
     if (answers.timeline === "This week" && product.availability) score += 1;
 
-    // Refinement bumps
-    if (refinement === "Show Premium Options") {
-        const priceNum = parseInt(product.price?.replace(/\D/g, "") ?? "0", 10);
-        if (priceNum > 2000) score += 5;
-    }
-    if (refinement === "Show Budget Options") {
-        const priceNum = parseInt(product.price?.replace(/\D/g, "") ?? "0", 10);
-        if (priceNum > 0 && priceNum < 1000) score += 5;
-    }
-
     return { product, score };
   });
 
-  return scored
-    .sort((a, b) => b.score - a.score || (a.product.featuredRank ?? 99) - (b.product.featuredRank ?? 99))
-    .slice(0, limit)
-    .map((s) => s.product);
+  // Shuffle array to ensure ties (or premium rerolls) display varying options
+  for (let i = scored.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [scored[i], scored[j]] = [scored[j], scored[i]];
+  }
+
+  scored.sort((a, b) => b.score - a.score || (a.product.featuredRank ?? 99) - (b.product.featuredRank ?? 99));
+
+  if (refinement === "Show Premium Options" || isFallback) {
+    scored.sort((a, b) => {
+      const aPriceStr = a.product.price?.replace(/\D/g, "") ?? "";
+      const bPriceStr = b.product.price?.replace(/\D/g, "") ?? "";
+      const aPrice = aPriceStr ? parseInt(aPriceStr, 10) : 0;
+      const bPrice = bPriceStr ? parseInt(bPriceStr, 10) : 0;
+      // Handle POA in sorting? Usually POA (0) isn't the highest price, so it falls to bottom. 
+      // If we want it to be considered premium, we could fake its price, but leaving it as 0 is fine.
+      return bPrice - aPrice; // descending
+    });
+  } else if (refinement === "Show Budget Options") {
+    scored.sort((a, b) => {
+      const aPriceStr = a.product.price?.replace(/\D/g, "") ?? "";
+      const bPriceStr = b.product.price?.replace(/\D/g, "") ?? "";
+      const aPrice = aPriceStr ? parseInt(aPriceStr, 10) : 0;
+      const bPrice = bPriceStr ? parseInt(bPriceStr, 10) : 0;
+      // POA should probably float to top or bottom? If price is 0, it's 'cheapest' by number, so it shows up.
+      return aPrice - bPrice; // ascending
+    });
+  }
+
+  const finalLimit = isFallback ? 3 : limit;
+  return scored.slice(0, finalLimit).map((s) => s.product);
 }
 
 export function buildEnquiryMessage(answers: ChatAnswers, selected: Product[]): string {
@@ -168,7 +226,7 @@ export function buildEnquiryMessage(answers: ChatAnswers, selected: Product[]): 
     `Timeline: ${answers.timeline ?? "—"}`,
     `Selected Products: \n${selected.map((p) => `- ${p.name}`).join("\n") || "None"}`,
     answers.phone ? `Phone: ${answers.phone}` : "",
-    answers.file ? `File Attached: ${answers.file}` : "",
+    answers.file ? `Custom Branding: ${answers.file}` : "",
     answers.message ? `Notes: ${answers.message}` : "",
   ]
     .filter(Boolean)

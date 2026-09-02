@@ -15,7 +15,7 @@ function ProductCard({ product }: { product: BestsellerProduct }) {
       data-shopify-handle={product.shopifyHandle}
       className="group block w-[74vw] shrink-0 snap-start sm:w-[46vw] md:w-[34vw] lg:w-[calc((100%-4.5rem)/4)]"
     >
-      <div className="relative aspect-4/5 w-full overflow-hidden rounded-2xl bg-secondary">
+      <div className="relative aspect-square w-full overflow-hidden rounded-2xl bg-secondary">
         <img
           src={product.image}
           alt={product.name}
@@ -50,7 +50,7 @@ export function Bestsellers() {
   const catalogue = useShopifyBestsellers(bestsellerProducts);
 
   const products = useMemo(
-    () => (active === "All" ? catalogue : catalogue.filter((p) => p.category === active)),
+    () => (active === "All" ? catalogue : catalogue.filter((p) => p.category === active)).slice(0, 12),
     [active, catalogue],
   );
 
@@ -89,9 +89,14 @@ export function Bestsellers() {
     >
       <div className="mx-auto w-full max-w-[1600px]">
         <div className="pl-[30px] pr-5 sm:pl-[42px] sm:pr-8 lg:pl-[58px] lg:pr-12">
-          <h2 id="bestsellers-heading" className="text-section">
-            Bestsellers
-          </h2>
+          <div className="flex items-end justify-between">
+            <h2 id="bestsellers-heading" className="text-section">
+              Bestsellers
+            </h2>
+            <a href="/products/?sort=Featured" className="text-sm font-medium hover:underline text-foreground pr-2">
+              View All &rarr;
+            </a>
+          </div>
 
 
           <div className="mt-6 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 sm:mt-8">

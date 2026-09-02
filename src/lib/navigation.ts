@@ -15,13 +15,13 @@ export const navCategories: NavCategory[] = [
     id: "officeneed-exclusive",
     label: "Officeneed Exclusive",
     blurb: "Made for OfficeNeed. Available nowhere else.",
-    items: ["Exclusive Products", "Featured Exclusives", "New Exclusives"],
+    items: ["Featured Exclusives", "New Exclusives"],
   },
   {
     id: "corporate-gifting",
     label: "Corporate Gifting",
     blurb: "Curated gifting programmes for teams, clients and milestones.",
-    featured: true,
+    
     items: [
       "Gift Sets",
       "Corporate Gifts",
@@ -35,20 +35,20 @@ export const navCategories: NavCategory[] = [
     label: "Fragrance Gifting",
     blurb: "Considered luxury for leadership and landmark occasions.",
     items: [
-      "Perfumes",
-      "Premium Gifts",
-      "Luxury Gifting",
+      "European Perfume",
+      "Middle Eastern Perfume",
+      "Perfume Gift Sets",
     ],
   },
   {
     id: "office-stationery",
     label: "Office Stationery",
     blurb: "Everyday essentials, specified once and replenished on schedule.",
-    items: ["Writing Instruments", "Notebooks & Notepads", "Desk Accessories", "Other Stationery"],
+    items: ["Files and Folders", "Printing Papers", "Staplers and Punching", "Pen"],
   },
   {
     id: "hardware-supplies",
-    label: "Hardware Supplies",
+    label: "Computer Peripherals",
     blurb: "Workstation hardware and peripherals for growing teams.",
     items: ["Computer Accessories", "Cables & Adapters", "Storage Devices", "Other Hardware"],
   },
@@ -76,6 +76,16 @@ function getHandle(categoryLabel: string, itemLabel?: string): string | null {
   return null;
 }
 
+export function navCategoryTarget(categoryId: string): ProductsLinkTarget {
+  const category = navCategories.find(c => c.id === categoryId);
+  if (!category) return { missingMapping: categoryId };
+
+  const handle = getHandle(category.label);
+  if (!handle) return { missingMapping: category.label };
+  
+  return { collection: handle };
+}
+
 export function navItemTarget(categoryId: string, item: string): ProductsLinkTarget {
   const category = navCategories.find(c => c.id === categoryId);
   if (!category) return { missingMapping: item };
@@ -92,8 +102,10 @@ export function navItemTarget(categoryId: string, item: string): ProductsLinkTar
 export const footerShopTargets: Record<string, ProductsLinkTarget> = {
   "Shop All": {},
   Bestsellers: { sort: "Featured" },
+  "Officeneed Exclusive": { collection: TAXONOMY["Officeneed Exclusive"].handle! },
   "Corporate Gifting": { collection: TAXONOMY["Corporate Gifting"].handle! },
   "Office Stationery": { collection: TAXONOMY["Office Stationery"].handle! },
-  "Hardware Supplies": { collection: TAXONOMY["Hardware Supplies"].handle! },
+  "Computer Peripherals": { collection: TAXONOMY["Computer Peripherals"].handle! },
   "Fragrance Gifting": { collection: TAXONOMY["Fragrance Gifting"].handle! },
+  "Fragrance & Luxury Gifting": { collection: TAXONOMY["Fragrance Gifting"].handle! },
 };

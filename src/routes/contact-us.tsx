@@ -114,7 +114,7 @@ function ContactUsPage() {
                 <div className="flex flex-col gap-2">
                   <h3 className="font-medium">Corporate Gifting</h3>
                   <a href="tel:+919922655975" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"><Phone className="w-4 h-4" /> +91 99226 55975</a>
-                  <a href="mailto:gifting@officeneed.in" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"><Mail className="w-4 h-4" /> gifting@officeneed.in</a>
+                  <a href="mailto:contact@officeneed.in" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"><Mail className="w-4 h-4" /> contact@officeneed.in</a>
                 </div>
 
                 <div className="flex flex-col gap-2">
@@ -124,15 +124,15 @@ function ContactUsPage() {
                 </div>
 
                 <div className="flex flex-col gap-2">
-                  <h3 className="font-medium">Hardware & IT</h3>
+                  <h3 className="font-medium">Computer Peripherals</h3>
                   <a href="tel:+919762136698" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"><Phone className="w-4 h-4" /> +91 97621 36698</a>
-                  <a href="mailto:computer@officeneed.in" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"><Mail className="w-4 h-4" /> computer@officeneed.in</a>
+                  <a href="mailto:contact@officeneed.in" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"><Mail className="w-4 h-4" /> contact@officeneed.in</a>
                 </div>
 
                 <div className="flex flex-col gap-2">
                   <h3 className="font-medium">Printing & Branding</h3>
                   <a href="tel:+917972398840" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"><Phone className="w-4 h-4" /> +91 79723 98840</a>
-                  <a href="mailto:print@officeneed.in" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"><Mail className="w-4 h-4" /> print@officeneed.in</a>
+                  <a href="mailto:contact@officeneed.in" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"><Mail className="w-4 h-4" /> contact@officeneed.in</a>
                 </div>
 
               </div>

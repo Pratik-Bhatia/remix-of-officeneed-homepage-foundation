@@ -11,8 +11,8 @@ const slides = [
     id: "scents",
     heading: "Signature Scents",
     text: "Elevate your professional presence with our premium fragrance collection.",
-    primary: { label: "Discover Collection", href: "#solutions" },
-    secondary: { label: "Shop Perfumes", href: "#bestsellers" },
+    primary: { label: "Discover Collection", href: "/products/?collection=fragrance-gifting" },
+    secondary: { label: "Shop Perfumes", href: "/products/?collection=european-perfume" },
     image: heroPerfumes.url,
     alt: "Luxury designer perfume bottles and gift boxes arranged with flowers and botanicals.",
   },
@@ -20,8 +20,8 @@ const slides = [
     id: "exclusive",
     heading: "Officeneed Exclusive",
     text: "Precision-crafted essentials designed for the modern workspace.",
-    primary: { label: "Explore Features", href: "#solutions" },
-    secondary: { label: "Shop Exclusives", href: "#bestsellers" },
+    primary: { label: "Explore Exclusives", href: "/products/?collection=exclusive-products" },
+    secondary: { label: "Shop Now", href: "/products/" },
     image: heroExclusive.url,
     alt: "Officeneed exclusive desk essentials, gift boxes and premium stationery set.",
   },
@@ -29,8 +29,8 @@ const slides = [
     id: "gifting",
     heading: "Corporate Gifting",
     text: "Build lasting business relationships with curated, premium gift sets.",
-    primary: { label: "View Catalogue", href: "#solutions" },
-    secondary: { label: "Plan Your Gifts", href: "#bestsellers" },
+    primary: { label: "View Gift Catalogue", href: "/products/?collection=frontpage" },
+    secondary: { label: "Shop Gift Sets", href: "/products/?collection=gift-sets" },
     image: heroGifting.url,
     alt: "Curated Officeneed corporate gift hamper with laptop bag, notebook, flask, mug, pen, candle, plant and thank you card.",
   },
@@ -38,8 +38,8 @@ const slides = [
     id: "assistant",
     heading: "AI Shopping Assistant",
     text: "Find the exact workspace essentials you need with personalized, AI-driven recommendations.",
-    primary: { label: "Try the Assistant", href: "#solutions" },
-    secondary: { label: "How It Works", href: "#bestsellers" },
+    primary: { label: "Try the Assistant", href: "#open-chat" },
+    secondary: { label: "Browse All Products", href: "/products/" },
     image: heroAI.url,
     alt: "Sleek smartphone on a textured black pedestal surrounded by desk essentials, white flowers, and orange peel on a dark luxury background.",
   },
@@ -125,9 +125,19 @@ export function Hero() {
               <p className="text-lede mt-4 max-w-[46ch] sm:mt-5">{s.text}</p>
 
               <div className="mt-6 flex w-full max-w-[360px] flex-col items-center gap-3 sm:mt-8 sm:max-w-none sm:flex-row sm:justify-center sm:gap-4">
-                <a href={s.primary.href} className="btn-primary w-full rounded-full sm:w-auto">
-                  {s.primary.label}
-                </a>
+                {s.primary.href === "#open-chat" ? (
+                  <button
+                    type="button"
+                    onClick={() => window.dispatchEvent(new CustomEvent("officeneed:open-chat"))}
+                    className="btn-primary w-full rounded-full sm:w-auto"
+                  >
+                    {s.primary.label}
+                  </button>
+                ) : (
+                  <a href={s.primary.href} className="btn-primary w-full rounded-full sm:w-auto">
+                    {s.primary.label}
+                  </a>
+                )}
                 <a href={s.secondary.href} className="btn-secondary w-full rounded-full sm:w-auto">
                   {s.secondary.label}
                 </a>

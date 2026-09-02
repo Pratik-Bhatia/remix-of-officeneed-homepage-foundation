@@ -1,7 +1,7 @@
 export type BestsellerCategory =
   | "Corporate Gifting"
   | "Office Stationery"
-  | "Hardware Supplies"
+  | "Computer Peripherals"
   | "Fragrance Gifting";
 
 export type BestsellerProduct = {
@@ -22,7 +22,7 @@ export const bestsellerFilters: Array<"All" | BestsellerCategory> = [
   "All",
   "Corporate Gifting",
   "Office Stationery",
-  "Hardware Supplies",
+  "Computer Peripherals",
   "Fragrance Gifting",
 ];
 

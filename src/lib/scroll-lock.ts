@@ -15,6 +15,12 @@ function preventScrollKeys(e: KeyboardEvent) {
   const keys = ['ArrowUp', 'ArrowDown', 'Space', 'PageUp', 'PageDown', 'Home', 'End'];
   if (keys.includes(e.code)) {
     const target = e.target as HTMLElement | null;
+    
+    // Allow default behavior inside form inputs so users can type spaces
+    if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+      return;
+    }
+    
     const isScrollable = target?.closest('[data-scrollable="true"]');
     if (!isScrollable) {
       if (e.cancelable) {

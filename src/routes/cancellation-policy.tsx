@@ -24,7 +24,7 @@ function CancellationPolicyPage() {
             <section>
               <h2 className="text-2xl font-medium mb-4">Order Cancellation</h2>
               <p className="text-muted-foreground leading-relaxed mb-4">
-                You may cancel your order at any time before it has been processed for dispatch. Once an order has been dispatched, it cannot be cancelled. Please note that all products are non-returnable and non-exchangeable.
+                You may cancel your order at any time before it has been processed for dispatch. Once an order has been dispatched, it cannot be cancelled. Please note that all products are strictly non-returnable and non-exchangeable, and we have a strict no replacement policy under any circumstances.
               </p>
             </section>
 
@@ -34,7 +34,7 @@ function CancellationPolicyPage() {
                 To cancel your order, please contact our customer support team immediately with your order number. You can reach us via:
               </p>
               <ul className="list-disc pl-6 text-muted-foreground space-y-2">
-                <li>Email: support@officeneed.in</li>
+                <li>Email: contact@officeneed.in</li>
                 
               </ul>
             </section>

@@ -3,7 +3,7 @@ export type MainCategory =
   | "Corporate Gifting"
   | "Fragrance Gifting"
   | "Office Stationery"
-  | "Hardware Supplies";
+  | "Computer Peripherals";
 
 export type CollectionMapping = {
   title: string;
@@ -21,15 +21,9 @@ export const TAXONOMY: Record<MainCategory, CategoryNode> = {
     id: "gid://shopify/Collection/498084970724",
     handle: "exclusive-products",
     subcategories: {
-      "Exclusive Products": { title: "Exclusive Products", id: "gid://shopify/Collection/498084970724", handle: "exclusive-products" },
-      "Featured Exclusives": { title: "Featured Exclusives", id: null, handle: null },
-      "New Exclusives": { title: "New Exclusives", id: null, handle: null },
-      "Notebooks & Notepads": { title: "Notebooks & Notepads", id: "gid://shopify/Collection/498206998756", handle: "notebooks-notepads" },
-      "Writing Instruments": { title: "Writing Instruments", id: null, handle: null },
-      "Desk Accessories": { title: "Desk Accessories", id: null, handle: null },
-      "Organizers": { title: "Organizers", id: null, handle: null },
-      "Office Essentials": { title: "Office Essentials", id: null, handle: null },
-      "Exclusive Collections": { title: "Exclusive Collections", id: null, handle: null },
+      "Featured Exclusives": { title: "Featured Exclusives", id: null, handle: "featured-exclusives" },
+      "New Exclusives": { title: "New Exclusives", id: null, handle: "exclusive-products" },
+      
     }
   },
   "Corporate Gifting": {
@@ -38,51 +32,42 @@ export const TAXONOMY: Record<MainCategory, CategoryNode> = {
     handle: "frontpage",
     subcategories: {
       "Gift Sets": { title: "Gift Sets", id: null, handle: "gift-sets" },
-      "Premium Gifts": { title: "Premium Gifts", id: null, handle: null },
-      "Corporate Gifts": { title: "Corporate Gifts", id: null, handle: null },
-      "Drinkware & Utensils": { title: "Drinkware & Utensils", id: null, handle: null },
-      "Customized Gifts": { title: "Customized Gifts", id: null, handle: null },
+      "Premium Gifts": { title: "Premium Gifts", id: null, handle: "premium-gifts" },
+      "Corporate Gifts": { title: "Corporate Gifts", id: null, handle: "corporate-gifts" },
+      "Drinkware & Utensils": { title: "Drinkware & Utensils", id: null, handle: "drinkware-utensils" },
+      "Customized Gifts": { title: "Customized Gifts", id: null, handle: "customized-gifts" },
     }
   },
   "Fragrance Gifting": {
     title: "Fragrance Gifting",
     id: "gid://shopify/Collection/498084937956",
-    handle: "fragance-gifting",
+    handle: "fragrance-gifting",
     subcategories: {
-      "Perfumes": { title: "Perfumes", id: null, handle: null },
-      "Fragrance Gift Sets": { title: "Fragrance Gift Sets", id: null, handle: null },
-      "Attars": { title: "Attars", id: null, handle: null },
-      "Home Fragrance": { title: "Home Fragrance", id: null, handle: null },
-      "Premium Fragrances": { title: "Premium Fragrances", id: null, handle: null },
+      "European Perfume": { title: "European Perfume", id: "gid://shopify/Collection/315489419357", handle: "european-perfume" },
+      "Middle Eastern Perfume": { title: "Middle Eastern Perfume", id: "gid://shopify/Collection/315489550429", handle: "eastern-perfume" },
+      "Perfume Gift Sets": { title: "Perfume Gift Sets", id: null, handle: "perfume-gift-sets" }
     }
   },
   "Office Stationery": {
     title: "Office Stationery",
     id: "gid://shopify/Collection/498084806884",
-    handle: null,
+    handle: "office-stationary",
     subcategories: {
-      "Notebooks & Notepads": { title: "Notebooks & Notepads", id: "gid://shopify/Collection/498206998756", handle: "notebooks-notepads" },
-      "Pens & Writing Instruments": { title: "Pens & Writing Instruments", id: null, handle: null },
-      "Paper Products": { title: "Paper Products", id: null, handle: null },
-      "Files & Folders": { title: "Files & Folders", id: null, handle: null },
-      "Desk Accessories": { title: "Desk Accessories", id: null, handle: null },
-      "Office Organizers": { title: "Office Organizers", id: null, handle: null },
-      "Sticky Notes & Memo Pads": { title: "Sticky Notes & Memo Pads", id: null, handle: null },
-      "Other Stationery": { title: "Other Stationery", id: null, handle: null },
+      "Files and Folders": { title: "Files and Folders", id: null, handle: "files-and-folders" },
+      "Printing Papers": { title: "Printing Papers", id: null, handle: "printing-papers" },
+      "Staplers and Punching": { title: "Staplers and Punching", id: null, handle: "staplers-and-punching" },
+      "Pen": { title: "Pen", id: null, handle: "pen" }
     }
   },
-  "Hardware Supplies": {
-    title: "Hardware Supplies",
+  "Computer Peripherals": {
+    title: "Computer Peripherals",
     id: "gid://shopify/Collection/498085003492",
     handle: "hardware",
     subcategories: {
-      "Computer Accessories": { title: "Computer Accessories", id: null, handle: null },
-      "Cables & Adapters": { title: "Cables & Adapters", id: null, handle: null },
-      "Storage Devices": { title: "Storage Devices", id: null, handle: null },
-      "Mobile Accessories": { title: "Mobile Accessories", id: null, handle: null },
-      "Power & Charging": { title: "Power & Charging", id: null, handle: null },
-      "Networking Accessories": { title: "Networking Accessories", id: null, handle: null },
-      "Other Hardware": { title: "Other Hardware", id: null, handle: null },
+      "Computer Accessories": { title: "Computer Accessories", id: "gid://shopify/Collection/315533361245", handle: "computer-accessories-1" },
+      "Cables & Adapters": { title: "Cables & Adapters", id: null, handle: "cables-and-adapters" },
+      "Storage Devices": { title: "Storage Devices", id: null, handle: "storage-devices" },
+      "Other Hardware": { title: "Other Hardware", id: null, handle: "other-hardware" },
     }
   }
 };
@@ -94,6 +79,16 @@ export function getCategoryByHandle(handle: string): { parentTitle?: string; nod
     if (main.handle === handle) return { node: main };
     for (const sub of Object.values(main.subcategories)) {
       if (sub.handle === handle) return { parentTitle: main.title, node: sub };
+    }
+  }
+  return null;
+}
+
+export function getCategoryByTitle(title: string): { parentTitle?: string; node: CollectionMapping } | null {
+  for (const main of Object.values(TAXONOMY)) {
+    if (main.title === title) return { node: main };
+    for (const sub of Object.values(main.subcategories)) {
+      if (sub.title === title) return { parentTitle: main.title, node: sub };
     }
   }
   return null;

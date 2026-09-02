@@ -149,3 +149,85 @@ export function formatMoney(amount: string | number, currencyCode: string) {
 }
 
 
+
+
+const RELATED_PRODUCTS_FIELDS = `
+  handle
+  title
+  productType
+  vendor
+  tags
+  availableForSale
+  featuredImage { id url altText }
+  priceRange { minVariantPrice { amount currencyCode } }
+  images(first: 5) { edges { node { id url altText } } }
+  variants(first: 100) { edges { node { id sku title price { amount currencyCode } compareAtPrice { amount currencyCode } availableForSale selectedOptions { name value } } } }
+  collections(first: 10) { edges { node { handle } } }
+`;
+
+/**
+ * Fetch related products from Shopify based on:
+ * 1. Same collection handle (most relevant)
+ * 2. Same productType
+ * Always excludes the current product handle.
+ */
+export async function fetchRelatedProducts(
+  currentHandle: string,
+  productType: string,
+  collectionHandles: string[],
+  limit = 4,
+): Promise<ShopifyProductNode[]> {
+  const results: ShopifyProductNode[] = [];
+  const seen = new Set<string>([currentHandle]);
+
+  if (collectionHandles.length > 0) {
+    const COLLECTION_QUERY = `
+      query GetCollectionProducts($handle: String!, $first: Int!) {
+        collection(handle: $handle) {
+          products(first: $first) {
+            edges { node { ${RELATED_PRODUCTS_FIELDS} } }
+          }
+        }
+      }
+    `;
+    for (const handle of collectionHandles.slice(0, 2)) {
+      try {
+        const data = await storefrontApiRequest(COLLECTION_QUERY, { handle, first: limit + 2 });
+        const edges = data?.data?.collection?.products?.edges ?? [];
+        for (const edge of edges) {
+          const node = edge.node;
+          if (!seen.has(node.handle)) {
+            seen.add(node.handle);
+            results.push(node);
+          }
+        }
+        if (results.length >= limit) break;
+      } catch {}
+    }
+  }
+
+  if (results.length < limit && productType) {
+    try {
+      const typeQuery = `product_type:${JSON.stringify(productType)}`;
+      const STOREFRONT_RELATED_QUERY = `
+        query GetProducts($first: Int!, $query: String) {
+          products(first: $first, query: $query) {
+            edges { node { ${RELATED_PRODUCTS_FIELDS} } }
+          }
+        }
+      `;
+      const data = await storefrontApiRequest(STOREFRONT_RELATED_QUERY, { first: limit + 4, query: typeQuery });
+      const edges = data?.data?.products?.edges ?? [];
+      for (const edge of edges) {
+        const node = edge.node;
+        if (!seen.has(node.handle)) {
+          seen.add(node.handle);
+          results.push(node);
+        }
+        if (results.length >= limit) break;
+      }
+    } catch {}
+  }
+
+  return results.slice(0, limit);
+}

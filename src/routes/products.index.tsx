@@ -1,4 +1,4 @@
-﻿import { useMemo } from "react";
+import { useMemo } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { Search, SlidersHorizontal } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -148,8 +148,27 @@ function ProductsPage() {
 
     const q = query.trim().toLowerCase();
     const filtered = catalogue.filter((p) => {
-      // Filter by the actual Shopify collection membership
-      const inCollection = isAllProducts || (p.collectionHandles && p.collectionHandles.includes(collection));
+      // Filter by the actual Shopify collection membership OR local taxonomy mapping fallback
+      let inCollection = false;
+      if (isAllProducts) {
+        inCollection = true;
+      } else if (missingMapping) {
+        inCollection = p.category === missingMapping || (p.subcategories && p.subcategories.includes(missingMapping)) || false;
+      } else if (collection) {
+        const hasShopifyCollection = !!(p.collectionHandles && p.collectionHandles.includes(collection));
+        let hasLocalTaxonomy = false;
+        
+        if (taxonomyMatch) {
+          if (taxonomyMatch.parentTitle) {
+            // It's a subcategory
+            hasLocalTaxonomy = !!p.subcategories?.includes(taxonomyMatch.node.title);
+          } else {
+            // It's a main category
+            hasLocalTaxonomy = p.category === taxonomyMatch.node.title;
+          }
+        }
+        inCollection = hasShopifyCollection || hasLocalTaxonomy;
+      }
       
       const matches =
         p.summary.toLowerCase().includes(q) ||
@@ -199,21 +218,7 @@ function ProductsPage() {
       <main className="w-full overflow-clip">
         <div className="mx-auto w-full max-w-[1600px] px-5 py-10 sm:px-8 sm:py-12 lg:px-12 lg:py-16">
 
-          <div className="text-sm text-muted-foreground mb-6 flex items-center gap-2">
-            <Link to="/" className="hover:text-foreground">Home</Link>
-            <span>/</span>
-            {isAllProducts ? (
-              <span className="text-foreground">All Products</span>
-            ) : taxonomyMatch?.parentTitle ? (
-              <>
-                <span>{taxonomyMatch.parentTitle}</span>
-                <span>/</span>
-                <span className="text-foreground">{taxonomyMatch.node.title}</span>
-              </>
-            ) : taxonomyMatch?.node.title ? (
-              <span className="text-foreground">{taxonomyMatch.node.title}</span>
-            ) : null}
-          </div>
+
 
           <header className="max-w-2xl mb-10">
             <h1 className="text-4xl sm:text-5xl font-display font-medium tracking-tight text-foreground">
@@ -317,9 +322,24 @@ function ProductsPage() {
                     The Shopify collection mapping for <strong>"{missingMapping}"</strong> is not yet configured. Please create a collection in Shopify and map its handle in the taxonomy.
                   </p>
                 </div>
+              ) : catalogue.length === 0 ? (
+                <div className="grid grid-cols-2 gap-x-5 gap-y-10 sm:gap-x-6 md:grid-cols-3 xl:grid-cols-3">
+                  {/* Skeletons while loading */}
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="animate-pulse flex flex-col gap-4">
+                      <div className="aspect-square bg-secondary rounded-2xl"></div>
+                      <div className="h-4 bg-secondary rounded w-3/4"></div>
+                      <div className="h-4 bg-secondary rounded w-1/2"></div>
+                    </div>
+                  ))}
+                </div>
+              ) : visible.length === 0 && (query || Object.keys(activeFilters).length > 0) ? (
+                <p className="text-sm text-muted-foreground mt-4 lg:mt-0">
+                  No products match your search or filters. Try adjusting them.
+                </p>
               ) : visible.length === 0 ? (
                 <p className="text-sm text-muted-foreground mt-4 lg:mt-0">
-                  No products match that search. Try a different term or category.
+                  There are currently no products available in this category.
                 </p>
               ) : (
                 <div className="grid grid-cols-2 gap-x-5 gap-y-10 sm:gap-x-6 md:grid-cols-3 xl:grid-cols-3">

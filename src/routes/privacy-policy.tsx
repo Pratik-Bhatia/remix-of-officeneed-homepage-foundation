@@ -118,7 +118,7 @@ function PrivacyPolicyPage() {
 
             <h2>Contact Information</h2>
             <p>
-              If you have questions or comments about this policy, you may email us at privacy@officeneed.com or contact us by post at our corporate headquarters in Maharashtra, India. If you need immediate assistance regarding an active corporate order, please reach out to your dedicated account manager.
+              If you have questions or comments about this policy, you may email us at contact@officeneed.in or contact us by post at our corporate headquarters in Maharashtra, India. If you need immediate assistance regarding an active corporate order, please reach out to your dedicated account manager.
             </p>
 
             <h2>Updates to this Policy</h2>

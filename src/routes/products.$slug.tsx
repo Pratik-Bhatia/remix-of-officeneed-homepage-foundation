@@ -1,16 +1,17 @@
 import { useMemo, useState, useRef, useEffect } from "react";
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
-import { Minus, Plus, ChevronLeft, ChevronRight, Loader2, ZoomIn, X } from "lucide-react";
+import { Minus, Plus, ChevronLeft, ChevronRight, Loader2, ZoomIn, X, ShieldCheck, Lock, Award, Truck } from "lucide-react";
 import { Navbar } from "@/components/officeneed/Navbar";
 import { Footer } from "@/components/officeneed/Footer";
 import { ProductCard } from "@/components/officeneed/ProductCard";
+import { ProductInformation } from "@/components/officeneed/ProductInformation";
 import { EnquiryDialog } from "@/components/officeneed/EnquiryDialog";
 import { ProductCustomizer } from "@/components/officeneed/ProductCustomizer";
 import { RichText } from "@/components/officeneed/RichText";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { getProductBySlug, getRelatedProducts } from "@/lib/products";
-import { fetchProductByHandle, formatMoney, type ShopifyVariantNode } from "@/lib/shopify";
+import { fetchProductByHandle, fetchRelatedProducts, formatMoney, type ShopifyVariantNode } from "@/lib/shopify";
 import { mergeProduct, shopifyNodeToProduct } from "@/lib/shopify-overlay";
 import { useCartStore } from "@/stores/cartStore";
 import { toast } from "sonner";
@@ -21,7 +22,6 @@ export const Route = createFileRoute("/products/$slug")({
   loader: async ({ params }) => {
     const staticProduct = getProductBySlug(params.slug);
 
-    // Live Shopify details take priority; static data is the fallback.
     let node = null;
     try {
       node = await fetchProductByHandle(params.slug);
@@ -29,9 +29,26 @@ export const Route = createFileRoute("/products/$slug")({
       node = null;
     }
 
-    if (staticProduct) return { product: mergeProduct(staticProduct, node ?? undefined), node };
-    if (node) return { product: shopifyNodeToProduct(node), node };
-    throw notFound();
+    const product = staticProduct
+      ? mergeProduct(staticProduct, node ?? undefined)
+      : node
+        ? shopifyNodeToProduct(node)
+        : null;
+
+    if (!product) throw notFound();
+
+    let related: any[] = [];
+    if (node) {
+      try {
+        const collectionHandles = node.collections?.edges.map((e: any) => e.node.handle) ?? [];
+        const relatedNodes = await fetchRelatedProducts(node.handle, node.productType, collectionHandles, 4);
+        related = relatedNodes.map(shopifyNodeToProduct);
+      } catch (e) {
+        console.error("Failed to fetch related", e);
+      }
+    }
+
+    return { product, node, related };
   },
   head: ({ params, loaderData }) => {
     if (!loaderData) {
@@ -102,7 +119,7 @@ function ProductNotFound() {
 }
 
 function ProductDetail() {
-  const { product, node } = Route.useLoaderData();
+  const { product, node, related } = Route.useLoaderData();
   const [quantity, setQuantity] = useState<number>(product.minimumOrderQuantity || 1);
   const [customizerOpen, setCustomizerOpen] = useState(false);
   const [zoomOpen, setZoomOpen] = useState(false);
@@ -130,6 +147,8 @@ function ProductDetail() {
 
 
   const addItem = useCartStore((s) => s.addItem);
+  const updateQuantity = useCartStore((s) => s.updateQuantity);
+  const items = useCartStore((s) => s.items);
   const isCartLoading = useCartStore((s) => s.isLoading);
 
   const min = product.minimumOrderQuantity || 1;
@@ -196,6 +215,38 @@ function ProductDetail() {
 
   const hasVariantChoice = variants.length > 1;
 
+  const cartItem = items.find(i => i.variantId === selectedVariant?.id);
+  const cartQuantity = cartItem?.quantity;
+  const isItemInCart = !!cartItem;
+
+  // Sync PDP quantity with cart
+  useEffect(() => {
+    if (cartQuantity !== undefined) {
+      setQuantity(cartQuantity);
+    } else {
+      setQuantity(product.minimumOrderQuantity || 1);
+    }
+  }, [cartQuantity, selectedVariant?.id, product.minimumOrderQuantity]);
+
+  const handleQuantityChange = (newQty: number) => {
+    if (!selectedVariant) return;
+    
+    if (!isItemInCart) {
+      setQuantity(Math.max(1, newQty));
+      return;
+    }
+
+    if (newQty <= 0) {
+      // Remove from cart
+      useCartStore.getState().removeItem(selectedVariant.id);
+      setQuantity(1); // Reset default for PDP
+    } else {
+      // Auto sync
+      setQuantity(newQty); // Optimistic UI
+      useCartStore.getState().updateQuantity(selectedVariant.id, newQty);
+    }
+  };
+
   const handleBuyNow = async () => {
     if (!node) {
       toast.error("This product is currently available for enquiry only.");
@@ -204,6 +255,13 @@ function ProductDetail() {
 
     const variantToUse = selectedVariant;
     if (!variantToUse) return;
+    
+    if (isItemInCart) {
+      // If already in cart, button just opens drawer since quantity auto-syncs
+      window.dispatchEvent(new CustomEvent("open-overlays", { detail: "cart" }));
+      return;
+    }
+
     if (!variantToUse.availableForSale) {
       toast.error("This option is currently sold out.");
       return;
@@ -215,7 +273,7 @@ function ProductDetail() {
         variantId: variantToUse.id,
         variantTitle: variantToUse.title,
         price: variantToUse.price ?? node.priceRange?.minVariantPrice,
-        quantity: product.supportsQuantity ? quantity : 1,
+        quantity,
         selectedOptions: variantToUse.selectedOptions ?? [],
       });
       toast.success("Added to cart", { description: product.name });
@@ -239,7 +297,7 @@ function ProductDetail() {
     ? parseFloat(selectedVariant.price.amount)
     : (product.priceAmount ?? NaN);
   const hasNumericPrice = Number.isFinite(unitAmount) && unitAmount > 0;
-  const qtyMultiplier = product.supportsQuantity ? quantity : 1;
+  const qtyMultiplier = quantity;
   const displayPrice = hasNumericPrice
     ? formatMoney(unitAmount * qtyMultiplier, currency)
     : product.price;
@@ -262,7 +320,6 @@ function ProductDetail() {
 
   const activeMedia = gallery[activeImage] ?? gallery[0];
 
-  const related = useMemo(() => getRelatedProducts(product, 4), [product]);
 
 
 
@@ -393,50 +450,40 @@ function ProductDetail() {
                       <dd className="tabular-nums">{skuLabel}</dd>
                     </div>
                   ) : null}
-                  {product.vendor ? (
-                    <div className="flex items-center gap-1.5">
-                      <dt className="font-medium text-foreground/80">Brand:</dt>
-                      <dd>{product.vendor}</dd>
-                    </div>
-                  ) : null}
+
                 </dl>
               </div>
 
-              {product.supportsQuantity ? (
-                <div className="mt-6">
-                  <p className="text-xs font-medium text-foreground/80" id="qty-label">
-                    Quantity{min > 1 ? ` (minimum ${min})` : ""}
-                  </p>
-                  <div className="mt-2 inline-flex items-center rounded-md border border-border">
-                    <button
-                      type="button"
-                      aria-label="Decrease quantity"
-                      onClick={() => setQuantity((q) => Math.max(min, q - step))}
-                      className="grid size-10 place-items-center text-foreground/80 transition-colors hover:bg-secondary"
-                    >
-                      <Minus className="size-4" />
-                    </button>
-                    <input
-                      type="number"
-                      aria-labelledby="qty-label"
-                      value={quantity}
-                      min={min}
-                      onChange={(e) =>
-                        setQuantity(Math.max(min, Number(e.target.value) || min))
-                      }
-                      className="w-12 border-x border-border bg-background py-1.5 text-center text-sm tabular-nums outline-none"
-                    />
-                    <button
-                      type="button"
-                      aria-label="Increase quantity"
-                      onClick={() => setQuantity((q) => q + step)}
-                      className="grid size-10 place-items-center text-foreground/80 transition-colors hover:bg-secondary"
-                    >
-                      <Plus className="size-4" />
-                    </button>
-                  </div>
+              {/* B2B Quantity Selector */}
+              <div className="mt-6 mb-2">
+                <div className="inline-flex h-[52px] items-center border border-[#e5e5e5] bg-transparent">
+                  <button
+                    type="button"
+                    aria-label="Decrease quantity"
+                    onClick={() => setQuantity((q) => Math.max(min, q - step))}
+                    className="px-5 text-foreground/60 hover:text-foreground hover:bg-[#f5f5f5] transition-colors h-full flex items-center justify-center"
+                  >
+                    <Minus className="size-3" strokeWidth={2} />
+                  </button>
+                  <input
+                    type="number"
+                    name="quantity"
+                    aria-label="Quantity"
+                    value={quantity}
+                    min={min}
+                    onChange={(e) => setQuantity(Math.max(min, Number(e.target.value) || min))}
+                    className="w-14 h-full bg-transparent text-center text-sm font-medium tabular-nums outline-none appearance-none"
+                  />
+                  <button
+                    type="button"
+                    aria-label="Increase quantity"
+                    onClick={() => setQuantity((q) => q + step)}
+                    className="px-5 text-foreground/60 hover:text-foreground hover:bg-[#f5f5f5] transition-colors h-full flex items-center justify-center"
+                  >
+                    <Plus className="size-3" strokeWidth={2} />
+                  </button>
                 </div>
-              ) : null}
+              </div>
 
               {hasVariantChoice ? (
                 <div className="mt-6">
@@ -488,25 +535,46 @@ function ProductDetail() {
                 </div>
               ) : null}
 
-              <div ref={purchaseSectionRef} className="mt-7 flex flex-col gap-3 sm:flex-row">
-                <Button 
-                  size="lg" 
+              {/* Stock Status */}
+              {selectedVariant?.availableForSale && (
+                <div className="mt-4 mb-2 flex items-center gap-2">
+                  <div className="size-2 rounded-full bg-green-500 relative">
+                    <div className="absolute inset-0 rounded-full bg-green-500 animate-ping opacity-75" />
+                  </div>
+                  <span className="text-xs font-semibold uppercase tracking-wider text-green-700 dark:text-green-500">
+                    In Stock &bull; Ready to dispatch
+                  </span>
+                </div>
+              )}
+              {selectedVariant && !selectedVariant.availableForSale && (
+                <div className="mt-4 mb-2 flex items-center gap-2">
+                  <div className="size-2 rounded-full bg-red-500" />
+                  <span className="text-xs font-semibold uppercase tracking-wider text-red-600">
+                    Out of Stock
+                  </span>
+                </div>
+              )}
+
+              <div ref={purchaseSectionRef} className="mt-4 flex flex-col sm:flex-row gap-3 max-w-md">
+                <Button
+                  variant="secondary"
+                  size="lg"
                   onClick={handleBuyNow}
                   disabled={isCartLoading || (!!selectedVariant && !selectedVariant.availableForSale)}
-                  className="w-full sm:w-auto font-medium text-background bg-foreground hover:bg-foreground/90"
+                  className="w-full sm:w-1/2 h-[52px] text-[13px] font-medium tracking-[0.1em] uppercase bg-secondary text-secondary-foreground hover:bg-secondary/80 border border-border/80 rounded-none shadow-none"
+                >
+                  {isCartLoading ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+                  Add to Cart
+                </Button>
+                <Button
+                  size="lg"
+                  onClick={handleBuyNow}
+                  disabled={isCartLoading || (!!selectedVariant && !selectedVariant.availableForSale)}
+                  className="w-full sm:w-1/2 h-[52px] text-[13px] font-medium tracking-[0.1em] uppercase bg-foreground text-background hover:bg-foreground/90 rounded-none shadow-none"
                 >
                   {isCartLoading ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
                   {selectedVariant && !selectedVariant.availableForSale ? "Sold out" : "Buy Now"}
                 </Button>
-                <EnquiryDialog
-                  product={product}
-                  quantity={product.supportsQuantity ? quantity : undefined}
-                  trigger={
-                    <Button size="lg" variant="outline" className="w-full sm:w-auto">
-                      Enquire Now
-                    </Button>
-                  }
-                />
               </div>
 
               {/* Corporate Gifting Customizer CTA */}
@@ -600,81 +668,31 @@ function ProductDetail() {
                 </div>
               )}
 
-              {/* Details */}
-              <div className="mt-8 space-y-6 border-t border-border pt-8">
-                <section>
-                  <h2 className="text-sm font-semibold text-foreground">Description</h2>
-                  <RichText
-                    className="mt-2"
-                    html={product.descriptionHtml}
-                    text={product.description}
-                  />
-                </section>
-
-                {product.specifications?.length ? (
-                  <section>
-                    <h2 className="text-sm font-semibold text-foreground">Specifications</h2>
-                    <dl className="mt-3 divide-y divide-border border-y border-border text-sm">
-                      {product.specifications.map((s) => (
-                        <div key={s.label} className="flex gap-4 py-2.5">
-                          <dt className="w-40 shrink-0 text-muted-foreground">{s.label}</dt>
-                          <dd className="min-w-0 text-foreground">{s.value}</dd>
-                        </div>
-                      ))}
-                    </dl>
-                  </section>
-                ) : null}
-
-                {product.features?.length ? (
-                  <section>
-                    <h2 className="text-sm font-semibold text-foreground">Features</h2>
-                    <ul className="mt-3 space-y-1.5 text-sm text-muted-foreground">
-                      {product.features.map((f) => (
-                        <li key={f} className="flex gap-2">
-                          <span aria-hidden className="text-foreground/40">
-                            —
-                          </span>
-                          <span>{f}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </section>
-                ) : null}
-
-                {!hasVariantChoice && product.variants?.length ? (
-                  <section>
-                    <h2 className="text-sm font-semibold text-foreground">Options</h2>
-                    <ul className="mt-3 flex flex-wrap gap-2">
-                      {product.variants.map((v) => (
-                        <li
-                          key={v}
-                          className="rounded-full bg-secondary px-3 py-1.5 text-xs text-secondary-foreground"
-                        >
-                          {v}
-                        </li>
-                      ))}
-                    </ul>
-                  </section>
-                ) : null}
-
-                {product.packaging ? (
-                  <section>
-                    <h2 className="text-sm font-semibold text-foreground">Packaging</h2>
-                    <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                      {product.packaging}
-                    </p>
-                  </section>
-                ) : null}
-
-                {product.customization ? (
-                  <section>
-                    <h2 className="text-sm font-semibold text-foreground">Customization</h2>
-                    <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                      {product.customization}
-                    </p>
-                  </section>
-                ) : null}
+              {/* Trust Badges */}
+              <div className="mt-8 grid grid-cols-3 border-t border-border/60 pt-6 pb-2 w-full">
+                <div className="flex flex-col items-center justify-start text-center">
+                  <ShieldCheck className="size-5 mb-1 text-foreground/70" />
+                  <span className="text-[10px] leading-tight font-medium uppercase tracking-wider text-muted-foreground">Quality<br/>Assured</span>
+                </div>
+                <div className="flex flex-col items-center justify-start text-center">
+                  <Lock className="size-5 mb-1 text-foreground/70" />
+                  <span className="text-[10px] leading-tight font-medium uppercase tracking-wider text-muted-foreground">Secure<br/>Checkout</span>
+                </div>
+                {(product.name.toLowerCase().includes('dell') || product.name.toLowerCase().includes('logitech') || product.vendor?.toLowerCase() === 'dell' || product.vendor?.toLowerCase() === 'logitech' || product.tags?.some((t) => t.toLowerCase().includes('warranty'))) ? (
+                  <div className="flex flex-col items-center justify-start text-center">
+                    <Award className="size-5 mb-1 text-foreground/70" />
+                    <span className="text-[10px] leading-tight font-medium uppercase tracking-wider text-muted-foreground">Official<br/>Warranty</span>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-start text-center">
+                    <Truck className="size-5 mb-1 text-foreground/70" />
+                    <span className="text-[10px] leading-tight font-medium uppercase tracking-wider text-muted-foreground">Fast<br/>Dispatch</span>
+                  </div>
+                )}
               </div>
+
+              {/* Product Information Accordions */}
+              <ProductInformation product={product} />
             </div>
           </div>
 
@@ -693,19 +711,24 @@ function ProductDetail() {
             <div className="mt-6 flex justify-center">
               <EnquiryDialog
                 product={product}
-                quantity={product.supportsQuantity ? quantity : undefined}
+                quantity={quantity}
                 trigger={<Button size="lg">Send Enquiry</Button>}
               />
             </div>
           </section>
 
           {/* Related */}
-          {related.length ? (
-            <section aria-labelledby="related-heading" className="mt-16 sm:mt-20">
-              <h2 id="related-heading" className="text-section">
-                You May Also Like
-              </h2>
-              <div className="mt-8 grid grid-cols-2 gap-x-5 gap-y-10 sm:gap-x-6 md:grid-cols-3 xl:grid-cols-4">
+          {related.length > 0 ? (
+            <section aria-labelledby="related-heading" className="mt-16 sm:mt-24 border-t border-border pt-16 sm:pt-20">
+              <div className="text-center mb-10">
+                <h2 id="related-heading" className="text-[14px] sm:text-[15px] font-semibold tracking-[0.1em] text-foreground uppercase">
+                  Related Products
+                </h2>
+                <p className="mt-3 text-sm text-muted-foreground">
+                  Explore more products you may like.
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-x-5 gap-y-10 sm:gap-x-6 md:grid-cols-3 xl:grid-cols-4">
                 {related.map((p) => (
                   <ProductCard key={p.slug} product={p} />
                 ))}
@@ -735,6 +758,27 @@ function ProductDetail() {
               </div>
             </div>
             <div className="flex items-center gap-3 shrink-0">
+              {/* Sticky Bar Quantity Selector */}
+              <div className="flex h-11 items-center rounded-md border border-border bg-background">
+                <button
+                  type="button"
+                  onClick={() => handleQuantityChange(quantity - 1)}
+                  className="flex h-full w-10 items-center justify-center text-muted-foreground hover:bg-secondary/50 hover:text-foreground transition-colors"
+                >
+                  <Minus className="size-3.5" strokeWidth={1.5} />
+                </button>
+                <div className="flex h-full w-12 items-center justify-center border-x border-border text-sm font-medium tabular-nums text-foreground">
+                  {quantity}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleQuantityChange(quantity + 1)}
+                  className="flex h-full w-10 items-center justify-center text-muted-foreground hover:bg-secondary/50 hover:text-foreground transition-colors"
+                >
+                  <Plus className="size-3.5" strokeWidth={1.5} />
+                </button>
+              </div>
+
               {hasVariantChoice && (
                 <div className="relative">
                   <select 
@@ -758,7 +802,7 @@ function ProductDetail() {
                 className="h-11 w-[220px] xl:w-[280px] font-medium"
               >
                 {isCartLoading ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
-                {selectedVariant && !selectedVariant.availableForSale ? "Sold out" : "Add to Cart"}
+                {selectedVariant && !selectedVariant.availableForSale ? "Sold out" : isItemInCart ? "View Cart" : "Add to Cart"}
               </Button>
             </div>
           </div>
@@ -773,6 +817,27 @@ function ProductDetail() {
               </div>
             </div>
             <div className="flex items-center gap-2 pl-[52px]">
+              {/* Sticky Bar Quantity Selector Mobile */}
+              <div className="flex h-10 items-center rounded-md border border-border bg-background shrink-0">
+                <button
+                  type="button"
+                  onClick={() => handleQuantityChange(quantity - 1)}
+                  className="flex h-full w-8 items-center justify-center text-muted-foreground hover:bg-secondary/50 hover:text-foreground transition-colors"
+                >
+                  <Minus className="size-3.5" strokeWidth={1.5} />
+                </button>
+                <div className="flex h-full w-10 items-center justify-center border-x border-border text-sm font-medium tabular-nums text-foreground">
+                  {quantity}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleQuantityChange(quantity + 1)}
+                  className="flex h-full w-8 items-center justify-center text-muted-foreground hover:bg-secondary/50 hover:text-foreground transition-colors"
+                >
+                  <Plus className="size-3.5" strokeWidth={1.5} />
+                </button>
+              </div>
+
               {hasVariantChoice && (
                 <div className="relative flex-1">
                   <select 
@@ -796,7 +861,7 @@ function ProductDetail() {
                 className="h-10 flex-[1.5] font-medium"
               >
                 {isCartLoading ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
-                {selectedVariant && !selectedVariant.availableForSale ? "Sold out" : "Add"}
+                {selectedVariant && !selectedVariant.availableForSale ? "Sold out" : isItemInCart ? "View Cart" : "Add"}
               </Button>
             </div>
           </div>

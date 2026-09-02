@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Send, X, MessageSquare, Plus, Check, Loader2, Paperclip, ChevronRight, CheckCircle2, Gift, Briefcase, Sparkles, Laptop, Printer } from "lucide-react";
+import { Send, X, MessageSquare, Plus, Check, Loader2, Paperclip, ChevronRight, CheckCircle2, Gift, Briefcase, Sparkles, Laptop, Printer , ArrowRight } from "lucide-react";
 import { uploadEnquiryAttachment } from "@/lib/uploads.functions";
 import logoUrl from "@/assets/officeneed-logo.png";
 import { AiAssistantIcon } from "@/components/officeneed/AiAssistantIcon";
+import { FragranceQuiz } from "./FragranceQuiz";
 import { cn } from "@/lib/utils";
 import {
   buildEnquiryMessage,
@@ -15,7 +16,9 @@ import {
   type ChatAnswers,
   type ChatStep,
 } from "@/lib/chat-flow";
+import { products as staticProducts } from "@/lib/products";
 import type { Product } from "@/lib/products";
+import { useShopifyCatalogue } from "@/lib/shopify-overlay";
 import { submitEnquiry } from "@/lib/enquiries.functions";
 
 type Bubble = {
@@ -34,7 +37,8 @@ const GREETING =
 
 export function ChatWidget() {
   const [open, setOpen] = useState(false);
-  const [phase, setPhase] = useState<"qualification" | "refinement" | "enquiry" | "done">("qualification");
+  const [phase, setPhase] = useState<"qualification" | "refinement" | "enquiry" | "done" | "fragrance">("qualification");
+  const catalogue = useShopifyCatalogue(staticProducts);
   const [stepIndex, setStepIndex] = useState(0);
   const [answers, setAnswers] = useState<ChatAnswers>({});
   const [messages, setMessages] = useState<Bubble[]>([]);
@@ -257,7 +261,7 @@ export function ChatWidget() {
     const clean = value.trim();
     if (!clean && !step.optional) return;
     
-    if (step.inputType === "email" && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(clean)) {
+    if (step.inputType === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean)) {
       setMessages((m) => [
         ...m,
         { id: uid(), role: "user", text: clean },
@@ -289,14 +293,18 @@ export function ChatWidget() {
     setMessages((m) => [...m, { id: uid(), role: "user", text: clean || "Skip" }]);
 
     if (phase === "qualification") {
+      if (step.id === "purpose" && clean === "Fragrance Gifting") {
+        setPhase("fragrance");
+        return;
+      }
       const nextIndex = stepIndex + 1;
       if (nextIndex < chatSteps.length) {
         setStepIndex(nextIndex);
         pushBot(chatSteps[nextIndex]!.question, 500);
       } else {
-        // We finished qualification, show recommendations
+        // We finished qualification � show recommendations
         setPhase("refinement");
-        const picks = recommendProducts(next);
+        const picks = recommendProducts(catalogue, next);
         setCurrentRecommendations(picks);
         pushBot("Based on what you've told me, here are a few options I'd recommend.", 800, picks, true);
         pushBot(refineStep.question, 1800);
@@ -310,7 +318,7 @@ export function ChatWidget() {
          pushBot(enquirySteps[0]!.question, 600);
       } else {
          // Show Premium / Show Budget
-         const picks = recommendProducts(next, clean);
+         const picks = recommendProducts(catalogue, next, clean);
          setCurrentRecommendations(picks);
          pushBot(`Here are some options based on your preference for "${clean}":`, 800, picks, true);
          pushBot(refineStep.question, 1800);
@@ -332,16 +340,14 @@ export function ChatWidget() {
 
   async function finish(final: ChatAnswers) {
     const selected = currentRecommendations.filter(p => selectedProductSlugs.has(p.slug));
-    const top = selected.length > 0 ? selected[0] : currentRecommendations[0];
+    const top = selected.length > 0 ? selected[0] : undefined;
     
     setTyping(true);
     setLoadingMsg("Preparing your enquiry...");
     try {
-      if (!top) throw new Error("No matching products");
-      
       const qtyNum = parseQuantity(final.quantity);
 
-      const productPayload = selected.length > 0 ? selected : [top];
+      const productPayload = selected;
       const selectedProducts = productPayload.map(p => ({
         slug: p.slug,
         name: p.name,
@@ -356,9 +362,9 @@ export function ChatWidget() {
 
       const result = await submitEnquiry({
         data: {
-          productSlug: top.slug,
-          productName: top.name,
-          category: top.category,
+          productSlug: top ? top.slug : "general-enquiry",
+          productName: top ? top.name : "General Enquiry",
+          category: top ? top.category : "General",
           quantity: qtyNum,
           name: final.name ?? "Chat visitor",
           company: final.company ?? "",
@@ -488,7 +494,15 @@ export function ChatWidget() {
             </button>
           </div>
 
-          {/* Transcript / Conversation */}
+          {phase === "fragrance" ? (
+              <FragranceQuiz 
+                products={catalogue} 
+                onClose={() => setOpen(false)} 
+                onReset={restart} 
+              />
+            ) : (
+              <>
+            {/* Transcript / Conversation */}
           <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto overscroll-contain px-5 py-5 pb-8 bg-[#F9FAFB]/50">
             {messages.map((m) => (
               <div key={m.id} className={cn("flex flex-col", m.role === "user" ? "items-end" : "items-start")}>
@@ -638,13 +652,14 @@ export function ChatWidget() {
                   {step.options.map((opt) => {
                     const iconMap: Record<string, any> = {
                       "Corporate Gifting": Gift,
+                      "Fragrance Gifting": Sparkles,
                       "Employee Joining Kits": Briefcase,
                       "Festive Gifts": Sparkles,
                       "Office Supplies": Paperclip,
                       "Hardware & IT": Laptop,
                       "Printing & Branding": Printer,
                     };
-                    const Icon = iconMap[opt] || ChevronRight;
+                    const Icon = iconMap[opt];
                     return (
                       <button
                         key={opt}
@@ -653,7 +668,7 @@ export function ChatWidget() {
                         onClick={() => void answer(opt)}
                         className="group flex flex-col items-center justify-center gap-1.5 rounded-xl border border-border/80 bg-white p-3 text-center shadow-sm transition-all hover:border-foreground/30 hover:shadow-md active:bg-primary active:text-primary-foreground disabled:opacity-50"
                       >
-                        <Icon className="size-4 opacity-50 group-hover:opacity-80 group-active:opacity-100 transition-opacity" strokeWidth={1.5} />
+                        {Icon && <Icon className="size-4 opacity-50 group-hover:opacity-80 group-active:opacity-100 transition-opacity" strokeWidth={1.5} />}
                         <span className="text-[12.5px] font-semibold leading-tight">{opt}</span>
                       </button>
                     )
@@ -800,6 +815,8 @@ export function ChatWidget() {
               </p>
             )}
           </div>
+          </>
+        )}
         </div>
       </div>
     </>

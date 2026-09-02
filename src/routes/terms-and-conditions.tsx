@@ -62,7 +62,7 @@ const termsSections: SectionItem[] = [
     number: "02",
     title: "Company Information",
     content: [
-      "Officeneed operates as an enterprise B2B corporate procurement, branding, and gifting partner headquartered in Maharashtra, India. We specialize in printing solutions, corporate gifting, institutional apparel, luxury fragrances, office supplies, and hardware & IT products.",
+      "Officeneed operates as an enterprise B2B corporate procurement, branding, and gifting partner headquartered in Maharashtra, India. We specialize in printing solutions, corporate gifting, institutional apparel, luxury fragrances, office supplies, and computer peripherals products.",
       "Our services cater to enterprise clients, institutions, and corporate organizations across India, providing end-to-end customization, warehousing, and logistics solutions.",
     ],
   },
@@ -215,7 +215,7 @@ const termsSections: SectionItem[] = [
     number: "19",
     title: "Contact Information",
     content: [
-      "For any formal legal notices, clarifications regarding these Terms & Conditions, or corporate compliance inquiries, please contact our administrative team at info@officeneed.com.",
+      "For any formal legal notices, clarifications regarding these Terms & Conditions, or corporate compliance inquiries, please contact our administrative team at contact@officeneed.in.",
       "You may also reach our corporate headquarters by post or phone during official working hours for immediate procurement support.",
     ],
   },
