@@ -187,16 +187,17 @@ export async function generateEnquiryPDF(data: EnquiryPDFData): Promise<Buffer> 
     }
   }
 
-  currentY += 10;
-
-  if (data.products && data.products.length > 0) {
+   currentY += 10;
+ 
+   let subtotal = 0;
+ 
+   if (data.products && data.products.length > 0) {
     // Products Table
     doc.setFontSize(14);
     doc.setFont("Roboto", "bold");
     doc.text("Recommended Products", marginX, currentY);
     currentY += 6;
   
-    let subtotal = 0;
     
     const tableData = data.products.map(p => {
       const lineTotal = p.quantity * p.unitPrice;

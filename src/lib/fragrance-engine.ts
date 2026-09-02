@@ -44,25 +44,27 @@ export function getFragranceRecommendations(products: Product[], answers: Fragra
     const matchedReasons: string[] = [];
     
     let profile = product.fragranceProfile;
-
+ 
     if (!profile) {
       const desc = (product.description || "").toLowerCase();
       const tags = (product.tags || []).map(t => t.toLowerCase());
+      const head = (s: string, sep: string) => (s.split(sep)[0] ?? "").toLowerCase();
       
       profile = {
         notes: ["Floral", "Citrus", "Woody", "Spicy", "Fresh", "Sweet", "Fruity", "Musk", "Oriental", "Aquatic"].filter(n => desc.includes(n.toLowerCase()) || tags.some(t => t.includes(n.toLowerCase()))),
-        occasion: ["Everyday / Daily Wear", "Office / Professional", "Casual Outings", "Date Night", "Party / Night Out", "Formal / Special Occasion", "Travel / Vacation"].filter(o => desc.includes(o.split(' / ')[0].toLowerCase()) || tags.some(t => t.includes(o.split(' / ')[0].toLowerCase()))),
+        occasion: ["Everyday / Daily Wear", "Office / Professional", "Casual Outings", "Date Night", "Party / Night Out", "Formal / Special Occasion", "Travel / Vacation"].filter(o => desc.includes(head(o, " / ")) || tags.some(t => t.includes(head(o, " / ")))),
         recipient: ["Men", "Women", "Unisex"].filter(r => desc.includes(r.toLowerCase()) || tags.some(t => t.includes(r.toLowerCase()))),
-        personality: ["Fresh & Energetic", "Calm & Sophisticated", "Bold & Confident", "Romantic & Charming", "Mysterious & Magnetic", "Playful & Adventurous"].filter(p => desc.includes(p.split(' ')[0].toLowerCase()) || tags.some(t => t.includes(p.split(' ')[0].toLowerCase()))),
-        mood: ["Fresh & Uplifting", "Calm & Relaxed", "Confident & Powerful", "Romantic & Sensual", "Elegant & Refined", "Warm & Comforting"].filter(m => desc.includes(m.split(' ')[0].toLowerCase()) || tags.some(t => t.includes(m.split(' ')[0].toLowerCase()))),
-        intensity: ["Subtle", "Balanced", "Bold"].find(i => desc.includes(i.toLowerCase()) || tags.some(t => t.includes(i.toLowerCase()))),
+        personality: ["Fresh & Energetic", "Calm & Sophisticated", "Bold & Confident", "Romantic & Charming", "Mysterious & Magnetic", "Playful & Adventurous"].filter(p => desc.includes(head(p, " ")) || tags.some(t => t.includes(head(p, " ")))),
+        mood: ["Fresh & Uplifting", "Calm & Relaxed", "Confident & Powerful", "Romantic & Sensual", "Elegant & Refined", "Warm & Comforting"].filter(m => desc.includes(head(m, " ")) || tags.some(t => t.includes(head(m, " ")))),
         weather: ["Hot", "Warm", "Cool", "Cold", "All Weather"].filter(w => desc.includes(w.toLowerCase()) || tags.some(t => t.includes(w.toLowerCase()))),
         time_of_day: ["Morning", "Daytime", "Evening", "Night", "All Day"].filter(td => desc.includes(td.toLowerCase()) || tags.some(t => t.includes(td.toLowerCase()))),
         age_group: ["18-24", "25-34", "35-44", "45+"].filter(a => desc.includes(a) || tags.some(t => t.includes(a))),
       };
+      const intensityVal = ["Subtle", "Balanced", "Bold"].find(i => desc.includes(i.toLowerCase()) || tags.some(t => t.includes(i.toLowerCase())));
+      if (intensityVal) profile.intensity = intensityVal;
       
       // If we synthesized it but found absolutely nothing, give it a tiny base score just so it exists
-      if (!profile.notes.length && !profile.occasion.length && !profile.recipient.length) {
+      if (!profile.notes?.length && !profile.occasion?.length && !profile.recipient?.length) {
          return { product, score: 0.1, matchPercentage: 10, explanation: "One of our classic fragrances." };
       }
     }
@@ -102,7 +104,7 @@ export function getFragranceRecommendations(products: Product[], answers: Fragra
     // 4. Personality (10%)
     if (answers.personality && profile.personality) {
       maxPossibleScore += 10;
-      if (profile.personality.some(p => answers.personality?.toLowerCase().includes(p.toLowerCase().split(" ")[0]))) {
+      if (profile.personality.some(p => answers.personality?.toLowerCase().includes(p.toLowerCase().split(" ")[0] ?? ""))) {
         score += 10;
         matchedReasons.push("a " + answers.personality.toLowerCase() + " vibe");
       }
@@ -111,7 +113,7 @@ export function getFragranceRecommendations(products: Product[], answers: Fragra
     // 5. Mood (10%)
     if (answers.mood && profile.mood) {
       maxPossibleScore += 10;
-      if (profile.mood.some(m => answers.mood?.toLowerCase().includes(m.toLowerCase().split(" ")[0]))) {
+      if (profile.mood.some(m => answers.mood?.toLowerCase().includes(m.toLowerCase().split(" ")[0] ?? ""))) {
         score += 10;
       }
     }
@@ -128,7 +130,7 @@ export function getFragranceRecommendations(products: Product[], answers: Fragra
     // 7. Weather (5%)
     if (answers.weather && answers.weather !== "Not Sure" && profile.weather) {
       maxPossibleScore += 5;
-      const w = answers.weather.split(" / ")[0];
+      const w = answers.weather.split(" / ")[0] ?? "";
       if (profile.weather.some(x => x.toLowerCase().includes(w.toLowerCase()) || x === "All Weather")) {
         score += 5;
         matchedReasons.push("matching the climate");

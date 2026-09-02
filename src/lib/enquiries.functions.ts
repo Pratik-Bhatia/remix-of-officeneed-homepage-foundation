@@ -182,7 +182,7 @@ export const submitEnquiry = createServerFn({ method: "POST" })
             ...(fileLinks.length ? { fileLinks } : {}),
           },
           ...(pdfAttachments.length ? { attachments: pdfAttachments } : {}),
-          products: data.selectedProducts.map(p => ({
+          products: (data.selectedProducts ?? []).map(p => ({
             name: p.name,
             category: p.category,
             quantity: p.quantity,
