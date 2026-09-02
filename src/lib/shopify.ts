@@ -44,6 +44,7 @@ export interface ShopifyProductNode {
   variants: { edges: Array<{ node: ShopifyVariantNode }> };
   options: Array<{ name: string; values: string[] }>;
   collections?: { edges: Array<{ node: { handle: string } }> };
+  metafields?: Array<{ key: string; value: string; type: string } | null>;
 }
 
 export interface ShopifyProduct {

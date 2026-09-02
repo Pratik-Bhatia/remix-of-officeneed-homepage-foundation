@@ -64,7 +64,7 @@ export function getFragranceRecommendations(products: Product[], answers: Fragra
       if (intensityVal) profile.intensity = intensityVal;
       
       // If we synthesized it but found absolutely nothing, give it a tiny base score just so it exists
-      if (!profile.notes.length && !profile.occasion.length && !profile.recipient.length) {
+      if (!profile.notes?.length && !profile.occasion?.length && !profile.recipient?.length) {
          return { product, score: 0.1, matchPercentage: 10, explanation: "One of our classic fragrances." };
       }
     }
