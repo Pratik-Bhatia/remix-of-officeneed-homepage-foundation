@@ -29,11 +29,11 @@ export function ProductCard({ product }: { product: Product }) {
         )}
       </div>
 
-      <div className="mt-4 flex flex-1 flex-col gap-3">
+      <div className="mt-4 flex flex-1 flex-col gap-2">
         <h3 className="line-clamp-2 text-sm font-medium leading-snug text-foreground sm:text-base">
           {product.name}
         </h3>
-        <p className="mt-auto text-xs tabular-nums text-foreground/80">
+        <p className="text-xs tabular-nums text-foreground/80">
           {product.price
             ? `${product.startingPrice ? "From " : ""}${product.price}`
             : "Price on enquiry"}
