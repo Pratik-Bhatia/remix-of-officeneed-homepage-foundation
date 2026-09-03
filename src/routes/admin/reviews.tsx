@@ -4,6 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { supabase } from "@/integrations/supabase/client";
 import {
   approveReview,
   listPendingReviews,
@@ -46,6 +47,14 @@ function AdminReviewsPage() {
     (async () => {
       try {
         setLoading(true);
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (!sessionData.session) {
+          if (active) {
+            setReviews([]);
+            setError("You need to be signed in with an admin account to moderate reviews.");
+          }
+          return;
+        }
         const data = await fetchReviewsFn({});
         if (active) {
           setReviews(data ?? []);
