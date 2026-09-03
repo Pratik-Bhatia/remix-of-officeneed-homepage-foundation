@@ -52,10 +52,12 @@ function AdminReviewsPage() {
         if (!sessionData.session) {
           if (active) {
             setReviews([]);
+            setSignedIn(false);
             setError("You need to be signed in with an admin account to moderate reviews.");
           }
           return;
         }
+        if (active) setSignedIn(true);
         const data = await fetchReviewsFn({});
         if (active) {
           setReviews(data ?? []);
