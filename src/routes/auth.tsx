@@ -151,17 +151,34 @@ function AuthPage() {
             />
           </div>
           <Button type="submit" className="w-full" disabled={submitting}>
-            {submitting ? "Signing in…" : "Sign in"}
+            {submitting
+              ? mode === "signin"
+                ? "Signing in…"
+                : "Creating account…"
+              : mode === "signin"
+                ? "Sign in"
+                : "Create account"}
           </Button>
         </form>
 
-        <button
-          type="button"
-          onClick={handleReset}
-          className="mt-4 text-xs text-muted-foreground hover:text-foreground underline underline-offset-4"
-        >
-          Forgot password?
-        </button>
+        <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground">
+          <button
+            type="button"
+            onClick={() => setMode(mode === "signin" ? "signup" : "signin")}
+            className="hover:text-foreground underline underline-offset-4"
+          >
+            {mode === "signin" ? "Create an account" : "Have an account? Sign in"}
+          </button>
+          {mode === "signin" && (
+            <button
+              type="button"
+              onClick={handleReset}
+              className="hover:text-foreground underline underline-offset-4"
+            >
+              Forgot password?
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
