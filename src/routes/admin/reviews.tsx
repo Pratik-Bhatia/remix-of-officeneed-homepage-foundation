@@ -37,6 +37,7 @@ function AdminReviewsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [signedIn, setSignedIn] = useState(false);
 
   const fetchReviewsFn = useServerFn(listPendingReviews);
   const approveFn = useServerFn(approveReview);
