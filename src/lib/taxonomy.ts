@@ -19,10 +19,10 @@ export const TAXONOMY: Record<MainCategory, CategoryNode> = {
   "Officeneed Exclusive": {
     title: "Officeneed Exclusive",
     id: "gid://shopify/Collection/498084970724",
-    handle: "exclusive-products",
+    handle: "officeneed-exclusive",
     subcategories: {
       "Featured Exclusives": { title: "Featured Exclusives", id: null, handle: "featured-exclusives" },
-      "New Exclusives": { title: "New Exclusives", id: null, handle: "exclusive-products" },
+      "New Exclusives": { title: "New Exclusives", id: null, handle: "new-exclusives" },
       
     }
   },
@@ -41,11 +41,11 @@ export const TAXONOMY: Record<MainCategory, CategoryNode> = {
   "Fragrance Gifting": {
     title: "Fragrance Gifting",
     id: "gid://shopify/Collection/498084937956",
-    handle: "fragrance-gifting",
+    handle: "perfumes",
     subcategories: {
       "European Perfume": { title: "European Perfume", id: "gid://shopify/Collection/315489419357", handle: "european-perfume" },
       "Middle Eastern Perfume": { title: "Middle Eastern Perfume", id: "gid://shopify/Collection/315489550429", handle: "eastern-perfume" },
-      "Perfume Gift Sets": { title: "Perfume Gift Sets", id: null, handle: "perfume-gift-sets" }
+      "Perfume Gift Sets": { title: "Perfume Gift Sets", id: null, handle: "perfume-gift-set" }
     }
   },
   "Office Stationery": {

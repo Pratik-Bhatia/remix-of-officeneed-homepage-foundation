@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { ArrowLeft, Check, Sparkles, ChevronRight, X, FlaskConical } from "lucide-react";
+import { ArrowLeft, Check, Sparkles, ChevronRight, X, FlaskConical, Loader2, ShoppingBag } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { FragranceQuizAnswers, FragranceMatch } from "@/lib/fragrance-engine";
 import { getFragranceRecommendations } from "@/lib/fragrance-engine";
@@ -14,12 +14,13 @@ import oudIcon from "@/assets/fragrance/oud.svg";
 import spicyIcon from "@/assets/fragrance/spicy.svg";
 import sweetIcon from "@/assets/fragrance/sweet.svg";
 import woodyIcon from "@/assets/fragrance/wood.svg";
-import { formatMoney } from "@/lib/shopify";
+import { formatMoney, fetchProductByHandle } from "@/lib/shopify";
+import { useCartStore } from "@/stores/cartStore";
 
-type QuizStep = "intro" | "recipient_type" | "gender" | "age_group" | "personality" | "mood" | "notes" | "intensity" | "occasion" | "weather" | "time_of_day" | "results";
+type QuizStep = "gender" | "scent_profile" | "occasion" | "intensity" | "budget" | "results";
 
 const STEPS: QuizStep[] = [
-  "intro", "recipient_type", "gender", "age_group", "personality", "mood", "notes", "intensity", "occasion", "weather", "time_of_day", "results"
+  "gender", "scent_profile", "occasion", "intensity", "budget", "results"
 ];
 
 const NOTES = [
@@ -35,6 +36,53 @@ const NOTES = [
   { id: "Oud", image: oudIcon },
 ];
 
+
+
+function QuizAddToCart({ productSlug }: { productSlug: string }) {
+  const [loading, setLoading] = useState(false);
+  const addItem = useCartStore(s => s.addItem);
+  const [success, setSuccess] = useState(false);
+
+  const handleAdd = async () => {
+    setLoading(true);
+    setSuccess(false);
+    try {
+      const node = await fetchProductByHandle(productSlug);
+      if (!node) throw new Error("Product not found");
+      const variant = node.variants?.edges?.[0]?.node;
+      if (!variant) throw new Error("No variant");
+      await addItem({
+        product: { node },
+        variantId: variant.id,
+        variantTitle: variant.title,
+        price: { amount: variant.price?.amount ?? "0", currencyCode: variant.price?.currencyCode ?? "INR" },
+        quantity: 1,
+        selectedOptions: variant.selectedOptions ?? []
+      });
+      setSuccess(true);
+      setTimeout(() => setSuccess(false), 2000);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <button 
+      onClick={handleAdd} 
+      disabled={loading || success}
+      className={cn(
+        "flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-sm font-semibold transition-colors",
+        success ? "bg-green-600 text-white" : "bg-foreground text-background hover:bg-foreground/90 disabled:opacity-50"
+      )}
+    >
+      {loading ? <Loader2 size={16} className="animate-spin" /> : success ? <Check size={16} /> : <ShoppingBag size={16} />}
+      {loading ? "Adding..." : success ? "Added to Cart" : "Add to Cart"}
+    </button>
+  );
+}
+
 export function FragranceQuiz({ products, onClose, onReset }: { products: Product[], onClose: () => void, onReset: () => void }) {
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [answers, setAnswers] = useState<FragranceQuizAnswers>(() => {
@@ -44,33 +92,19 @@ export function FragranceQuiz({ products, onClose, onReset }: { products: Produc
     }
     return {};
   });
-  const [selectedNotes, setSelectedNotes] = useState<string[]>(() => {
-    const saved = typeof window !== 'undefined' ? sessionStorage.getItem('officeGpt_quizState') : null;
-    if (saved) {
-      try { return JSON.parse(saved).answers?.notes || []; } catch(e){}
-    }
-    return [];
-  });
-  const [selectedOccasion, setSelectedOccasion] = useState<string[]>(() => {
-    const saved = typeof window !== 'undefined' ? sessionStorage.getItem('officeGpt_quizState') : null;
-    if (saved) {
-      try { return JSON.parse(saved).answers?.occasion || []; } catch(e){}
-    }
-    return [];
-  });
   const [matches, setMatches] = useState<FragranceMatch[]>([]);
   
   const step = STEPS[currentStepIndex];
-  const progress = Math.max(1, Math.min(10, currentStepIndex)); // 1 to 10 for the actual questions
+  const progress = Math.min(5, currentStepIndex + 1);
 
   const next = () => setCurrentStepIndex(i => Math.min(STEPS.length - 1, i + 1));
   const back = () => setCurrentStepIndex(i => Math.max(0, i - 1));
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      sessionStorage.setItem('officeGpt_quizState', JSON.stringify({ step, answers: { ...answers, notes: selectedNotes, occasion: selectedOccasion } }));
+      sessionStorage.setItem('officeGpt_quizState', JSON.stringify({ step, answers: { ...answers } }));
     }
-  }, [step, answers, selectedNotes, selectedOccasion]);
+  }, [step, answers]);
 
   useEffect(() => {
     if (step === "results") {
@@ -85,123 +119,20 @@ export function FragranceQuiz({ products, onClose, onReset }: { products: Produc
 
   const renderContent = () => {
     switch (step) {
-      case "intro":
-        return (
-          <div className="flex flex-col items-center justify-center text-center p-6 h-full animate-in fade-in zoom-in duration-300">
-            <div className="h-16 w-16 bg-primary/10 text-primary rounded-full flex items-center justify-center mb-6">
-              <FlaskConical size={32} />
-            </div>
-            <h3 className="text-2xl font-bold mb-2">Let's find your fragrance.</h3>
-            <p className="text-muted-foreground mb-8">I'll ask you a few quick questions and match you with perfumes from our collection.</p>
-            <button onClick={next} className="w-full bg-primary text-primary-foreground py-4 rounded-xl font-semibold text-lg hover:bg-primary/90 transition-colors">Start</button>
-          </div>
-        );
-
-      case "recipient_type":
-        return <SingleChoice title="What kind of fragrance are you looking for?" options={["For Myself", "For Someone Else", "Not Sure"]} onSelect={(v) => updateAnswer("recipient_type", v)} value={answers.recipient_type} />;
-        
       case "gender":
-        const forMyself = answers.recipient_type === "For Myself";
-        const title = forMyself ? "What kind of fragrance do you usually wear?" : "Who are you choosing it for?";
-        const opts = forMyself ? ["Men's fragrance", "Women's fragrance", "Unisex fragrance", "Not Sure"] : ["Man", "Woman", "Unisex / Anyone", "Not Sure"];
-        return <SingleChoice title={title} options={opts} onSelect={(v) => updateAnswer("gender", v)} value={answers.gender} />;
+        return <SingleChoice title="Who is this fragrance for?" options={["For Him", "For Her", "Unisex / Anyone"]} onSelect={(v) => updateAnswer("gender", v)} value={answers.gender} />;
 
-      case "age_group":
-        return <SingleChoice title="What's the age group?" options={["18-24", "25-34", "35-44", "45+", "Prefer not to say"]} onSelect={(v) => updateAnswer("age_group", v)} value={answers.age_group} />;
-
-      case "personality":
-        return <SingleChoice title="Which personality feels closest to you?" options={["Fresh & Energetic", "Calm & Sophisticated", "Bold & Confident", "Romantic & Charming", "Mysterious & Magnetic", "Playful & Adventurous"]} onSelect={(v) => updateAnswer("personality", v)} value={answers.personality} />;
-
-      case "mood":
-        return <SingleChoice title="What mood do you want your fragrance to create?" options={["Fresh & Uplifting", "Calm & Relaxed", "Confident & Powerful", "Romantic & Sensual", "Elegant & Refined", "Warm & Comforting"]} onSelect={(v) => updateAnswer("mood", v)} value={answers.mood} />;
-
-      case "notes":
-        return (
-          <div className="flex flex-col h-full animate-in slide-in-from-right-4 duration-300">
-            <h3 className="text-xl font-bold mb-1">Which fragrance notes attract you most?</h3>
-            <p className="text-sm text-muted-foreground mb-4">Choose up to 3</p>
-            <div className="grid grid-cols-2 gap-2 mb-6 overflow-y-auto pr-2 pb-20">
-              {NOTES.map(note => {
-                const selected = selectedNotes.includes(note.id);
-                return (
-                  <button
-                    key={note.id}
-                    onClick={() => {
-                      if (selected) {
-                        setSelectedNotes(prev => prev.filter(n => n !== note.id));
-                      } else if (selectedNotes.length < 3) {
-                        setSelectedNotes(prev => [...prev, note.id]);
-                      }
-                    }}
-                    className={cn(
-                      "flex items-center gap-2 p-3 rounded-xl border text-left transition-all",
-                      selected ? "is-selected" : "border-border hover:border-primary/30 hover:bg-secondary"
-                    )}
-                  >
-                    <img src={note.image} alt={note.id} className="w-8 h-8 object-contain opacity-80" />
-                    <span className="font-medium text-sm">{note.id}</span>
-                  </button>
-                );
-              })}
-            </div>
-            
-            <div className="absolute bottom-0 left-0 right-0 p-4 bg-background border-t flex flex-col gap-2">
-              <button
-                onClick={() => {
-                  setAnswers(prev => ({ ...prev, notes: selectedNotes }));
-                  next();
-                }}
-                disabled={selectedNotes.length === 0}
-                className={cn("w-full py-3 rounded-xl font-semibold transition-colors", selectedNotes.length > 0 ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground")}
-              >
-                Continue
-              </button>
-              <button onClick={() => updateAnswer("notes", ["Not Sure"])} className="text-sm text-muted-foreground py-2 hover:text-foreground">Not Sure</button>
-            </div>
-          </div>
-        );
-
-      case "intensity":
-        return <SingleChoice title="How noticeable would you like your fragrance to be?" options={["Subtle", "Balanced", "Bold", "Not Sure"]} onSelect={(v) => updateAnswer("intensity", v)} value={answers.intensity} />;
+      case "scent_profile":
+        return <GridChoice title="What scent profile do they prefer?" options={["Citrus & Fresh", "Warm & Woody", "Floral & Rose", "Sweet & Vanilla", "Bold & Spicy", "Aquatic & Marine", "Fruity & Tropical", "Musky & Powdery", "Earthy & Green", "Not Sure / Mixed"]} onSelect={(v) => updateAnswer("scent_profile", v as any)} value={answers.scent_profile} />;
 
       case "occasion":
-        const occOpts = ["Everyday / Daily Wear", "Office / Professional", "Casual Outings", "Date Night", "Party / Night Out", "Formal / Special Occasion", "Travel / Vacation"];
-        return (
-          <div className="flex flex-col h-full animate-in slide-in-from-right-4 duration-300">
-            <h3 className="text-xl font-bold mb-4">Where will you mostly wear it?</h3>
-            <div className="flex flex-col gap-2 mb-6 overflow-y-auto pb-20">
-              {occOpts.map(opt => {
-                const selected = selectedOccasion.includes(opt);
-                return (
-                  <button
-                    key={opt}
-                    onClick={() => {
-                      if (selected) setSelectedOccasion(p => p.filter(x => x !== opt));
-                      else setSelectedOccasion(p => [...p, opt]);
-                    }}
-                    className={cn(
-                      "flex items-center justify-between p-4 rounded-xl border transition-all text-left",
-                      selected ? "is-selected" : "border-border hover:border-primary/30"
-                    )}
-                  >
-                    <span className="font-medium">{opt}</span>
-                    {selected && <Check className="text-primary" size={18} />}
-                  </button>
-                );
-              })}
-            </div>
-            <div className="absolute bottom-0 left-0 right-0 p-4 bg-background border-t flex flex-col gap-2">
-              <button onClick={() => { setAnswers(p => ({ ...p, occasion: selectedOccasion })); next(); }} disabled={selectedOccasion.length === 0} className={cn("w-full py-3 rounded-xl font-semibold", selectedOccasion.length > 0 ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground")}>Continue</button>
-              <button onClick={() => updateAnswer("occasion", ["Not Sure"])} className="text-sm text-muted-foreground py-2 hover:text-foreground">Not Sure</button>
-            </div>
-          </div>
-        );
+        return <SingleChoice title="What is the gifting occasion?" options={["Daily Office / Workwear", "Executive / Formal Milestone", "Festive / Celebration", "Casual Everyday"]} onSelect={(v) => updateAnswer("occasion", v)} value={answers.occasion} />;
 
-      case "weather":
-        return <SingleChoice title="What kind of weather will you mostly wear it in?" options={["Hot / Summer", "Warm / Spring", "Cool / Autumn", "Cold / Winter", "All Season", "Not Sure"]} onSelect={(v) => updateAnswer("weather", v)} value={answers.weather} />;
+      case "intensity":
+        return <SingleChoice title="How strong should the fragrance be?" options={["Subtle & Light (EDT)", "Moderate", "Strong & Long-lasting (Parfum)"]} onSelect={(v) => updateAnswer("intensity", v)} value={answers.intensity} />;
 
-      case "time_of_day":
-        return <SingleChoice title="When will you usually wear it?" options={["Morning", "Daytime", "Evening", "Night", "Any Time", "Not Sure"]} onSelect={(v) => updateAnswer("time_of_day", v)} value={answers.time_of_day} />;
+      case "budget":
+        return <SingleChoice title="What is your budget?" options={["Under ₹2,500", "₹2,500 – ₹5,000", "₹5,000+"]} onSelect={(v) => updateAnswer("budget", v)} value={answers.budget} />;
 
       case "results":
         if (matches.length === 0) {
@@ -210,7 +141,7 @@ export function FragranceQuiz({ products, onClose, onReset }: { products: Produc
               <h3 className="text-xl font-bold mb-4">I'm still learning our fragrance collection.</h3>
               <p className="text-muted-foreground mb-6">Here are the closest options currently available.</p>
               {/* Show some fallback products if they don't have metafields yet */}
-              <button onClick={() => { if (typeof window !== "undefined") sessionStorage.removeItem("officeGpt_quizState"); onReset(); }} className="mt-auto w-full py-3 rounded-xl font-semibold border hover:bg-secondary">Start Over</button>
+              
             </div>
           );
         }
@@ -245,9 +176,7 @@ export function FragranceQuiz({ products, onClose, onReset }: { products: Produc
                 </div>
               ))}
             </div>
-            <button onClick={() => { setCurrentStepIndex(0); setAnswers({}); setSelectedNotes([]); setSelectedOccasion([]); }} className="mt-6 w-full py-3 rounded-xl font-semibold border text-muted-foreground hover:bg-secondary hover:text-foreground">
-              Start Over
-            </button>
+            
           </div>
         );
       default:
@@ -258,17 +187,34 @@ export function FragranceQuiz({ products, onClose, onReset }: { products: Produc
   return (
     <div className="flex-1 flex flex-col h-full bg-background relative z-10">
       <div className="flex items-center justify-between p-4 shrink-0">
-        <button onClick={() => { if (step === "intro") onReset(); else back(); }} className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+        <button onClick={() => { if (currentStepIndex === 0) onReset(); else back(); }} className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
           <ArrowLeft size={16} /> Back
         </button>
         
-        {step !== "intro" && step !== "results" && (
-          <span className="text-xs font-bold text-muted-foreground tracking-widest">{progress} OF 10</span>
+        {step !== "results" && (
+          <span className="text-xs font-bold text-muted-foreground tracking-widest">{progress} OF 5</span>
         )}
       </div>
 
       <div className="flex-1 overflow-y-auto px-5 pb-5">
         {renderContent()}
+      </div>
+      
+      <div className="p-4 border-t flex flex-col gap-3 bg-background z-10 shrink-0">
+        <div className="flex items-center justify-between">
+          <button 
+            onClick={() => {
+              if (typeof window !== "undefined") sessionStorage.removeItem("officeGpt_quizState");
+              onReset();
+            }} 
+            className="text-sm font-medium text-muted-foreground hover:text-foreground px-2 py-1 rounded-md transition-colors"
+          >
+            Start Over
+          </button>
+        </div>
+        <p className="text-center text-[11px] font-sans text-[#6b7280] pb-1">
+          Recommendations are AI-assisted and may vary. Please verify product details before purchase.
+        </p>
       </div>
     </div>
   );
@@ -293,6 +239,49 @@ function SingleChoice({ title, options, onSelect, value }: { title: string, opti
             )}
           >
             {opt}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function GridChoice({ title, options, onSelect, value }: { title: string, options: string[], onSelect: (v: string) => void, value: string | undefined }) {
+  const getIcon = (opt: string) => {
+    switch (opt) {
+      case "Citrus & Fresh": return <img src={citrusIcon} className="w-8 h-8 opacity-80" alt="Citrus" />;
+      case "Warm & Woody": return <img src={woodyIcon} className="w-8 h-8 opacity-80" alt="Woody" />;
+      case "Floral & Rose": return <img src={floralIcon} className="w-8 h-8 opacity-80" alt="Floral" />;
+      case "Sweet & Vanilla": return <img src={sweetIcon} className="w-8 h-8 opacity-80" alt="Sweet" />;
+      case "Bold & Spicy": return <img src={spicyIcon} className="w-8 h-8 opacity-80" alt="Spicy" />;
+      case "Aquatic & Marine": return <img src={aquaticIcon} className="w-8 h-8 opacity-80" alt="Aquatic" />;
+      case "Fruity & Tropical": return <img src={fruityIcon} className="w-8 h-8 opacity-80" alt="Fruity" />;
+      case "Musky & Powdery": return <img src={muskyIcon} className="w-8 h-8 opacity-80" alt="Musky" />;
+      case "Earthy & Green": return <img src={freshIcon} className="w-8 h-8 opacity-80" alt="Earthy" />;
+      case "Not Sure / Mixed": return <Sparkles className="w-8 h-8 opacity-80 text-muted-foreground" />;
+      default: return null;
+    }
+  };
+
+  return (
+    <div className="flex flex-col h-full animate-in slide-in-from-right-4 duration-300">
+      <h3 className="text-2xl font-bold mb-6 leading-tight">{title}</h3>
+      <div className="grid grid-cols-2 gap-[10px] overflow-y-auto pb-6">
+        {options.map((opt) => (
+          <button
+            key={opt}
+            onClick={() => onSelect(opt)}
+            className={cn(
+              "flex flex-col items-center justify-center text-center p-3 rounded-xl border transition-all duration-200 gap-2",
+              value === opt 
+                ? "is-selected font-semibold text-primary bg-primary/5 border-primary" 
+                : opt === "Not Sure / Mixed"
+                  ? "col-span-2 border-transparent bg-secondary/50 text-muted-foreground hover:bg-secondary"
+                  : "border-border hover:border-primary/30 hover:bg-secondary/50"
+            )}
+          >
+            {getIcon(opt)}
+            <span className="text-[13px] leading-tight font-medium">{opt}</span>
           </button>
         ))}
       </div>

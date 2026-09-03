@@ -814,6 +814,9 @@ export function ChatWidget() {
                 {error}
               </p>
             )}
+            <p className="mt-3 text-center text-[11px] text-[#6b7280] font-sans">
+                Recommendations are AI-assisted and may vary. Please verify product details before purchase.
+              </p>
           </div>
           </>
         )}

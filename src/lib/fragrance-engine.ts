@@ -1,16 +1,11 @@
 import type { Product } from "./products";
 
 export type FragranceQuizAnswers = {
-  recipient_type?: "For Myself" | "For Someone Else" | "Not Sure";
-  gender?: "Men's fragrance" | "Women's fragrance" | "Unisex fragrance" | "Man" | "Woman" | "Unisex / Anyone" | "Not Sure";
-  age_group?: "18-24" | "25-34" | "35-44" | "45+" | "Prefer not to say";
-  personality?: "Fresh & Energetic" | "Calm & Sophisticated" | "Bold & Confident" | "Romantic & Charming" | "Mysterious & Magnetic" | "Playful & Adventurous";
-  mood?: "Fresh & Uplifting" | "Calm & Relaxed" | "Confident & Powerful" | "Romantic & Sensual" | "Elegant & Refined" | "Warm & Comforting";
-  notes?: string[];
-  intensity?: "Subtle" | "Balanced" | "Bold" | "Not Sure";
-  occasion?: string[];
-  weather?: "Hot / Summer" | "Warm / Spring" | "Cool / Autumn" | "Cold / Winter" | "All Season" | "Not Sure";
-  time_of_day?: "Morning" | "Daytime" | "Evening" | "Night" | "Any Time" | "Not Sure";
+  gender?: "For Him" | "For Her" | "Unisex / Anyone";
+  scent_profile?: "Citrus & Fresh" | "Warm & Woody" | "Floral & Rose" | "Sweet & Vanilla" | "Bold & Spicy" | "Aquatic & Marine" | "Fruity & Tropical" | "Musky & Powdery" | "Earthy & Green" | "Not Sure / Mixed";
+  occasion?: "Daily Office / Workwear" | "Executive / Formal Milestone" | "Festive / Celebration" | "Casual Everyday";
+  intensity?: "Subtle & Light (EDT)" | "Moderate" | "Strong & Long-lasting (Parfum)";
+  budget?: "Under ₹2,500" | "₹2,500 – ₹5,000" | "₹5,000+";
 };
 
 export type FragranceMatch = {
@@ -36,7 +31,32 @@ function arrayIntersect(arr1?: string[], arr2?: string[]) {
 }
 
 export function getFragranceRecommendations(products: Product[], answers: FragranceQuizAnswers): FragranceMatch[] {
-  const eligibleProducts = products.filter(p => p.category === "Fragrance Gifting" || p.subcategories?.includes("Perfume Gift Sets") || p.subcategories?.includes("European Perfume") || p.subcategories?.includes("Middle Eastern Perfume"));
+  let eligibleProducts = products.filter(p => p.category === "Fragrance Gifting" || p.subcategories?.includes("Perfume Gift Sets") || p.subcategories?.includes("European Perfume") || p.subcategories?.includes("Middle Eastern Perfume"));
+
+  // 1. Strict Gender Filtering (Pre-LLM Logic Fix)
+  if (answers.gender) {
+    eligibleProducts = eligibleProducts.filter(p => {
+      const desc = (p.description || "").toLowerCase();
+      const tags = (p.tags || []).map(t => t.toLowerCase());
+      const hasTagOrDesc = (term: string) => tags.includes(term) || desc.includes(term);
+      const isUnisex = hasTagOrDesc("unisex");
+      
+      // We check for men and women to prevent partial matches
+      const hasMen = tags.some(t => /\bmen\b/.test(t)) || tags.some(t => /\bman\b/.test(t)) || /\bmen\b/.test(desc) || /\bman\b/.test(desc);
+      const hasWomen = tags.some(t => /\bwomen\b/.test(t)) || tags.some(t => /\bwoman\b/.test(t)) || /\bwomen\b/.test(desc) || /\bwoman\b/.test(desc);
+
+      if (answers.gender === "For Him") {
+        return isUnisex || hasMen;
+      }
+      if (answers.gender === "For Her") {
+        return isUnisex || hasWomen;
+      }
+      if (answers.gender === "Unisex / Anyone") {
+        return isUnisex;
+      }
+      return true;
+    });
+  }
 
   const matches = eligibleProducts.map(product => {
     let score = 0;
@@ -70,86 +90,78 @@ export function getFragranceRecommendations(products: Product[], answers: Fragra
     }
 
 
-    // 1. Notes (25%)
-    if (answers.notes && answers.notes.length > 0 && !answers.notes.includes("Not Sure")) {
+    // We already strictly filtered by gender, so we can ignore it for score, or add a flat score just to boost all.
+    score += 15;
+    maxPossibleScore += 15;
+
+    // 1. Scent Profile (Notes equivalent) (30%)
+    const desc = (product.description || "").toLowerCase();
+      const tags = (product.tags || []).join(" ").toLowerCase();
+      const txt = desc + " " + tags;
+
+      if (answers.scent_profile && answers.scent_profile !== "Not Sure / Mixed") {
+      maxPossibleScore += 30;
+      let matched = false;
+      if (answers.scent_profile === "Citrus & Fresh" && (txt.includes("fresh") || txt.includes("citrus") || txt.includes("lemon"))) matched = true;
+      else if (answers.scent_profile === "Warm & Woody" && (txt.includes("warm") || txt.includes("wood") || txt.includes("oud") || txt.includes("amber") || txt.includes("cedar"))) matched = true;
+      else if (answers.scent_profile === "Floral & Rose" && (txt.includes("floral") || txt.includes("flower") || txt.includes("rose") || txt.includes("jasmine"))) matched = true;
+      else if (answers.scent_profile === "Sweet & Vanilla" && (txt.includes("sweet") || txt.includes("vanilla") || txt.includes("caramel"))) matched = true;
+      else if (answers.scent_profile === "Bold & Spicy" && (txt.includes("bold") || txt.includes("spic") || txt.includes("pepper"))) matched = true;
+      else if (answers.scent_profile === "Aquatic & Marine" && (txt.includes("aqua") || txt.includes("water") || txt.includes("marine") || txt.includes("ocean") || txt.includes("sea"))) matched = true;
+      else if (answers.scent_profile === "Fruity & Tropical" && (txt.includes("fruit") || txt.includes("peach") || txt.includes("apple") || txt.includes("tropical") || txt.includes("coconut"))) matched = true;
+      else if (answers.scent_profile === "Musky & Powdery" && (txt.includes("musk") || txt.includes("powder") || txt.includes("soft"))) matched = true;
+      else if (answers.scent_profile === "Earthy & Green" && (txt.includes("earth") || txt.includes("green") || txt.includes("moss") || txt.includes("vetiver"))) matched = true;
+      
+      if (matched) {
+        score += 30;
+        matchedReasons.push(answers.scent_profile.toLowerCase() + " profile");
+      }
+    }
+
+    // 2. Occasion (25%)
+    if (answers.occasion) {
       maxPossibleScore += 25;
-      const matchingNotes = arrayIntersect(answers.notes, profile.notes);
-      if (matchingNotes > 0) {
-        // Boost if it hits multiple, don't penalize if the product has extra notes
-        const noteScore = Math.min(25, (matchingNotes / answers.notes.length) * 25);
-        score += noteScore;
-        matchedReasons.push(answers.notes.join(", ") + " notes");
+      let matched = false;
+      if (answers.occasion === "Daily Office / Workwear" && (txt.includes("office") || txt.includes("daily") || txt.includes("work") || txt.includes("everyday"))) matched = true;
+      else if (answers.occasion === "Executive / Formal Milestone" && (txt.includes("formal") || txt.includes("executive") || txt.includes("luxury") || txt.includes("premium"))) matched = true;
+      else if (answers.occasion === "Festive / Celebration" && (txt.includes("festiv") || txt.includes("party") || txt.includes("celebrat") || txt.includes("special"))) matched = true;
+      else if (answers.occasion === "Casual Everyday" && (txt.includes("casual") || txt.includes("everyday") || txt.includes("daily"))) matched = true;
+
+      // Generous fallback if it's generally versatile
+      if (matched || txt.includes("versatile")) {
+        score += 25;
+        matchedReasons.push("matching the occasion");
       }
     }
 
-    // 2. Occasion (15%)
-    if (answers.occasion && answers.occasion.length > 0 && !answers.occasion.includes("Not Sure")) {
+    // 3. Intensity (15%)
+    if (answers.intensity) {
       maxPossibleScore += 15;
-      const matchingOccasion = arrayIntersect(answers.occasion, profile.occasion);
-      if (matchingOccasion > 0) {
+      const desc = (product.description || "").toLowerCase();
+      let matched = false;
+      
+      if (answers.intensity === "Subtle & Light (EDT)" && (desc.includes("edt") || desc.includes("eau de toilette") || desc.includes("subtle") || desc.includes("light"))) matched = true;
+      else if (answers.intensity === "Strong & Long-lasting (Parfum)" && (desc.includes("parfum") || desc.includes("strong") || desc.includes("long-lasting"))) matched = true;
+      else if (answers.intensity === "Moderate") matched = true; // Safe fallback
+
+      if (matched) {
         score += 15;
-        matchedReasons.push(answers.occasion[0] + " use");
+        matchedReasons.push("the right intensity");
       }
     }
 
-    // 3. Recipient/Gender (15%)
-    if (answers.gender && answers.gender !== "Not Sure" && profile.recipient) {
+    // 4. Budget (15%)
+    if (answers.budget) {
       maxPossibleScore += 15;
-      const mapped = GENDER_MAP[answers.gender] || answers.gender;
-      if (profile.recipient.includes(mapped) || profile.recipient.includes("Unisex")) {
+      const price = product.priceAmount || 0;
+      let matched = false;
+      if (answers.budget === "Under ₹2,500" && price <= 2500) matched = true;
+      else if (answers.budget === "₹2,500 – ₹5,000" && price > 2500 && price <= 5000) matched = true;
+      else if (answers.budget === "₹5,000+" && price > 5000) matched = true;
+
+      if (matched) {
         score += 15;
-      }
-    }
-
-    // 4. Personality (10%)
-    if (answers.personality && profile.personality) {
-      maxPossibleScore += 10;
-      if (profile.personality.some(p => answers.personality?.toLowerCase().includes(p.toLowerCase().split(" ")[0] ?? ""))) {
-        score += 10;
-        matchedReasons.push("a " + answers.personality.toLowerCase() + " vibe");
-      }
-    }
-
-    // 5. Mood (10%)
-    if (answers.mood && profile.mood) {
-      maxPossibleScore += 10;
-      if (profile.mood.some(m => answers.mood?.toLowerCase().includes(m.toLowerCase().split(" ")[0] ?? ""))) {
-        score += 10;
-      }
-    }
-
-    // 6. Intensity (10%)
-    if (answers.intensity && answers.intensity !== "Not Sure" && profile.intensity) {
-      maxPossibleScore += 10;
-      if (profile.intensity.toLowerCase() === answers.intensity.toLowerCase()) {
-        score += 10;
-        matchedReasons.push(`a ${answers.intensity.toLowerCase()} presence`);
-      }
-    }
-
-    // 7. Weather (5%)
-    if (answers.weather && answers.weather !== "Not Sure" && profile.weather) {
-      maxPossibleScore += 5;
-      const w = answers.weather.split(" / ")[0] ?? "";
-      if (profile.weather.some(x => x.toLowerCase().includes(w.toLowerCase()) || x === "All Weather")) {
-        score += 5;
-        matchedReasons.push("matching the climate");
-      }
-    }
-
-    // 8. Time of Day (5%)
-    if (answers.time_of_day && answers.time_of_day !== "Not Sure" && profile.time_of_day) {
-      maxPossibleScore += 5;
-      if (profile.time_of_day.some(t => t.toLowerCase() === answers.time_of_day?.toLowerCase() || t === "All Day")) {
-        score += 5;
-      }
-    }
-
-    // 9. Age Group (5%)
-    if (answers.age_group && answers.age_group !== "Prefer not to say" && profile.age_group) {
-      maxPossibleScore += 5;
-      if (profile.age_group.includes(answers.age_group)) {
-        score += 5;
+        matchedReasons.push("fitting your budget");
       }
     }
 
