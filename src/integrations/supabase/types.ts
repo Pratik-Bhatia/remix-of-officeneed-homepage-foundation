@@ -181,6 +181,45 @@ export type Database = {
           },
         ]
       }
+      product_reviews: {
+        Row: {
+          author_email: string
+          author_name: string
+          body: string
+          created_at: string
+          id: string
+          is_verified_buyer: boolean
+          product_handle: string
+          rating: number
+          status: string
+          title: string
+        }
+        Insert: {
+          author_email: string
+          author_name: string
+          body: string
+          created_at?: string
+          id?: string
+          is_verified_buyer?: boolean
+          product_handle: string
+          rating: number
+          status?: string
+          title: string
+        }
+        Update: {
+          author_email?: string
+          author_name?: string
+          body?: string
+          created_at?: string
+          id?: string
+          is_verified_buyer?: boolean
+          product_handle?: string
+          rating?: number
+          status?: string
+          title?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
