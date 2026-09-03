@@ -60,6 +60,25 @@ function AuthPage() {
     e.preventDefault();
     setSubmitting(true);
     try {
+      if (mode === "signup") {
+        const { data, error } = await supabase.auth.signUp({
+          email: email.trim(),
+          password,
+          options: { emailRedirectTo: window.location.origin },
+        });
+        if (error) {
+          toast.error(error.message || "Unable to create the account.");
+          return;
+        }
+        if (!data.session) {
+          toast.success("Account created. Check your email to confirm, then sign in.");
+          setMode("signin");
+          return;
+        }
+        await router.invalidate();
+        navigate({ to: destination, replace: true });
+        return;
+      }
       const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
       if (error) {
         toast.error(error.message || "Unable to sign in.");
