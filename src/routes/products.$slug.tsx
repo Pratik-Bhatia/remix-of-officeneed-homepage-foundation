@@ -5,6 +5,7 @@ import { Navbar } from "@/components/officeneed/Navbar";
 import { Footer } from "@/components/officeneed/Footer";
 import { ProductCard } from "@/components/officeneed/ProductCard";
 import { ProductInformation } from "@/components/officeneed/ProductInformation";
+import { ProductReviews, ProductRatingSummary, MOCK_REVIEWS, type Review } from "@/components/officeneed/ProductReviews";
 import { EnquiryDialog } from "@/components/officeneed/EnquiryDialog";
 import { ProductCustomizer } from "@/components/officeneed/ProductCustomizer";
 import { RichText } from "@/components/officeneed/RichText";
@@ -15,6 +16,7 @@ import { fetchProductByHandle, fetchRelatedProducts, formatMoney, type ShopifyVa
 import { mergeProduct, shopifyNodeToProduct } from "@/lib/shopify-overlay";
 import { useCartStore } from "@/stores/cartStore";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 const BASE = "https://officeneed-premier-launch.lovable.app";
 
@@ -125,6 +127,38 @@ function ProductDetail() {
   const [zoomOpen, setZoomOpen] = useState(false);
   const purchaseSectionRef = useRef<HTMLDivElement>(null);
   const [showStickyBar, setShowStickyBar] = useState(false);
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const slug = Route.useParams().slug;
+
+  useEffect(() => {
+    async function fetchReviews() {
+      const { data, error } = await supabase
+        .from('product_reviews')
+        .select('*')
+        .eq('product_handle', slug)
+        .eq('status', 'approved')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error("Error fetching reviews:", error);
+        return;
+      }
+
+      if (data) {
+        const formatted: Review[] = data.map((r: any) => ({
+          id: r.id,
+          title: r.title,
+          body: r.body,
+          rating: r.rating,
+          author: r.author_name,
+          date: new Date(r.created_at).toLocaleDateString("en-IN", { month: "long", year: "numeric" }),
+          verified: r.is_verified_buyer,
+        }));
+        setReviews(formatted);
+      }
+    }
+    fetchReviews();
+  }, [slug]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -412,169 +446,149 @@ function ProductDetail() {
             <div className="w-full min-w-0 max-w-full overflow-wrap-break-word">
               <p className="text-eyebrow text-muted-foreground">{product.category}</p>
               <h1 className="mt-2 text-3xl md:text-4xl lg:text-[40px] font-semibold tracking-tight text-foreground leading-[1.1] text-balance">{product.name}</h1>
+              <ProductRatingSummary reviews={reviews} />
               
-              <div className="mt-4 space-y-3">
-                <p className="text-sm leading-relaxed text-muted-foreground sm:text-base">
-                  {product.summary}
-                </p>
-
-                <div className="flex flex-wrap items-baseline gap-3">
-                  <p className="text-xl font-medium tabular-nums text-foreground">
-                    {displayPrice
-                      ? `${!selectedVariant && product.startingPrice ? "From " : ""}${displayPrice}`
-                      : "Price on enquiry"}
-                  </p>
-                  {showCompareAt ? (
-                    <p className="text-sm tabular-nums text-muted-foreground line-through">
-                      {formatMoney(compareAmount * qtyMultiplier, currency)}
+              <div className="mt-6 flex flex-col space-y-5">
+                {/* Price and SKU row */}
+                <div>
+                  <div className="flex flex-wrap items-baseline gap-3">
+                    <p className="text-2xl font-semibold tabular-nums text-foreground tracking-tight">
+                      {displayPrice
+                        ? `${!selectedVariant && product.startingPrice ? "From " : ""}${displayPrice}`
+                        : "Price on enquiry"}
                     </p>
-                  ) : null}
-                </div>
-
-                <dl className="flex flex-wrap gap-x-6 gap-y-2 text-xs text-muted-foreground">
-                  {availabilityLabel ? (
-                    <div className="flex items-center gap-1.5">
-                      <dt className="font-medium text-foreground/80">Availability:</dt>
-                      <dd
-                        className={cn(
-                          availabilityLabel === "Sold out" ? "text-destructive" : undefined,
-                        )}
-                      >
-                        {availabilityLabel}
-                      </dd>
-                    </div>
-                  ) : null}
-                  {skuLabel ? (
-                    <div className="flex items-center gap-1.5">
-                      <dt className="font-medium text-foreground/80">Product code:</dt>
-                      <dd className="tabular-nums">{skuLabel}</dd>
-                    </div>
-                  ) : null}
-
-                </dl>
-              </div>
-
-              {/* B2B Quantity Selector */}
-              <div className="mt-6 mb-2">
-                <div className="inline-flex h-[52px] items-center border border-[#e5e5e5] bg-transparent">
-                  <button
-                    type="button"
-                    aria-label="Decrease quantity"
-                    onClick={() => setQuantity((q) => Math.max(min, q - step))}
-                    className="px-5 text-foreground/60 hover:text-foreground hover:bg-[#f5f5f5] transition-colors h-full flex items-center justify-center"
-                  >
-                    <Minus className="size-3" strokeWidth={2} />
-                  </button>
-                  <input
-                    type="number"
-                    name="quantity"
-                    aria-label="Quantity"
-                    value={quantity}
-                    min={min}
-                    onChange={(e) => setQuantity(Math.max(min, Number(e.target.value) || min))}
-                    className="w-14 h-full bg-transparent text-center text-sm font-medium tabular-nums outline-none appearance-none"
-                  />
-                  <button
-                    type="button"
-                    aria-label="Increase quantity"
-                    onClick={() => setQuantity((q) => q + step)}
-                    className="px-5 text-foreground/60 hover:text-foreground hover:bg-[#f5f5f5] transition-colors h-full flex items-center justify-center"
-                  >
-                    <Plus className="size-3" strokeWidth={2} />
-                  </button>
-                </div>
-              </div>
-
-              {hasVariantChoice ? (
-                <div className="mt-6">
-                  <p className="text-xs font-medium text-foreground/80" id="variant-label">
-                    {node?.options?.find((o) => o.name.toLowerCase() !== "title")?.name ?? "Options"}
-                    {selectedVariant ? (
-                      <span className="ml-1 text-muted-foreground">— {selectedVariant.title}</span>
+                    {showCompareAt ? (
+                      <p className="text-sm tabular-nums text-muted-foreground line-through">
+                        {formatMoney(compareAmount * qtyMultiplier, currency)}
+                      </p>
                     ) : null}
-                  </p>
-                  <div
-                    role="group"
-                    aria-labelledby="variant-label"
-                    className="mt-3 flex flex-wrap gap-3"
-                  >
-                    {variants.map((v) => {
-                      const isSelected = selectedVariant?.id === v.id;
-                      const thumb = v.image?.url;
-                      return (
-                        <button
-                          key={v.id}
-                          type="button"
-                          onClick={() => selectVariant(v)}
-                          aria-pressed={isSelected}
-                          className={cn(
-                            "flex items-center gap-2 rounded-full border py-1.5 pl-1.5 pr-3.5 text-xs transition-all outline-none focus-visible:ring-2 focus-visible:ring-foreground",
-                            thumb ? "" : "pl-3.5",
-                            isSelected
-                              ? "border-foreground bg-foreground text-background"
-                              : "border-border bg-background text-foreground hover:border-foreground",
-                            !v.availableForSale ? "opacity-50" : "",
-                          )}
-                        >
-                          {thumb ? (
-                            <img
-                              src={thumb}
-                              alt=""
-                              loading="lazy"
-                              className="size-8 shrink-0 rounded-full bg-transparent object-cover"
-                            />
-                          ) : null}
-                          <span className="whitespace-nowrap">{v.title}</span>
-                          {!v.availableForSale ? (
-                            <span className="whitespace-nowrap opacity-70">(Sold out)</span>
-                          ) : null}
-                        </button>
-                      );
-                    })}
+                  </div>
+                  {skuLabel && (
+                    <p className="mt-1 text-[13px] text-muted-foreground">
+                      Product code: <span className="tabular-nums">{skuLabel}</span>
+                    </p>
+                  )}
+                </div>
+
+                {/* Stock Status */}
+                {selectedVariant?.availableForSale ? (
+                  <div className="flex items-center gap-2">
+                    <div className="size-2 rounded-full bg-green-500 relative">
+                      <div className="absolute inset-0 rounded-full bg-green-500 animate-ping opacity-75" />
+                    </div>
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-green-700 dark:text-green-500">
+                      In Stock &bull; Ready to dispatch
+                    </span>
+                  </div>
+                ) : selectedVariant && !selectedVariant.availableForSale ? (
+                  <div className="flex items-center gap-2">
+                    <div className="size-2 rounded-full bg-red-500" />
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-red-600">
+                      Out of Stock
+                    </span>
+                  </div>
+                ) : null}
+
+                {/* Variant choice */}
+                {hasVariantChoice ? (
+                  <div>
+                    <p className="text-[13px] font-medium text-foreground/80 mb-2" id="variant-label">
+                      {node?.options?.find((o) => o.name.toLowerCase() !== "title")?.name ?? "Options"}
+                      {selectedVariant ? (
+                        <span className="ml-1 font-normal text-muted-foreground">— {selectedVariant.title}</span>
+                      ) : null}
+                    </p>
+                    <div
+                      role="group"
+                      aria-labelledby="variant-label"
+                      className="flex flex-wrap gap-2.5"
+                    >
+                      {variants.map((v) => {
+                        const isSelected = selectedVariant?.id === v.id;
+                        const thumb = v.image?.url;
+                        return (
+                          <button
+                            key={v.id}
+                            type="button"
+                            onClick={() => selectVariant(v)}
+                            aria-pressed={isSelected}
+                            className={cn(
+                              "flex items-center gap-2 rounded-md border py-2 pl-2 pr-4 text-[13px] font-medium transition-all outline-none focus-visible:ring-2 focus-visible:ring-foreground",
+                              thumb ? "" : "pl-4",
+                              isSelected
+                                ? "border-foreground bg-foreground text-background"
+                                : "border-border bg-background text-foreground hover:border-foreground/40",
+                              !v.availableForSale ? "opacity-50" : "",
+                            )}
+                          >
+                            {thumb ? (
+                              <img
+                                src={thumb}
+                                alt=""
+                                loading="lazy"
+                                className="size-6 shrink-0 rounded-[4px] bg-transparent object-cover"
+                              />
+                            ) : null}
+                            <span className="whitespace-nowrap">{v.title}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : null}
+
+                {/* Quantity and Actions Row */}
+                <div ref={purchaseSectionRef} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-2">
+                  <div className="inline-flex h-[52px] w-full sm:w-32 shrink-0 items-center border border-border bg-transparent rounded-md overflow-hidden">
+                    <button
+                      type="button"
+                      aria-label="Decrease quantity"
+                      onClick={() => handleQuantityChange(Math.max(min, quantity - step))}
+                      className="px-4 text-foreground/60 hover:text-foreground hover:bg-muted/50 transition-colors h-full flex items-center justify-center"
+                    >
+                      <Minus className="size-4" strokeWidth={2} />
+                    </button>
+                    <input
+                      type="number"
+                      name="quantity"
+                      aria-label="Quantity"
+                      value={quantity}
+                      min={min}
+                      onChange={(e) => handleQuantityChange(Math.max(min, Number(e.target.value) || min))}
+                      className="flex-1 min-w-0 h-full bg-transparent text-center text-sm font-semibold tabular-nums outline-none appearance-none"
+                    />
+                    <button
+                      type="button"
+                      aria-label="Increase quantity"
+                      onClick={() => handleQuantityChange(quantity + step)}
+                      className="px-4 text-foreground/60 hover:text-foreground hover:bg-muted/50 transition-colors h-full flex items-center justify-center"
+                    >
+                      <Plus className="size-4" strokeWidth={2} />
+                    </button>
+                  </div>
+
+                  <div className="flex flex-1 gap-3">
+                    <Button
+                      variant="secondary"
+                      size="lg"
+                      onClick={handleBuyNow}
+                      disabled={isCartLoading || (!!selectedVariant && !selectedVariant.availableForSale)}
+                      className="flex-1 h-[52px] text-[13px] font-semibold tracking-wide uppercase bg-secondary text-secondary-foreground hover:bg-secondary/80 border border-border/80 shadow-none rounded-md"
+                    >
+                      {isCartLoading ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+                      Add to Cart
+                    </Button>
+                    <Button
+                      size="lg"
+                      onClick={handleBuyNow}
+                      disabled={isCartLoading || (!!selectedVariant && !selectedVariant.availableForSale)}
+                      className="flex-1 h-[52px] text-[13px] font-semibold tracking-wide uppercase bg-foreground text-background hover:bg-foreground/90 shadow-none rounded-md"
+                    >
+                      {isCartLoading ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+                      {selectedVariant && !selectedVariant.availableForSale ? "Sold out" : "Buy Now"}
+                    </Button>
                   </div>
                 </div>
-              ) : null}
-
-              {/* Stock Status */}
-              {selectedVariant?.availableForSale && (
-                <div className="mt-4 mb-2 flex items-center gap-2">
-                  <div className="size-2 rounded-full bg-green-500 relative">
-                    <div className="absolute inset-0 rounded-full bg-green-500 animate-ping opacity-75" />
-                  </div>
-                  <span className="text-xs font-semibold uppercase tracking-wider text-green-700 dark:text-green-500">
-                    In Stock &bull; Ready to dispatch
-                  </span>
-                </div>
-              )}
-              {selectedVariant && !selectedVariant.availableForSale && (
-                <div className="mt-4 mb-2 flex items-center gap-2">
-                  <div className="size-2 rounded-full bg-red-500" />
-                  <span className="text-xs font-semibold uppercase tracking-wider text-red-600">
-                    Out of Stock
-                  </span>
-                </div>
-              )}
-
-              <div ref={purchaseSectionRef} className="mt-4 flex flex-col sm:flex-row gap-3 max-w-md">
-                <Button
-                  variant="secondary"
-                  size="lg"
-                  onClick={handleBuyNow}
-                  disabled={isCartLoading || (!!selectedVariant && !selectedVariant.availableForSale)}
-                  className="w-full sm:w-1/2 h-[52px] text-[13px] font-medium tracking-[0.1em] uppercase bg-secondary text-secondary-foreground hover:bg-secondary/80 border border-border/80 rounded-none shadow-none"
-                >
-                  {isCartLoading ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
-                  Add to Cart
-                </Button>
-                <Button
-                  size="lg"
-                  onClick={handleBuyNow}
-                  disabled={isCartLoading || (!!selectedVariant && !selectedVariant.availableForSale)}
-                  className="w-full sm:w-1/2 h-[52px] text-[13px] font-medium tracking-[0.1em] uppercase bg-foreground text-background hover:bg-foreground/90 rounded-none shadow-none"
-                >
-                  {isCartLoading ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
-                  {selectedVariant && !selectedVariant.availableForSale ? "Sold out" : "Buy Now"}
-                </Button>
               </div>
 
               {/* Corporate Gifting Customizer CTA */}
@@ -691,6 +705,20 @@ function ProductDetail() {
                 )}
               </div>
 
+              {/* B2B Affordance */}
+              <div className="mt-5 text-center">
+                <a 
+                  href="#enquiry-heading" 
+                  className="text-[13px] text-muted-foreground/80 hover:text-foreground transition-colors underline decoration-border hover:decoration-foreground underline-offset-4"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    document.getElementById('enquiry-heading')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  }}
+                >
+                  Need this for corporate gifting? Request a Quote
+                </a>
+              </div>
+
               {/* Product Information Accordions */}
               <ProductInformation product={product} />
             </div>
@@ -716,6 +744,12 @@ function ProductDetail() {
               />
             </div>
           </section>
+
+          {/* Customer Reviews */}
+          <ProductReviews 
+            reviews={reviews} 
+            productHandle={slug}
+          />
 
           {/* Related */}
           {related.length > 0 ? (

@@ -14,7 +14,46 @@ export type Database = {
   }
   public: {
     Tables: {
-      corporate_quote_requests: {
+      product_reviews: {
+        Row: {
+          id: string
+          product_handle: string
+          rating: number
+          title: string
+          body: string
+          author_name: string
+          author_email: string
+          is_verified_buyer: boolean
+          status: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          product_handle: string
+          rating: number
+          title: string
+          body: string
+          author_name: string
+          author_email: string
+          is_verified_buyer?: boolean
+          status?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          product_handle?: string
+          rating?: number
+          title?: string
+          body?: string
+          author_name?: string
+          author_email?: string
+          is_verified_buyer?: boolean
+          status?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
+            corporate_quote_requests: {
         Row: {
           additional_requirements: string | null
           company_name: string
