@@ -46,6 +46,14 @@ function AdminReviewsPage() {
     (async () => {
       try {
         setLoading(true);
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (!sessionData.session) {
+          if (active) {
+            setReviews([]);
+            setError("You need to be signed in with an admin account to moderate reviews.");
+          }
+          return;
+        }
         const data = await fetchReviewsFn({});
         if (active) {
           setReviews(data ?? []);
