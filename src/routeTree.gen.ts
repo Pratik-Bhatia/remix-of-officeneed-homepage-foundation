@@ -11,12 +11,14 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AboutUsRouteImport } from './routes/about-us'
+import { Route as AuthRouteImport } from './routes/auth'
 import { Route as BlogRouteImport } from './routes/blog'
 import { Route as CancellationPolicyRouteImport } from './routes/cancellation-policy'
 import { Route as ClientsRouteImport } from './routes/clients'
 import { Route as ContactUsRouteImport } from './routes/contact-us'
 import { Route as FaqsRouteImport } from './routes/faqs'
 import { Route as PrivacyPolicyRouteImport } from './routes/privacy-policy'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as ReturnsRefundsRouteImport } from './routes/returns-refunds'
 import { Route as ShippingDeliveryRouteImport } from './routes/shipping-delivery'
 import { Route as TermsAndConditionsRouteImport } from './routes/terms-and-conditions'
@@ -36,6 +38,11 @@ const IndexRoute = IndexRouteImport.update({
 const AboutUsRoute = AboutUsRouteImport.update({
   id: '/about-us',
   path: '/about-us',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthRoute = AuthRouteImport.update({
+  id: '/auth',
+  path: '/auth',
   getParentRoute: () => rootRouteImport,
 } as any)
 const BlogRoute = BlogRouteImport.update({
@@ -66,6 +73,11 @@ const FaqsRoute = FaqsRouteImport.update({
 const PrivacyPolicyRoute = PrivacyPolicyRouteImport.update({
   id: '/privacy-policy',
   path: '/privacy-policy',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ReturnsRefundsRoute = ReturnsRefundsRouteImport.update({
@@ -122,12 +134,14 @@ const ShopHandleRoute = ShopHandleRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/about-us': typeof AboutUsRoute
+  '/auth': typeof AuthRoute
   '/blog': typeof BlogRouteWithChildren
   '/cancellation-policy': typeof CancellationPolicyRoute
   '/clients': typeof ClientsRoute
   '/contact-us': typeof ContactUsRoute
   '/faqs': typeof FaqsRoute
   '/privacy-policy': typeof PrivacyPolicyRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/returns-refunds': typeof ReturnsRefundsRoute
   '/shipping-delivery': typeof ShippingDeliveryRoute
   '/terms-and-conditions': typeof TermsAndConditionsRoute
@@ -142,12 +156,14 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/about-us': typeof AboutUsRoute
+  '/auth': typeof AuthRoute
   '/blog': typeof BlogRouteWithChildren
   '/cancellation-policy': typeof CancellationPolicyRoute
   '/clients': typeof ClientsRoute
   '/contact-us': typeof ContactUsRoute
   '/faqs': typeof FaqsRoute
   '/privacy-policy': typeof PrivacyPolicyRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/returns-refunds': typeof ReturnsRefundsRoute
   '/shipping-delivery': typeof ShippingDeliveryRoute
   '/terms-and-conditions': typeof TermsAndConditionsRoute
@@ -163,12 +179,14 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/about-us': typeof AboutUsRoute
+  '/auth': typeof AuthRoute
   '/blog': typeof BlogRouteWithChildren
   '/cancellation-policy': typeof CancellationPolicyRoute
   '/clients': typeof ClientsRoute
   '/contact-us': typeof ContactUsRoute
   '/faqs': typeof FaqsRoute
   '/privacy-policy': typeof PrivacyPolicyRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/returns-refunds': typeof ReturnsRefundsRoute
   '/shipping-delivery': typeof ShippingDeliveryRoute
   '/terms-and-conditions': typeof TermsAndConditionsRoute
@@ -185,12 +203,14 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/about-us'
+    | '/auth'
     | '/blog'
     | '/cancellation-policy'
     | '/clients'
     | '/contact-us'
     | '/faqs'
     | '/privacy-policy'
+    | '/reset-password'
     | '/returns-refunds'
     | '/shipping-delivery'
     | '/terms-and-conditions'
@@ -205,12 +225,14 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/about-us'
+    | '/auth'
     | '/blog'
     | '/cancellation-policy'
     | '/clients'
     | '/contact-us'
     | '/faqs'
     | '/privacy-policy'
+    | '/reset-password'
     | '/returns-refunds'
     | '/shipping-delivery'
     | '/terms-and-conditions'
@@ -225,12 +247,14 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/about-us'
+    | '/auth'
     | '/blog'
     | '/cancellation-policy'
     | '/clients'
     | '/contact-us'
     | '/faqs'
     | '/privacy-policy'
+    | '/reset-password'
     | '/returns-refunds'
     | '/shipping-delivery'
     | '/terms-and-conditions'
@@ -246,12 +270,14 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AboutUsRoute: typeof AboutUsRoute
+  AuthRoute: typeof AuthRoute
   BlogRoute: typeof BlogRouteWithChildren
   CancellationPolicyRoute: typeof CancellationPolicyRoute
   ClientsRoute: typeof ClientsRoute
   ContactUsRoute: typeof ContactUsRoute
   FaqsRoute: typeof FaqsRoute
   PrivacyPolicyRoute: typeof PrivacyPolicyRoute
+  ResetPasswordRoute: typeof ResetPasswordRoute
   ReturnsRefundsRoute: typeof ReturnsRefundsRoute
   ShippingDeliveryRoute: typeof ShippingDeliveryRoute
   TermsAndConditionsRoute: typeof TermsAndConditionsRoute
@@ -277,6 +303,13 @@ declare module '@tanstack/react-router' {
       path: '/about-us'
       fullPath: '/about-us'
       preLoaderRoute: typeof AboutUsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth': {
+      id: '/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof AuthRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/blog': {
@@ -319,6 +352,13 @@ declare module '@tanstack/react-router' {
       path: '/privacy-policy'
       fullPath: '/privacy-policy'
       preLoaderRoute: typeof PrivacyPolicyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/returns-refunds': {
@@ -407,12 +447,14 @@ const BlogRouteWithChildren = BlogRoute._addFileChildren(BlogRouteChildren)
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AboutUsRoute: AboutUsRoute,
+  AuthRoute: AuthRoute,
   BlogRoute: BlogRouteWithChildren,
   CancellationPolicyRoute: CancellationPolicyRoute,
   ClientsRoute: ClientsRoute,
   ContactUsRoute: ContactUsRoute,
   FaqsRoute: FaqsRoute,
   PrivacyPolicyRoute: PrivacyPolicyRoute,
+  ResetPasswordRoute: ResetPasswordRoute,
   ReturnsRefundsRoute: ReturnsRefundsRoute,
   ShippingDeliveryRoute: ShippingDeliveryRoute,
   TermsAndConditionsRoute: TermsAndConditionsRoute,

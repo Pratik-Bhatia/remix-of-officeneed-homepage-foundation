@@ -37,6 +37,7 @@ function AdminReviewsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [signedIn, setSignedIn] = useState(false);
 
   const fetchReviewsFn = useServerFn(listPendingReviews);
   const approveFn = useServerFn(approveReview);
@@ -51,10 +52,12 @@ function AdminReviewsPage() {
         if (!sessionData.session) {
           if (active) {
             setReviews([]);
+            setSignedIn(false);
             setError("You need to be signed in with an admin account to moderate reviews.");
           }
           return;
         }
+        if (active) setSignedIn(true);
         const data = await fetchReviewsFn({});
         if (active) {
           setReviews(data ?? []);
@@ -103,12 +106,45 @@ function AdminReviewsPage() {
     }
   };
 
+  if (!loading && !signedIn) {
+    return (
+      <div className="container mx-auto py-20 px-4 flex justify-center">
+        <div className="w-full max-w-md text-center bg-white border border-border rounded-2xl shadow-sm p-10">
+          <h1 className="text-2xl font-bold mb-2">Admin access required</h1>
+          <p className="text-sm text-muted-foreground mb-6">
+            Sign in with your Officeneed admin account to moderate customer reviews.
+          </p>
+          <Button asChild>
+            <Link to="/auth" search={{ redirect: "/admin/reviews" }}>
+              Sign in
+            </Link>
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="container mx-auto py-10 px-4">
-      <h1 className="text-3xl font-bold mb-2">Review Moderation</h1>
-      <p className="text-sm text-muted-foreground mb-8">
-        Approve reviews to publish them on the storefront, or reject spam.
-      </p>
+      <div className="flex items-start justify-between gap-4 mb-8">
+        <div>
+          <h1 className="text-3xl font-bold mb-2">Review Moderation</h1>
+          <p className="text-sm text-muted-foreground">
+            Approve reviews to publish them on the storefront, or reject spam.
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={async () => {
+            await supabase.auth.signOut();
+            setSignedIn(false);
+          }}
+        >
+          Sign out
+        </Button>
+      </div>
+
 
       <div className="bg-white border border-border rounded-xl shadow-sm overflow-hidden">
         <table className="w-full text-sm text-left">
