@@ -116,9 +116,13 @@ function AuthPage() {
   return (
     <div className="min-h-[70vh] flex items-center justify-center px-4 py-12">
       <div className="w-full max-w-sm bg-white border border-border rounded-2xl shadow-sm p-8">
-        <h1 className="text-2xl font-bold mb-1">Admin sign in</h1>
+        <h1 className="text-2xl font-bold mb-1">
+          {mode === "signin" ? "Admin sign in" : "Create admin account"}
+        </h1>
         <p className="text-sm text-muted-foreground mb-6">
-          Sign in with your Officeneed admin account to moderate reviews and quotes.
+          {mode === "signin"
+            ? "Sign in with your Officeneed admin account to moderate reviews and quotes."
+            : "Use an approved Officeneed admin email address to register."}
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
