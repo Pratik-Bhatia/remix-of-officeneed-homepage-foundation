@@ -36,6 +36,7 @@ function AuthPage() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [submitting, setSubmitting] = useState(false);
   const [checking, setChecking] = useState(true);
 
