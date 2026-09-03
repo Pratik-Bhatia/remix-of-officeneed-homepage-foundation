@@ -18,6 +18,7 @@ import { Route as ClientsRouteImport } from './routes/clients'
 import { Route as ContactUsRouteImport } from './routes/contact-us'
 import { Route as FaqsRouteImport } from './routes/faqs'
 import { Route as PrivacyPolicyRouteImport } from './routes/privacy-policy'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as ReturnsRefundsRouteImport } from './routes/returns-refunds'
 import { Route as ShippingDeliveryRouteImport } from './routes/shipping-delivery'
 import { Route as TermsAndConditionsRouteImport } from './routes/terms-and-conditions'
@@ -72,6 +73,11 @@ const FaqsRoute = FaqsRouteImport.update({
 const PrivacyPolicyRoute = PrivacyPolicyRouteImport.update({
   id: '/privacy-policy',
   path: '/privacy-policy',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ReturnsRefundsRoute = ReturnsRefundsRouteImport.update({
@@ -135,6 +141,7 @@ export interface FileRoutesByFullPath {
   '/contact-us': typeof ContactUsRoute
   '/faqs': typeof FaqsRoute
   '/privacy-policy': typeof PrivacyPolicyRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/returns-refunds': typeof ReturnsRefundsRoute
   '/shipping-delivery': typeof ShippingDeliveryRoute
   '/terms-and-conditions': typeof TermsAndConditionsRoute
@@ -156,6 +163,7 @@ export interface FileRoutesByTo {
   '/contact-us': typeof ContactUsRoute
   '/faqs': typeof FaqsRoute
   '/privacy-policy': typeof PrivacyPolicyRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/returns-refunds': typeof ReturnsRefundsRoute
   '/shipping-delivery': typeof ShippingDeliveryRoute
   '/terms-and-conditions': typeof TermsAndConditionsRoute
@@ -178,6 +186,7 @@ export interface FileRoutesById {
   '/contact-us': typeof ContactUsRoute
   '/faqs': typeof FaqsRoute
   '/privacy-policy': typeof PrivacyPolicyRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/returns-refunds': typeof ReturnsRefundsRoute
   '/shipping-delivery': typeof ShippingDeliveryRoute
   '/terms-and-conditions': typeof TermsAndConditionsRoute
@@ -201,6 +210,7 @@ export interface FileRouteTypes {
     | '/contact-us'
     | '/faqs'
     | '/privacy-policy'
+    | '/reset-password'
     | '/returns-refunds'
     | '/shipping-delivery'
     | '/terms-and-conditions'
@@ -222,6 +232,7 @@ export interface FileRouteTypes {
     | '/contact-us'
     | '/faqs'
     | '/privacy-policy'
+    | '/reset-password'
     | '/returns-refunds'
     | '/shipping-delivery'
     | '/terms-and-conditions'
@@ -243,6 +254,7 @@ export interface FileRouteTypes {
     | '/contact-us'
     | '/faqs'
     | '/privacy-policy'
+    | '/reset-password'
     | '/returns-refunds'
     | '/shipping-delivery'
     | '/terms-and-conditions'
@@ -265,6 +277,7 @@ export interface RootRouteChildren {
   ContactUsRoute: typeof ContactUsRoute
   FaqsRoute: typeof FaqsRoute
   PrivacyPolicyRoute: typeof PrivacyPolicyRoute
+  ResetPasswordRoute: typeof ResetPasswordRoute
   ReturnsRefundsRoute: typeof ReturnsRefundsRoute
   ShippingDeliveryRoute: typeof ShippingDeliveryRoute
   TermsAndConditionsRoute: typeof TermsAndConditionsRoute
@@ -339,6 +352,13 @@ declare module '@tanstack/react-router' {
       path: '/privacy-policy'
       fullPath: '/privacy-policy'
       preLoaderRoute: typeof PrivacyPolicyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/returns-refunds': {
@@ -434,6 +454,7 @@ const rootRouteChildren: RootRouteChildren = {
   ContactUsRoute: ContactUsRoute,
   FaqsRoute: FaqsRoute,
   PrivacyPolicyRoute: PrivacyPolicyRoute,
+  ResetPasswordRoute: ResetPasswordRoute,
   ReturnsRefundsRoute: ReturnsRefundsRoute,
   ShippingDeliveryRoute: ShippingDeliveryRoute,
   TermsAndConditionsRoute: TermsAndConditionsRoute,
