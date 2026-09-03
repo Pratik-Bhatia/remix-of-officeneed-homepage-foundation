@@ -36,7 +36,6 @@ function AuthPage() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [submitting, setSubmitting] = useState(false);
   const [checking, setChecking] = useState(true);
 
@@ -61,25 +60,6 @@ function AuthPage() {
     e.preventDefault();
     setSubmitting(true);
     try {
-      if (mode === "signup") {
-        const { data, error } = await supabase.auth.signUp({
-          email: email.trim(),
-          password,
-          options: { emailRedirectTo: window.location.origin },
-        });
-        if (error) {
-          toast.error(error.message || "Unable to create the account.");
-          return;
-        }
-        if (!data.session) {
-          toast.success("Account created. Check your email to confirm, then sign in.");
-          setMode("signin");
-          return;
-        }
-        await router.invalidate();
-        navigate({ to: destination, replace: true });
-        return;
-      }
       const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
       if (error) {
         toast.error(error.message || "Unable to sign in.");
@@ -93,18 +73,6 @@ function AuthPage() {
     }
   };
 
-  const handleReset = async () => {
-    if (!email.trim()) {
-      toast.error("Enter your email first, then tap reset.");
-      return;
-    }
-    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: `${window.location.origin}/reset-password`,
-    });
-    if (error) toast.error(error.message);
-    else toast.success("Password reset link sent. Check your inbox.");
-  };
-
   if (checking) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center text-sm text-muted-foreground">
@@ -116,13 +84,9 @@ function AuthPage() {
   return (
     <div className="min-h-[70vh] flex items-center justify-center px-4 py-12">
       <div className="w-full max-w-sm bg-white border border-border rounded-2xl shadow-sm p-8">
-        <h1 className="text-2xl font-bold mb-1">
-          {mode === "signin" ? "Admin sign in" : "Create admin account"}
-        </h1>
+        <h1 className="text-2xl font-bold mb-1">Admin sign in</h1>
         <p className="text-sm text-muted-foreground mb-6">
-          {mode === "signin"
-            ? "Sign in with your Officeneed admin account to moderate reviews and quotes."
-            : "Use an approved Officeneed admin email address to register."}
+          Sign in with your Officeneed admin account to moderate reviews and quotes.
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -143,7 +107,7 @@ function AuthPage() {
             <Input
               id="password"
               type="password"
-              autoComplete={mode === "signin" ? "current-password" : "new-password"}
+              autoComplete="current-password"
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -151,34 +115,10 @@ function AuthPage() {
             />
           </div>
           <Button type="submit" className="w-full" disabled={submitting}>
-            {submitting
-              ? mode === "signin"
-                ? "Signing in…"
-                : "Creating account…"
-              : mode === "signin"
-                ? "Sign in"
-                : "Create account"}
+            {submitting ? "Signing in…" : "Sign in"}
           </Button>
         </form>
 
-        <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground">
-          <button
-            type="button"
-            onClick={() => setMode(mode === "signin" ? "signup" : "signin")}
-            className="hover:text-foreground underline underline-offset-4"
-          >
-            {mode === "signin" ? "Create an account" : "Have an account? Sign in"}
-          </button>
-          {mode === "signin" && (
-            <button
-              type="button"
-              onClick={handleReset}
-              className="hover:text-foreground underline underline-offset-4"
-            >
-              Forgot password?
-            </button>
-          )}
-        </div>
       </div>
     </div>
   );
