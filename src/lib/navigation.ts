@@ -48,7 +48,7 @@ export const navCategories: NavCategory[] = [
     id: "hardware-supplies",
     label: "Computer Peripherals",
     blurb: "Workstation hardware and peripherals for growing teams.",
-    items: ["Computer Accessories", "Cables & Adapters", "Storage Devices", "Other Hardware"],
+    items: ["Computer Accessories", "Cables & Adapters", "Storage Devices"],
   },
 ];
 

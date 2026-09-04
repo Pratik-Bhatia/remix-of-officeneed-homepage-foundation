@@ -65,7 +65,6 @@ export const TAXONOMY: Record<MainCategory, CategoryNode> = {
       "Computer Accessories": { title: "Computer Accessories", id: "gid://shopify/Collection/315533361245", handle: "computer-accessories-1" },
       "Cables & Adapters": { title: "Cables & Adapters", id: null, handle: "cables-and-adapters" },
       "Storage Devices": { title: "Storage Devices", id: null, handle: "storage-devices" },
-      "Other Hardware": { title: "Other Hardware", id: null, handle: "other-hardware" },
     }
   }
 };
