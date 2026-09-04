@@ -139,8 +139,6 @@ type Rule = { category: Product["category"]; sub: string; match: RegExp };
 const RULES: Rule[] = [
   { category: "Officeneed Exclusive", sub: "Featured Exclusives", match: /featured exclusive/ },
   { category: "Officeneed Exclusive", sub: "New Exclusives", match: /new exclusive/ },
-  { category: "Corporate Gifting", sub: "Premium Gifts", match: /premium gift/ },
-  { category: "Corporate Gifting", sub: "Customized Gifts", match: /customized gift|custom gift/ },
   { category: "Fragrance Gifting", sub: "Perfume Gift Sets", match: /perfume gift set|fragrance gift set|perfume set/ },
   { category: "Fragrance Gifting", sub: "Middle Eastern Perfume", match: /attar|oud|arab|middle east/ },
   { category: "Fragrance Gifting", sub: "European Perfume", match: /perfum|fragranc|eau de|deodor|cologne/ },
