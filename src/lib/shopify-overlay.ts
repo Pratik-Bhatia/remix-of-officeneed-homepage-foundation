@@ -8,7 +8,7 @@
  * present in Shopify falls back to the existing static data.
  */
 import { useQuery } from "@tanstack/react-query";
-import { fetchProducts, formatMoney, type ShopifyProductNode } from "@/lib/shopify";
+import { fetchProducts, fetchCollections, formatMoney, type ShopifyProductNode, type ShopifyCollectionNode } from "@/lib/shopify";
 import type { Product } from "@/lib/products";
 import type { BestsellerProduct } from "@/lib/bestsellers";
 
@@ -412,3 +412,16 @@ export function useShopifyBestsellers(staticItems: BestsellerProduct[]) {
   return [...live, ...fallback];
 }
 
+
+export function useShopifyCollections() {
+  const { data } = useQuery({
+    queryKey: ["shopify", "collections"],
+    queryFn: async () => {
+      const edges = await fetchCollections(50);
+      return edges.map((e) => e.node);
+    },
+    staleTime: 5 * 60 * 1000,
+    retry: 1,
+  });
+  return data ?? [];
+}

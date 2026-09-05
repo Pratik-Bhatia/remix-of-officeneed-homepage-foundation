@@ -232,3 +232,33 @@ export async function fetchRelatedProducts(
 
   return results.slice(0, limit);
 }
+
+export type ShopifyCollectionNode = {
+  id: string;
+  handle: string;
+  title: string;
+  image?: { url: string; altText?: string };
+};
+
+export const COLLECTIONS_QUERY = `
+  query GetCollections($first: Int!) {
+    collections(first: $first) {
+      edges {
+        node {
+          id
+          handle
+          title
+          image {
+            url
+            altText
+          }
+        }
+      }
+    }
+  }
+`;
+
+export async function fetchCollections(first = 50): Promise<{ node: ShopifyCollectionNode }[]> {
+  const data = await storefrontApiRequest(COLLECTIONS_QUERY, { first });
+  return data?.data?.collections?.edges ?? [];
+}

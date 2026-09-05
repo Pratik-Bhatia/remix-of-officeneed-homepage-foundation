@@ -23,7 +23,7 @@ import {
   sortProducts,
 } from "@/lib/products";
 import type { ProductSort } from "@/lib/products";
-import { useShopifyCatalogue } from "@/lib/shopify-overlay";
+import { useShopifyCatalogue, useShopifyCollections } from "@/lib/shopify-overlay";
 import { getCategoryByHandle, TAXONOMY, MAIN_CATEGORIES, type MainCategory } from "@/lib/taxonomy";
 
 const TITLE = "Products — OfficeNeed";
@@ -142,6 +142,16 @@ function ProductsPage() {
       : null;
 
   const catalogue = useShopifyCatalogue(products);
+  const collections = useShopifyCollections();
+
+  const getCollectionImage = (handle: string, fallbackTitle: string) => {
+    const shopifyCol = collections.find(c => c.handle === handle);
+    if (shopifyCol && shopifyCol.image?.url) {
+      return shopifyCol.image.url;
+    }
+    return subcategoryImages[fallbackTitle] || categoryImages[fallbackTitle] || categoryImages["All Products"];
+  };
+
 
   const visible = useMemo(() => {
     if (missingMapping) return [];
@@ -242,8 +252,8 @@ function ProductsPage() {
                         onClick={() => setCollection(node.handle)}
                         className="group flex flex-col items-center gap-3 w-20 sm:w-24 focus:outline-none"
                       >
-                        <div className="size-14 sm:size-16 rounded-2xl overflow-hidden bg-secondary border border-border shadow-sm transition-transform duration-300 group-hover:-translate-y-1 group-hover:shadow-md">
-                          <img src={categoryImages[c] || categoryImages["All Products"]} alt={c} className="w-full h-full object-cover" />
+                        <div className="size-14 sm:size-16 flex items-center justify-center transition-transform duration-300 group-hover:-translate-y-1">
+                          <img src={getCollectionImage(node.handle || "", c)} alt={c} className="w-full h-full object-contain mix-blend-multiply dark:mix-blend-normal" />
                         </div>
                         <span className="text-[11px] sm:text-xs font-medium text-foreground/80 group-hover:text-foreground text-center leading-tight">
                           {c}
@@ -262,8 +272,8 @@ function ProductsPage() {
                         onClick={() => setCollection(sub.handle)}
                         className="group flex flex-col items-center gap-3 w-20 sm:w-24 focus:outline-none"
                       >
-                        <div className="size-14 sm:size-16 rounded-2xl overflow-hidden bg-secondary border border-border shadow-sm transition-transform duration-300 group-hover:-translate-y-1 group-hover:shadow-md">
-                          <img src={subcategoryImages[sub.title] || categoryImages["All Products"]} alt={sub.title} className="w-full h-full object-cover" />
+                        <div className="size-14 sm:size-16 flex items-center justify-center transition-transform duration-300 group-hover:-translate-y-1">
+                          <img src={getCollectionImage(sub.handle || "", sub.title)} alt={sub.title} className="w-full h-full object-contain mix-blend-multiply dark:mix-blend-normal" />
                         </div>
                         <span className="text-[11px] sm:text-xs font-medium text-foreground/80 group-hover:text-foreground text-center leading-tight">
                           {sub.title}
