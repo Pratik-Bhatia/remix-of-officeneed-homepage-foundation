@@ -49,7 +49,6 @@ const categoryImages: Record<string, string> = {
 
 const subcategoryImages: Record<string, string> = {
   "Gift Sets": "https://images.unsplash.com/photo-1513201099705-a9746e1e201f?auto=format&fit=crop&w=200&q=75",
-  "Corporate Gifts": "https://images.unsplash.com/photo-1607083206968-13611e3d76db?auto=format&fit=crop&w=200&q=75",
 };
 
 export const Route = createFileRoute("/products/")({

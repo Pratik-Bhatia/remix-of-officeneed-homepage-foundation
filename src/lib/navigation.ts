@@ -24,8 +24,10 @@ export const navCategories: NavCategory[] = [
     
     items: [
       "Gift Sets",
-      "Corporate Gifts",
       "Drinkware & Utensils",
+        "Bags",
+        "Diaries",
+        "Luxury Pens",
     ],
   },
   {

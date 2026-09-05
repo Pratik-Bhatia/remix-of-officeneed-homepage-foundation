@@ -231,7 +231,7 @@ export function Navbar() {
                   {active.blurb}
                 </p>
               </div>
-              <ul className="grid grid-cols-2 gap-x-10 gap-y-1 xl:grid-cols-3">
+              <ul className="grid grid-cols-2 gap-x-10 gap-y-2 xl:flex xl:flex-wrap xl:gap-x-10 xl:gap-y-4">
                 {active.items.map((item) => (
                   <li key={item}>
                     <Link
@@ -241,9 +241,7 @@ export function Navbar() {
                       className="group flex items-center justify-between rounded-md py-2.5 text-[0.875rem] text-foreground/80 transition-colors duration-200 hover:text-foreground"
                     >
                       <span>{item}</span>
-                      <span className="translate-x-[-4px] text-accent opacity-0 transition-all duration-200 group-hover:translate-x-0 group-hover:opacity-100">
-                        →
-                      </span>
+                      
                     </Link>
                   </li>
                 ))}

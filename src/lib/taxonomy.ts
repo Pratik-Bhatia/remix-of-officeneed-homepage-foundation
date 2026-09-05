@@ -32,8 +32,10 @@ export const TAXONOMY: Record<MainCategory, CategoryNode> = {
     handle: "frontpage",
     subcategories: {
       "Gift Sets": { title: "Gift Sets", id: null, handle: "gift-sets" },
-      "Corporate Gifts": { title: "Corporate Gifts", id: null, handle: "corporate-gifts" },
       "Drinkware & Utensils": { title: "Drinkware & Utensils", id: null, handle: "drinkware-utensils" },
+      "Bags": { title: "Bags", id: null, handle: "bags" },
+      "Diaries": { title: "Diaries", id: null, handle: "diaries" },
+      "Luxury Pens": { title: "Luxury Pens", id: null, handle: "luxury-pens" },
     }
   },
   "Fragrance Gifting": {
