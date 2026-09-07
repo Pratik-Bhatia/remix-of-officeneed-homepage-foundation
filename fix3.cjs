@@ -1,19 +1,28 @@
 const fs = require("fs");
-let content = fs.readFileSync("src/lib/shopify-overlay.ts", "utf8");
+const path = "src/components/officeneed/ChatWidget.tsx";
+let text = fs.readFileSync(path, "utf8");
 
-content = content.replace(/collectionHandles: node\.collections\?\.edges\.map\(e => e\.node\.handle\) \?\? \[\],\n\s*/g, '');
+const importSearch = 'import { AiAssistantIcon } from "@/components/officeneed/AiAssistantIcon";';
+if (!text.includes('import { FragranceQuiz }')) {
+  text = text.replace(importSearch, importSearch + '\nimport { FragranceQuiz } from "./FragranceQuiz";');
+}
 
-content = content.replace(/export function shopifyNodeToProduct\(node: ShopifyProductNode\): Product \{[\s\S]*?return \{/, `export function shopifyNodeToProduct(node: ShopifyProductNode): Product {
-  const { category, sub } = classify(node);
-  const images = nodeImages(node);
-  const description = (node.description ?? "").trim();
-  const summary = description
-    ? truncateWords(description.replace(/\\s+/g, " "), 150)
-    : \`\${node.title} — available through OfficeNeed.\`;
-  const amount = parseFloat(node.priceRange?.minVariantPrice?.amount ?? "0");
-  const variants = node.variants?.edges?.map((e) => e.node) ?? [];
+const headerSearch = '{/* Header */}';
+const quizBlock = `      {phase === "fragrance" && (
+        <FragranceQuiz 
+          products={shopifyProducts} 
+          onClose={() => setOpen(false)} 
+          onReset={() => {
+            setPhase("qualification");
+            setAnswers({});
+            setStepIndex(0);
+          }} 
+        />
+      )}`;
 
-  return {
-    collectionHandles: node.collections?.edges.map(e => e.node.handle) ?? [],`);
+if (!text.includes('<FragranceQuiz')) {
+  text = text.replace(headerSearch, quizBlock + '\n          ' + headerSearch);
+}
 
-fs.writeFileSync("src/lib/shopify-overlay.ts", content);
+fs.writeFileSync(path, text);
+console.log("Injected render block!");

@@ -1,19 +1,25 @@
 const fs = require("fs");
-let content = fs.readFileSync("src/lib/shopify-overlay.ts", "utf8");
+const path = "src/components/officeneed/ChatWidget.tsx";
+let text = fs.readFileSync(path, "utf8");
 
-content = content.replace(/collectionHandles: node\.collections\?\.edges\.map\(e => e\.node\.handle\) \?\? \[\],?\s*/g, '');
-
-content = content.replace(/export function shopifyNodeToProduct\(node: ShopifyProductNode\): Product \{[\s\S]*?return \{/, `export function shopifyNodeToProduct(node: ShopifyProductNode): Product {
-  const { category, sub } = classify(node);
-  const images = nodeImages(node);
-  const description = (node.description ?? "").trim();
-  const summary = description
-    ? truncateWords(description.replace(/\\s+/g, " "), 150)
-    : \`\${node.title} — available through OfficeNeed.\`;
-  const amount = parseFloat(node.priceRange?.minVariantPrice?.amount ?? "0");
-  const variants = node.variants?.edges?.map((e) => e.node) ?? [];
-
-  return {
-    collectionHandles: node.collections?.edges.map(e => e.node.handle) ?? [],`);
-
-fs.writeFileSync("src/lib/shopify-overlay.ts", content);
+// We need to inject the closing tags at the very bottom
+const index = text.lastIndexOf("</>");
+if (index !== -1) {
+  // Before </> we need to close the <> that we opened.
+  // Wait, the structure is:
+  //           </div>
+  //         </div>
+  //       </div>
+  //     </>
+  //   );
+  // }
+  
+  const bottom = text.substring(index - 50);
+  const fixed = bottom.replace(
+    /<\/div>\s*<\/div>\s*<\/div>\s*<\/>/,
+    `</div>\n            </>\n          )}\n          </div>\n        </div>\n      </div>\n    </>`
+  );
+  text = text.substring(0, index - 50) + fixed;
+  fs.writeFileSync(path, text);
+  console.log("Fixed JSX syntax via lastIndexOf");
+}

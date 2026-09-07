@@ -1,25 +1,16 @@
 const fs = require("fs");
-let content = fs.readFileSync("src/lib/shopify.ts", "utf8");
+const path = "src/components/officeneed/ChatWidget.tsx";
+let text = fs.readFileSync(path, "utf8");
 
-content = content.replace(/export interface ShopifyProductNode \{[\s\S]*?export interface ShopifyProduct/, `export interface ShopifyProductNode {
-  id: string;
-  title: string;
-  description: string;
-  descriptionHtml?: string;
-  handle: string;
-  productType: string;
-  vendor: string;
-  tags?: string[];
-  availableForSale?: boolean;
-  totalInventory?: number | null;
-  featuredImage?: ShopifyImage | null;
-  priceRange: { minVariantPrice: { amount: string; currencyCode: string } };
-  images: { edges: Array<{ node: ShopifyImage }> };
-  variants: { edges: Array<{ node: ShopifyVariantNode }> };
-  options: Array<{ name: string; values: string[] }>;
-  collections?: { edges: Array<{ node: { handle: string } }> };
-}
+text = text.replace(
+  /setMessages\(\(m\) => \[\.\.\.m, \{ id: uid\(\), role: "user", text: clean \|\| "Skip" \}\]\);/,
+  `setMessages((m) => [...m, { id: uid(), role: "user", text: clean || "Skip" }]);
 
-export interface ShopifyProduct`);
+    if (step.id === "purpose" && clean === "Fragrance & Perfumes") {
+      setPhase("fragrance");
+      return;
+    }`
+);
 
-fs.writeFileSync("src/lib/shopify.ts", content);
+fs.writeFileSync(path, text);
+console.log("Fixed!");
