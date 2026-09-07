@@ -133,7 +133,7 @@ function ProductDetail() {
   useEffect(() => {
     async function fetchReviews() {
       const { data, error } = await supabase
-        .from('product_reviews')
+        .from('product_reviews_public')
         .select('*')
         .eq('product_handle', slug)
         .eq('status', 'approved')
