@@ -25,6 +25,7 @@ import { Route as ShippingDeliveryRouteImport } from './routes/shipping-delivery
 import { Route as TermsAndConditionsRouteImport } from './routes/terms-and-conditions'
 import { Route as AccountIndexRouteImport } from './routes/account.index'
 import { Route as AccountOrdersRouteImport } from './routes/account.orders'
+import { Route as AccountSavesRouteImport } from './routes/account.saves'
 import { Route as AdminQuotesRouteImport } from './routes/admin/quotes'
 import { Route as AdminReviewsRouteImport } from './routes/admin/reviews'
 import { Route as BlogSlugRouteImport } from './routes/blog.$slug'
@@ -113,6 +114,11 @@ const AccountOrdersRoute = AccountOrdersRouteImport.update({
   path: '/orders',
   getParentRoute: () => AccountRoute,
 } as any)
+const AccountSavesRoute = AccountSavesRouteImport.update({
+  id: '/saves',
+  path: '/saves',
+  getParentRoute: () => AccountRoute,
+} as any)
 const AdminQuotesRoute = AdminQuotesRouteImport.update({
   id: '/admin/quotes',
   path: '/admin/quotes',
@@ -165,6 +171,7 @@ export interface FileRoutesByFullPath {
   '/shipping-delivery': typeof ShippingDeliveryRoute
   '/terms-and-conditions': typeof TermsAndConditionsRoute
   '/account/orders': typeof AccountOrdersRoute
+  '/account/saves': typeof AccountSavesRoute
   '/admin/quotes': typeof AdminQuotesRoute
   '/admin/reviews': typeof AdminReviewsRoute
   '/blog/$slug': typeof BlogSlugRoute
@@ -189,6 +196,7 @@ export interface FileRoutesByTo {
   '/shipping-delivery': typeof ShippingDeliveryRoute
   '/terms-and-conditions': typeof TermsAndConditionsRoute
   '/account/orders': typeof AccountOrdersRoute
+  '/account/saves': typeof AccountSavesRoute
   '/admin/quotes': typeof AdminQuotesRoute
   '/admin/reviews': typeof AdminReviewsRoute
   '/blog/$slug': typeof BlogSlugRoute
@@ -215,6 +223,7 @@ export interface FileRoutesById {
   '/shipping-delivery': typeof ShippingDeliveryRoute
   '/terms-and-conditions': typeof TermsAndConditionsRoute
   '/account/orders': typeof AccountOrdersRoute
+  '/account/saves': typeof AccountSavesRoute
   '/admin/quotes': typeof AdminQuotesRoute
   '/admin/reviews': typeof AdminReviewsRoute
   '/blog/$slug': typeof BlogSlugRoute
@@ -242,6 +251,7 @@ export interface FileRouteTypes {
     | '/shipping-delivery'
     | '/terms-and-conditions'
     | '/account/orders'
+    | '/account/saves'
     | '/admin/quotes'
     | '/admin/reviews'
     | '/blog/$slug'
@@ -266,6 +276,7 @@ export interface FileRouteTypes {
     | '/shipping-delivery'
     | '/terms-and-conditions'
     | '/account/orders'
+    | '/account/saves'
     | '/admin/quotes'
     | '/admin/reviews'
     | '/blog/$slug'
@@ -291,6 +302,7 @@ export interface FileRouteTypes {
     | '/shipping-delivery'
     | '/terms-and-conditions'
     | '/account/orders'
+    | '/account/saves'
     | '/admin/quotes'
     | '/admin/reviews'
     | '/blog/$slug'
@@ -438,6 +450,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AccountOrdersRouteImport
       parentRoute: typeof AccountRoute
     }
+    '/account/saves': {
+      id: '/account/saves'
+      path: '/saves'
+      fullPath: '/account/saves'
+      preLoaderRoute: typeof AccountSavesRouteImport
+      parentRoute: typeof AccountRoute
+    }
     '/admin/quotes': {
       id: '/admin/quotes'
       path: '/admin/quotes'
@@ -492,11 +511,13 @@ declare module '@tanstack/react-router' {
 
 interface AccountRouteChildren {
   AccountOrdersRoute: typeof AccountOrdersRoute
+  AccountSavesRoute: typeof AccountSavesRoute
   AccountIndexRoute: typeof AccountIndexRoute
 }
 
 const AccountRouteChildren: AccountRouteChildren = {
   AccountOrdersRoute: AccountOrdersRoute,
+  AccountSavesRoute: AccountSavesRoute,
   AccountIndexRoute: AccountIndexRoute,
 }
 
