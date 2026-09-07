@@ -243,7 +243,42 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      product_reviews_public: {
+        Row: {
+          author_name: string | null
+          body: string | null
+          created_at: string | null
+          id: string | null
+          is_verified_buyer: boolean | null
+          product_handle: string | null
+          rating: number | null
+          status: string | null
+          title: string | null
+        }
+        Insert: {
+          author_name?: string | null
+          body?: string | null
+          created_at?: string | null
+          id?: string | null
+          is_verified_buyer?: boolean | null
+          product_handle?: string | null
+          rating?: number | null
+          status?: string | null
+          title?: string | null
+        }
+        Update: {
+          author_name?: string | null
+          body?: string | null
+          created_at?: string | null
+          id?: string | null
+          is_verified_buyer?: boolean | null
+          product_handle?: string | null
+          rating?: number | null
+          status?: string | null
+          title?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       has_role: {
