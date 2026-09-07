@@ -1,11 +1,17 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
-const API_SECRET = Deno.env.get("API_SECRET") || "test_secret_key"; // Require this header from Shopify Flow
+// Fail closed: no hardcoded fallback. If API_SECRET is not configured, every request is rejected.
+const API_SECRET = Deno.env.get("API_SECRET"); // Require this header from Shopify Flow
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-api-key, content-type" } });
+  }
+
+  if (!API_SECRET) {
+    console.error("API_SECRET environment variable is not configured; refusing all requests.");
+    return new Response(JSON.stringify({ error: "Service not configured" }), { status: 500, headers: { "Content-Type": "application/json" } });
   }
 
   const authHeader = req.headers.get("x-api-key") || req.headers.get("authorization");
@@ -72,7 +78,7 @@ Description: ${description || "None"}
                 personality: { type: "array", items: { type: "string", enum: ["Elegant & Classy", "Confident & Bold", "Calm & Sophisticated", "Fresh & Energetic", "Romantic & Charming", "Adventurous & Free-spirited", "Fun & Playful", "Mysterious & Intense", "Minimal & Understated"] }, description: "Maximum 2" },
                 intensity: { type: "string", enum: ["Subtle", "Balanced", "Bold"] },
                 mood: { type: "array", items: { type: "string", enum: ["Fresh & Energising", "Sophisticated & Premium", "Romantic & Sensual", "Confident & Powerful", "Soft & Elegant", "Warm & Comforting", "Fun & Playful", "Mysterious & Alluring"] }, description: "Maximum 2" },
-                age_group: { type: "array", items: { type: "string", enum: ["18–24", "25–34", "35–44", "45–54", "55+", "Not Sure"] }, description: "Maximum 2" },
+                age_group: { type: "array", items: { type: "string", enum: ["18â€“24", "25â€“34", "35â€“44", "45â€“54", "55+", "Not Sure"] }, description: "Maximum 2" },
                 time_of_day: { type: "array", items: { type: "string", enum: ["Morning", "Daytime", "Evening", "Night", "All Day"] }, description: "Maximum 2" },
                 weather: { type: "array", items: { type: "string", enum: ["Hot & Sunny", "Warm & Pleasant", "Cool & Mild", "Cold & Cozy", "All Weather", "Not Sure"] }, description: "Maximum 2" },
                 recipient: { type: "array", items: { type: "string", enum: ["Men", "Women", "Unisex", "Not Sure"] }, description: "Maximum 3" },
@@ -111,6 +117,6 @@ Description: ${description || "None"}
     return new Response(JSON.stringify(result), { headers: { "Content-Type": "application/json" } });
   } catch (error: any) {
     console.error(error);
-    return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ error: "Classification failed" }), { status: 500, headers: { "Content-Type": "application/json" } });
   }
 });
