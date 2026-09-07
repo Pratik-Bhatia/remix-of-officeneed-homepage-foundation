@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AboutUsRouteImport } from './routes/about-us'
+import { Route as AccountRouteImport } from './routes/account'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as BlogRouteImport } from './routes/blog'
 import { Route as CancellationPolicyRouteImport } from './routes/cancellation-policy'
@@ -22,6 +23,10 @@ import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as ReturnsRefundsRouteImport } from './routes/returns-refunds'
 import { Route as ShippingDeliveryRouteImport } from './routes/shipping-delivery'
 import { Route as TermsAndConditionsRouteImport } from './routes/terms-and-conditions'
+import { Route as AccountIndexRouteImport } from './routes/account.index'
+import { Route as AccountOrdersRouteImport } from './routes/account.orders'
+import { Route as AccountProfileRouteImport } from './routes/account.profile'
+import { Route as AccountSavesRouteImport } from './routes/account.saves'
 import { Route as AdminQuotesRouteImport } from './routes/admin/quotes'
 import { Route as AdminReviewsRouteImport } from './routes/admin/reviews'
 import { Route as BlogSlugRouteImport } from './routes/blog.$slug'
@@ -38,6 +43,11 @@ const IndexRoute = IndexRouteImport.update({
 const AboutUsRoute = AboutUsRouteImport.update({
   id: '/about-us',
   path: '/about-us',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AccountRoute = AccountRouteImport.update({
+  id: '/account',
+  path: '/account',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthRoute = AuthRouteImport.update({
@@ -95,6 +105,26 @@ const TermsAndConditionsRoute = TermsAndConditionsRouteImport.update({
   path: '/terms-and-conditions',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AccountIndexRoute = AccountIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AccountRoute,
+} as any)
+const AccountOrdersRoute = AccountOrdersRouteImport.update({
+  id: '/orders',
+  path: '/orders',
+  getParentRoute: () => AccountRoute,
+} as any)
+const AccountProfileRoute = AccountProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
+  getParentRoute: () => AccountRoute,
+} as any)
+const AccountSavesRoute = AccountSavesRouteImport.update({
+  id: '/saves',
+  path: '/saves',
+  getParentRoute: () => AccountRoute,
+} as any)
 const AdminQuotesRoute = AdminQuotesRouteImport.update({
   id: '/admin/quotes',
   path: '/admin/quotes',
@@ -134,6 +164,7 @@ const ShopHandleRoute = ShopHandleRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/about-us': typeof AboutUsRoute
+  '/account': typeof AccountRouteWithChildren
   '/auth': typeof AuthRoute
   '/blog': typeof BlogRouteWithChildren
   '/cancellation-policy': typeof CancellationPolicyRoute
@@ -145,11 +176,15 @@ export interface FileRoutesByFullPath {
   '/returns-refunds': typeof ReturnsRefundsRoute
   '/shipping-delivery': typeof ShippingDeliveryRoute
   '/terms-and-conditions': typeof TermsAndConditionsRoute
+  '/account/orders': typeof AccountOrdersRoute
+  '/account/profile': typeof AccountProfileRoute
+  '/account/saves': typeof AccountSavesRoute
   '/admin/quotes': typeof AdminQuotesRoute
   '/admin/reviews': typeof AdminReviewsRoute
   '/blog/$slug': typeof BlogSlugRoute
   '/products/$slug': typeof ProductsSlugRoute
   '/shop/$handle': typeof ShopHandleRoute
+  '/account/': typeof AccountIndexRoute
   '/products/': typeof ProductsIndexRoute
   '/shop/': typeof ShopIndexRoute
 }
@@ -167,11 +202,15 @@ export interface FileRoutesByTo {
   '/returns-refunds': typeof ReturnsRefundsRoute
   '/shipping-delivery': typeof ShippingDeliveryRoute
   '/terms-and-conditions': typeof TermsAndConditionsRoute
+  '/account/orders': typeof AccountOrdersRoute
+  '/account/profile': typeof AccountProfileRoute
+  '/account/saves': typeof AccountSavesRoute
   '/admin/quotes': typeof AdminQuotesRoute
   '/admin/reviews': typeof AdminReviewsRoute
   '/blog/$slug': typeof BlogSlugRoute
   '/products/$slug': typeof ProductsSlugRoute
   '/shop/$handle': typeof ShopHandleRoute
+  '/account': typeof AccountIndexRoute
   '/products': typeof ProductsIndexRoute
   '/shop': typeof ShopIndexRoute
 }
@@ -179,6 +218,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/about-us': typeof AboutUsRoute
+  '/account': typeof AccountRouteWithChildren
   '/auth': typeof AuthRoute
   '/blog': typeof BlogRouteWithChildren
   '/cancellation-policy': typeof CancellationPolicyRoute
@@ -190,11 +230,15 @@ export interface FileRoutesById {
   '/returns-refunds': typeof ReturnsRefundsRoute
   '/shipping-delivery': typeof ShippingDeliveryRoute
   '/terms-and-conditions': typeof TermsAndConditionsRoute
+  '/account/orders': typeof AccountOrdersRoute
+  '/account/profile': typeof AccountProfileRoute
+  '/account/saves': typeof AccountSavesRoute
   '/admin/quotes': typeof AdminQuotesRoute
   '/admin/reviews': typeof AdminReviewsRoute
   '/blog/$slug': typeof BlogSlugRoute
   '/products/$slug': typeof ProductsSlugRoute
   '/shop/$handle': typeof ShopHandleRoute
+  '/account/': typeof AccountIndexRoute
   '/products/': typeof ProductsIndexRoute
   '/shop/': typeof ShopIndexRoute
 }
@@ -203,6 +247,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/about-us'
+    | '/account'
     | '/auth'
     | '/blog'
     | '/cancellation-policy'
@@ -214,11 +259,15 @@ export interface FileRouteTypes {
     | '/returns-refunds'
     | '/shipping-delivery'
     | '/terms-and-conditions'
+    | '/account/orders'
+    | '/account/profile'
+    | '/account/saves'
     | '/admin/quotes'
     | '/admin/reviews'
     | '/blog/$slug'
     | '/products/$slug'
     | '/shop/$handle'
+    | '/account/'
     | '/products/'
     | '/shop/'
   fileRoutesByTo: FileRoutesByTo
@@ -236,17 +285,22 @@ export interface FileRouteTypes {
     | '/returns-refunds'
     | '/shipping-delivery'
     | '/terms-and-conditions'
+    | '/account/orders'
+    | '/account/profile'
+    | '/account/saves'
     | '/admin/quotes'
     | '/admin/reviews'
     | '/blog/$slug'
     | '/products/$slug'
     | '/shop/$handle'
+    | '/account'
     | '/products'
     | '/shop'
   id:
     | '__root__'
     | '/'
     | '/about-us'
+    | '/account'
     | '/auth'
     | '/blog'
     | '/cancellation-policy'
@@ -258,11 +312,15 @@ export interface FileRouteTypes {
     | '/returns-refunds'
     | '/shipping-delivery'
     | '/terms-and-conditions'
+    | '/account/orders'
+    | '/account/profile'
+    | '/account/saves'
     | '/admin/quotes'
     | '/admin/reviews'
     | '/blog/$slug'
     | '/products/$slug'
     | '/shop/$handle'
+    | '/account/'
     | '/products/'
     | '/shop/'
   fileRoutesById: FileRoutesById
@@ -270,6 +328,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AboutUsRoute: typeof AboutUsRoute
+  AccountRoute: typeof AccountRouteWithChildren
   AuthRoute: typeof AuthRoute
   BlogRoute: typeof BlogRouteWithChildren
   CancellationPolicyRoute: typeof CancellationPolicyRoute
@@ -303,6 +362,13 @@ declare module '@tanstack/react-router' {
       path: '/about-us'
       fullPath: '/about-us'
       preLoaderRoute: typeof AboutUsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/account': {
+      id: '/account'
+      path: '/account'
+      fullPath: '/account'
+      preLoaderRoute: typeof AccountRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth': {
@@ -382,6 +448,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TermsAndConditionsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/account/': {
+      id: '/account/'
+      path: '/'
+      fullPath: '/account/'
+      preLoaderRoute: typeof AccountIndexRouteImport
+      parentRoute: typeof AccountRoute
+    }
+    '/account/orders': {
+      id: '/account/orders'
+      path: '/orders'
+      fullPath: '/account/orders'
+      preLoaderRoute: typeof AccountOrdersRouteImport
+      parentRoute: typeof AccountRoute
+    }
+    '/account/profile': {
+      id: '/account/profile'
+      path: '/profile'
+      fullPath: '/account/profile'
+      preLoaderRoute: typeof AccountProfileRouteImport
+      parentRoute: typeof AccountRoute
+    }
+    '/account/saves': {
+      id: '/account/saves'
+      path: '/saves'
+      fullPath: '/account/saves'
+      preLoaderRoute: typeof AccountSavesRouteImport
+      parentRoute: typeof AccountRoute
+    }
     '/admin/quotes': {
       id: '/admin/quotes'
       path: '/admin/quotes'
@@ -434,6 +528,23 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AccountRouteChildren {
+  AccountOrdersRoute: typeof AccountOrdersRoute
+  AccountProfileRoute: typeof AccountProfileRoute
+  AccountSavesRoute: typeof AccountSavesRoute
+  AccountIndexRoute: typeof AccountIndexRoute
+}
+
+const AccountRouteChildren: AccountRouteChildren = {
+  AccountOrdersRoute: AccountOrdersRoute,
+  AccountProfileRoute: AccountProfileRoute,
+  AccountSavesRoute: AccountSavesRoute,
+  AccountIndexRoute: AccountIndexRoute,
+}
+
+const AccountRouteWithChildren =
+  AccountRoute._addFileChildren(AccountRouteChildren)
+
 interface BlogRouteChildren {
   BlogSlugRoute: typeof BlogSlugRoute
 }
@@ -447,6 +558,7 @@ const BlogRouteWithChildren = BlogRoute._addFileChildren(BlogRouteChildren)
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AboutUsRoute: AboutUsRoute,
+  AccountRoute: AccountRouteWithChildren,
   AuthRoute: AuthRoute,
   BlogRoute: BlogRouteWithChildren,
   CancellationPolicyRoute: CancellationPolicyRoute,

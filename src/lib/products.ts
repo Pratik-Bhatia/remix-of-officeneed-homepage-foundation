@@ -11,7 +11,8 @@ export type ProductCategory =
   | "Office Stationery"
   | "Computer Peripherals"
   | "Printing & Branding"
-  | "Fragrance Gifting";
+  | "Fragrance Gifting"
+  | "Officeneed Exclusive";
 
 export type Product = {
   collectionHandles?: string[];

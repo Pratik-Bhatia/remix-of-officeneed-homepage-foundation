@@ -384,8 +384,8 @@ export function useShopifyBestsellers(staticItems: BestsellerProduct[]) {
         ? "Office Stationery"
         : p.category === "Computer Peripherals"
           ? "Computer Peripherals"
-          : p.category === "Printing & Branding"
-            ? "Corporate Gifting"
+        : p.category === "Printing & Branding" || p.category === "Officeneed Exclusive"
+          ? "Corporate Gifting"
             : p.category;
     return {
     id: node.id,

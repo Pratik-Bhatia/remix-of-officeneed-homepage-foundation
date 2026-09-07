@@ -32,6 +32,26 @@ export const categoryFilters: Record<ProductCategory, FilterGroup[]> = {
       ],
     },
   ],
+  "Officeneed Exclusive": [
+    {
+      id: "price",
+      label: "Price Range",
+      options: [
+        { label: "Under ₹2,000", value: "under_2000" },
+        { label: "₹2,000 - ₹5,000", value: "2000_5000" },
+        { label: "Above ₹5,000", value: "above_5000" },
+      ],
+    },
+    {
+      id: "minOrder",
+      label: "Minimum Order",
+      options: [
+        { label: "No Minimum", value: "none" },
+        { label: "10 - 49", value: "10_49" },
+        { label: "50+", value: "50_plus" },
+      ],
+    },
+  ],
   "Computer Peripherals": [
     {
       id: "connectivity",
