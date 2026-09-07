@@ -98,6 +98,27 @@ export type Database = {
         }
         Relationships: []
       }
+      customer_saves: {
+        Row: {
+          created_at: string
+          id: string
+          product_handle: string
+          shopify_customer_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          product_handle: string
+          shopify_customer_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          product_handle?: string
+          shopify_customer_id?: string
+        }
+        Relationships: []
+      }
       product_enquiries: {
         Row: {
           category: string
