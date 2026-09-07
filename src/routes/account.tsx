@@ -47,11 +47,13 @@ function SignInPanel({ onDone }: { onDone: () => Promise<void> }) {
       if (mode === "signin") {
         await signInCustomer(email, password);
       } else {
+        const firstName = String(form.get("firstName") ?? "").trim();
+        const lastName = String(form.get("lastName") ?? "").trim();
         await registerCustomer({
           email,
           password,
-          firstName: String(form.get("firstName") ?? "").trim() || undefined,
-          lastName: String(form.get("lastName") ?? "").trim() || undefined,
+          ...(firstName ? { firstName } : {}),
+          ...(lastName ? { lastName } : {}),
         });
       }
       await onDone();
