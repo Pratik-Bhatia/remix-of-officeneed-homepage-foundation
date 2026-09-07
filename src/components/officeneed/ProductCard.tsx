@@ -74,17 +74,6 @@ export function ProductCard({ product }: { product: Product }) {
           disabled={busy}
           aria-label={isSaved ? `Remove ${product.name} from your saves` : `Save ${product.name}`}
           aria-pressed={isSaved}
-          className="absolute bottom-[calc(100%-theme(spacing.3))] right-3 z-20 hidden"
-        />
-      ) : null}
-
-      {isSignedIn ? (
-        <button
-          type="button"
-          onClick={handleToggle}
-          disabled={busy}
-          aria-label={isSaved ? `Remove ${product.name} from your saves` : `Save ${product.name}`}
-          aria-pressed={isSaved}
           className="absolute right-3 top-3 z-20 grid size-9 place-items-center rounded-full border border-border bg-background/85 backdrop-blur transition-colors hover:border-foreground/40 disabled:opacity-60"
           style={product.price ? undefined : { top: "3rem" }}
         >
