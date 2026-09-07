@@ -11,17 +11,35 @@ function arrayBufferToBase64(buffer: ArrayBuffer | Uint8Array) {
   return btoa(binary);
 }
 
+// Max ~5MB of binary image data (base64 is ~4/3 larger). Prevents abuse of the paid API.
+const MAX_BASE64_LENGTH = 7 * 1024 * 1024;
+const BASE64_RE = /^[A-Za-z0-9+/=\s]+$/;
+
 export const processLogoServer = createServerFn({ method: "POST" })
-  .validator((data: { imageBase64: string }) => data)
+  .validator((data: { imageBase64: string }) => {
+    if (!data || typeof data.imageBase64 !== "string") {
+      throw new Error("Invalid request: image data is required.");
+    }
+    return data;
+  })
   .handler(async ({ data }) => {
     try {
       const apiKey = process.env['REMOVE_BG_API_KEY'];
       
       if (!apiKey) {
-        return { success: false, error: "REMOVE_BG_API_KEY environment variable is not set." };
+        return { success: false, error: "Image processing is not configured." };
       }
       
-      const base64Data = data.imageBase64;
+      // Strip an optional data URL prefix, then enforce a hard size cap before
+      // forwarding anything to the paid remove.bg API.
+      const base64Data = data.imageBase64.replace(/^data:image\/\w+;base64,/, "");
+      
+      if (base64Data.length > MAX_BASE64_LENGTH) {
+        return { success: false, error: "Image is too large. Please upload a logo under 5MB." };
+      }
+      if (!BASE64_RE.test(base64Data)) {
+        return { success: false, error: "Invalid image data." };
+      }
       
       const response = await fetch("https://api.remove.bg/v1.0/removebg", {
         method: "POST",
