@@ -16,7 +16,10 @@ export const listPendingReviews = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     await assertAdmin(context as any);
-    const { data, error } = await (context as any).supabase
+    // Reviewer emails are column-restricted for regular users; admins read
+    // them here through the service role after the admin check above.
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data, error } = await supabaseAdmin
       .from("product_reviews")
       .select("id, product_handle, rating, title, body, author_name, author_email, is_verified_buyer, status, created_at")
       .eq("status", "pending")
