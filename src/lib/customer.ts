@@ -232,17 +232,26 @@ export async function registerCustomer(input: {
   firstName?: string;
   lastName?: string;
 }): Promise<void> {
-  const data = await storefront<{
-    customerCreate: { customerUserErrors: Array<{ message: string }> };
-  }>(
-    `mutation Register($input: CustomerCreateInput!) {
-       customerCreate(input: $input) { customerUserErrors { message } }
-     }`,
-    { input },
-  );
-  const errors = data.customerCreate.customerUserErrors;
-  if (errors.length) throw new Error(errors[0]?.message ?? "Could not create your account.");
-  await signInCustomer(input.email, input.password);
+  try {
+    const data = await storefront<{
+      customerCreate: { customerUserErrors: Array<{ message: string }> };
+    }>(
+      `mutation Register($input: CustomerCreateInput!) {
+         customerCreate(input: $input) { customerUserErrors { message } }
+       }`,
+      { input },
+    );
+    const errors = data.customerCreate.customerUserErrors;
+    if (errors.length) throw new Error(errors[0]?.message ?? "Could not create your account.");
+    await signInCustomer(input.email, input.password);
+  } catch (error: any) {
+    if (error.message && error.message.includes("unauthenticated_write_customers")) {
+      throw new Error(
+        "Registration is currently disabled by store configuration. The Storefront API token is missing the 'unauthenticated_write_customers' permission."
+      );
+    }
+    throw error;
+  }
 }
 
 export async function updateCustomer(
