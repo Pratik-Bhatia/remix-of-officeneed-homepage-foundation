@@ -16,7 +16,7 @@ const quickLinks = [
   })),
 ];
 
-import { useShopifyCatalogue } from "@/lib/shopify-overlay";
+import { useShopifyCatalogue, shopifyCatalogueQueryOptions } from "@/lib/shopify-overlay";
 import { useQuery } from "@tanstack/react-query";
 
 export function SearchModal({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
@@ -24,9 +24,10 @@ export function SearchModal({ open, onOpenChange }: { open: boolean; onOpenChang
   const [query, setQuery] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const catalogue = useShopifyCatalogue(products);
-  
+
   // Read the query state from the same cache key used by useShopifyCatalogue
-  const { isLoading, isError } = useQuery({ queryKey: ["shopify", "catalog"] });
+  const { isLoading, isError } = useQuery(shopifyCatalogueQueryOptions);
+
 
   useEffect(() => {
     if (open) {
