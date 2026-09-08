@@ -339,16 +339,19 @@ export function shopifyNodeToProduct(node: ShopifyProductNode): Product {
  * no Shopify equivalent kept as a fallback. If Shopify is unavailable, the
  * static catalogue is returned untouched.
  */
+export const shopifyCatalogueQueryOptions = {
+  queryKey: ["shopify", "catalog"] as const,
+  queryFn: async () => {
+    const edges = await fetchProducts(250);
+    return edges.map((e) => e.node);
+  },
+  staleTime: 5 * 60 * 1000,
+  retry: 1,
+};
+
 export function useShopifyCatalogue(staticProducts: Product[]) {
-  const { data } = useQuery({
-    queryKey: ["shopify", "catalog"],
-    queryFn: async () => {
-      const edges = await fetchProducts(250);
-      return edges.map((e) => e.node);
-    },
-    staleTime: 5 * 60 * 1000,
-    retry: 1,
-  });
+  const { data } = useQuery(shopifyCatalogueQueryOptions);
+
 
   const nodes = data ?? [];
   if (nodes.length === 0) return staticProducts;
