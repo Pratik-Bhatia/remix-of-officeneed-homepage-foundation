@@ -13,7 +13,7 @@ const options = {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
-    'X-Shopify-Storefront-Access-Token': '3a2ae2d30877cebfeeeb9a7c1f923587',
+    'X-Shopify-Storefront-Access-Token': 'REMOVED_TOKEN',
     'Content-Length': Buffer.byteLength(data)
   }
 };

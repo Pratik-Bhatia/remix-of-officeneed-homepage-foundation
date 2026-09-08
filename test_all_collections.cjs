@@ -1,4 +1,4 @@
-const token = "f1e68506c43205c33a20d5d20d4916b8";
+const token = "REMOVED_TOKEN";
 const domain = "har1k4-di.myshopify.com";
 
 const query = `
