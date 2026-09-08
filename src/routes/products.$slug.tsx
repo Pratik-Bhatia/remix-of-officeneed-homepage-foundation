@@ -612,6 +612,7 @@ function ProductDetail() {
               
               <ProductCustomizer 
                 product={product} 
+                selectedVariant={selectedVariant}
                 open={customizerOpen} 
                 onOpenChange={setCustomizerOpen} 
               />

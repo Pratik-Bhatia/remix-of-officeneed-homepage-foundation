@@ -14,7 +14,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 export function AuthModal({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
-  const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -24,22 +23,12 @@ export function AuthModal({ open, onOpenChange }: { open: boolean; onOpenChange:
     setLoading(true);
 
     try {
-      if (isSignUp) {
-        const { error } = await supabase.auth.signUp({ email, password });
-        if (error) {
-          toast.error(error.message);
-        } else {
-          toast.success("Registration successful. Please check your email if verification is required.");
-          onOpenChange(false);
-        }
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) {
+        toast.error(error.message);
       } else {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) {
-          toast.error(error.message);
-        } else {
-          toast.success("Successfully logged in");
-          onOpenChange(false);
-        }
+        toast.success("Successfully logged in");
+        onOpenChange(false);
       }
     } catch {
       toast.error("Sign in is temporarily unavailable. Please try again shortly.");
@@ -52,9 +41,9 @@ export function AuthModal({ open, onOpenChange }: { open: boolean; onOpenChange:
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{isSignUp ? "Create an account" : "Sign in to OfficeNeed"}</DialogTitle>
+          <DialogTitle>Sign in to OfficeNeed</DialogTitle>
           <DialogDescription>
-            {isSignUp ? "Sign up to manage your orders and enquiries." : "Welcome back! Please sign in to continue."}
+            Welcome back! Please sign in to continue.
           </DialogDescription>
         </DialogHeader>
         
@@ -83,20 +72,9 @@ export function AuthModal({ open, onOpenChange }: { open: boolean; onOpenChange:
           
           <Button type="submit" className="w-full" disabled={loading}>
             {loading ? <Loader2 className="size-4 animate-spin mr-2" /> : null}
-            {isSignUp ? "Sign Up" : "Sign In"}
+            Sign In
           </Button>
         </form>
-
-        <div className="text-center text-sm text-muted-foreground mt-2">
-          {isSignUp ? "Already have an account? " : "Don't have an account? "}
-          <button
-            type="button"
-            className="text-primary hover:underline font-medium"
-            onClick={() => setIsSignUp(!isSignUp)}
-          >
-            {isSignUp ? "Sign in" : "Create one"}
-          </button>
-        </div>
       </DialogContent>
     </Dialog>
   );

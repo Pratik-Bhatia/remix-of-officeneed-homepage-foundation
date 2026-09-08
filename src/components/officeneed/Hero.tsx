@@ -29,7 +29,7 @@ const slides = [
     id: "gifting",
     heading: "Corporate Gifting",
     text: "Build lasting business relationships with curated, premium gift sets.",
-    primary: { label: "View Gift Catalogue", href: "/products/?collection=frontpage" },
+    primary: { label: "View Gift Catalogue", href: "/products/?collection=corporate-gifting" },
     secondary: { label: "Shop Gift Sets", href: "/products/?collection=gift-sets" },
     image: heroGifting.url,
     alt: "Curated Officeneed corporate gift hamper with laptop bag, notebook, flask, mug, pen, candle, plant and thank you card.",

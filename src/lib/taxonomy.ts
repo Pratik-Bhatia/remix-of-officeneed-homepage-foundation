@@ -29,7 +29,7 @@ export const TAXONOMY: Record<MainCategory, CategoryNode> = {
   "Corporate Gifting": {
     title: "Corporate Gifting",
     id: "gid://shopify/Collection/497947345124",
-    handle: "frontpage",
+    handle: "corporate-gifting",
     subcategories: {
       "Gift Sets": { title: "Gift Sets", id: null, handle: "gift-sets" },
       "Drinkware & Utensils": { title: "Drinkware & Utensils", id: null, handle: "drinkware-utensils" },
@@ -62,7 +62,7 @@ export const TAXONOMY: Record<MainCategory, CategoryNode> = {
   "Computer Peripherals": {
     title: "Computer Peripherals",
     id: "gid://shopify/Collection/498085003492",
-    handle: "hardware",
+    handle: "computer-accessories",
     subcategories: {
       "Computer Accessories": { title: "Computer Accessories", id: "gid://shopify/Collection/315533361245", handle: "computer-accessories-1" },
       "Cables & Adapters": { title: "Cables & Adapters", id: null, handle: "cables-and-adapters" },

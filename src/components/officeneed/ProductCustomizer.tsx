@@ -13,6 +13,7 @@ import { submitCorporateQuote } from "@/lib/corporate-quotes.functions";
 
 interface ProductCustomizerProps {
   product: any;
+  selectedVariant?: any;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
@@ -118,8 +119,10 @@ const processLogos = (src: string): Promise<{ uvLogo: string; laserLogo: string 
 };
 
 
-export function ProductCustomizer({ product, open, onOpenChange }: ProductCustomizerProps) {
+export function ProductCustomizer({ product, selectedVariant, open, onOpenChange }: ProductCustomizerProps) {
   const [step, setStep] = useState<Step>("customize");
+  
+  const previewImage = selectedVariant?.image?.url || product.images?.[0] || "https://placehold.co/800x1000/f8f9fa/a1a1aa?text=Product+Image";
   
   const [logo, setLogo] = useState<string | null>(null);
   const [logoFile, setLogoFile] = useState<File | null>(null);
@@ -283,7 +286,7 @@ export function ProductCustomizer({ product, open, onOpenChange }: ProductCustom
           product: {
             id: product.id || product.slug,
             name: product.name,
-            variant: product.variants?.[0]?.title
+            variant: selectedVariant?.title || product.variants?.[0]?.title
           },
           logo: logoFile && logoBase64 ? {
             name: logoFile.name,
@@ -393,7 +396,7 @@ export function ProductCustomizer({ product, open, onOpenChange }: ProductCustom
                 onClick={handleCanvasClick}
               >
                 <img 
-                  src={product.images?.[0] || "https://placehold.co/800x1000/f8f9fa/a1a1aa?text=Product+Image"} 
+                  src={previewImage} 
                   alt="Product preview" 
                   crossOrigin="anonymous"
                   className="absolute inset-0 w-full h-full object-contain pointer-events-none drop-shadow-sm p-4 lg:p-8"
@@ -759,7 +762,7 @@ export function ProductCustomizer({ product, open, onOpenChange }: ProductCustom
                   
                   <div className="w-full aspect-[4/5] bg-[#F9FAFB] rounded-xl border border-border mb-8 flex items-center justify-center p-6 relative overflow-hidden shadow-inner">
                     <img 
-                      src={product.images?.[0] || "https://placehold.co/800x1000/f8f9fa/a1a1aa?text=Product"} 
+                      src={previewImage} 
                       alt="Product" 
                       className="w-full h-full object-contain pointer-events-none drop-shadow-sm"
                     />

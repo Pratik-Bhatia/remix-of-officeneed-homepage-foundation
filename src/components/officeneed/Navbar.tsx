@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { lockScroll, unlockScroll } from "@/lib/scroll-lock";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { Menu, MessageSquare, Search, User, X, ChevronDown } from "lucide-react";
 import logoUrl from "@/assets/officeneed-logo.png";
 import { primaryNavCategories as navCategories, navItemTarget, navCategoryTarget } from "@/lib/navigation";
@@ -8,10 +8,8 @@ import { CartDrawer } from "@/components/officeneed/CartDrawer";
 import { AiAssistantIcon } from "@/components/officeneed/AiAssistantIcon";
 import { cn } from "@/lib/utils";
 import { SearchModal } from "./SearchModal";
-import { AuthModal } from "./AuthModal";
-import { AccountModal } from "./AccountModal";
-import { supabase } from "@/integrations/supabase/client";
-import type { User as SupabaseUser } from "@supabase/supabase-js";
+import { CustomerAuthModal } from "./CustomerAuthModal";
+import { useCustomer } from "@/lib/customer";
 
 function Logo({ className }: { className?: string }) {
   return (
@@ -66,31 +64,15 @@ export function Navbar() {
 
   const [searchOpen, setSearchOpen] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
-  const [accountOpen, setAccountOpen] = useState(false);
-  const [user, setUser] = useState<SupabaseUser | null>(null);
+  
+  const { status } = useCustomer();
+  const navigate = useNavigate();
 
   useEffect(() => {
-    let unsubscribe = () => {};
-    try {
-      void supabase.auth.getSession()
-        .then(({ data: { session } }) => setUser(session?.user ?? null))
-        .catch(() => setUser(null));
-
-      const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-        setUser(session?.user ?? null);
-      });
-      unsubscribe = () => subscription.unsubscribe();
-    } catch {
-      // Authentication is optional for browsing. A missing client config must
-      // never prevent the storefront from rendering.
-      setUser(null);
-    }
-
     const handleOpenAuth = () => setAuthOpen(true);
     window.addEventListener("open-auth-modal", handleOpenAuth);
 
     return () => {
-      unsubscribe();
       window.removeEventListener("open-auth-modal", handleOpenAuth);
     };
   }, []);
@@ -202,7 +184,7 @@ export function Navbar() {
             <Search className="size-5 md:size-[22px] xl:size-5" strokeWidth={1.6} />
           </IconButton>
           <span className="hidden xl:inline-flex">
-            <IconButton label="Account" className="size-[26px] md:size-10 xl:size-11" onClick={() => user ? setAccountOpen(true) : setAuthOpen(true)}>
+            <IconButton label="Account" className="size-[26px] md:size-10 xl:size-11" onClick={() => status === "in" ? navigate({ to: "/account" }) : setAuthOpen(true)}>
               <User className="size-5 md:size-[22px] xl:size-5" strokeWidth={1.6} />
             </IconButton>
           </span>
@@ -358,7 +340,7 @@ export function Navbar() {
             aria-label="Account"
             onClick={() => {
               setMobileOpen(false);
-              user ? setAccountOpen(true) : setAuthOpen(true);
+              status === "in" ? navigate({ to: "/account" }) : setAuthOpen(true);
             }}
             className={cn(
               "mt-8 flex min-h-12 items-center gap-3 text-sm text-foreground/80 transition-[opacity,transform] duration-[420ms] ease-[cubic-bezier(0.22,1,0.36,1)]",
@@ -373,8 +355,7 @@ export function Navbar() {
       </div>
 
       <SearchModal open={searchOpen} onOpenChange={setSearchOpen} />
-      <AuthModal open={authOpen} onOpenChange={setAuthOpen} />
-      {user && <AccountModal open={accountOpen} onOpenChange={setAccountOpen} user={user} />}
+      <CustomerAuthModal open={authOpen} onOpenChange={setAuthOpen} />
     </>
   );
 }
