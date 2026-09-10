@@ -21,14 +21,25 @@ const supabaseEnvCompatibilityPlugin = () => ({
   enforce: "pre" as const,
   transform(code: string, id: string) {
     const normalizedId = id.replaceAll("\\", "/");
-    if (!normalizedId.endsWith("/src/integrations/supabase/client.ts")) return null;
+    const isSupabaseClient = normalizedId.endsWith("/src/integrations/supabase/client.ts");
+    const isShopifyClient = normalizedId.endsWith("/src/lib/shopify.ts");
+    if (!isSupabaseClient && !isShopifyClient) return null;
 
-    const updated = code
-      .replaceAll("import.meta.env['VITE_SUPABASE_URL']", "import.meta.env.VITE_SUPABASE_URL")
-      .replaceAll(
-        "import.meta.env['VITE_SUPABASE_PUBLISHABLE_KEY']",
-        "import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY",
+    let updated = code;
+    if (isSupabaseClient) {
+      updated = updated
+        .replaceAll("import.meta.env['VITE_SUPABASE_URL']", "import.meta.env.VITE_SUPABASE_URL")
+        .replaceAll(
+          "import.meta.env['VITE_SUPABASE_PUBLISHABLE_KEY']",
+          "import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY",
+        );
+    }
+    if (isShopifyClient) {
+      updated = updated.replaceAll(
+        'import.meta.env["VITE_SHOPIFY_STOREFRONT_ACCESS_TOKEN"]',
+        "import.meta.env.VITE_SHOPIFY_STOREFRONT_ACCESS_TOKEN",
       );
+    }
 
     return updated === code ? null : { code: updated, map: null };
   },
@@ -37,12 +48,26 @@ const supabaseEnvCompatibilityPlugin = () => ({
 if (supabaseUrl) process.env["VITE_SUPABASE_URL"] = supabaseUrl;
 if (supabasePublishableKey) process.env["VITE_SUPABASE_PUBLISHABLE_KEY"] = supabasePublishableKey;
 
+// Bridge the managed Shopify Storefront token (public, client-safe) into the
+// browser bundle when the platform has not injected the VITE_ copy yet.
+const shopifyStorefrontToken =
+  process.env["VITE_SHOPIFY_STOREFRONT_ACCESS_TOKEN"] ??
+  process.env["SHOPIFY_STOREFRONT_ACCESS_TOKEN"];
+if (shopifyStorefrontToken)
+  process.env["VITE_SHOPIFY_STOREFRONT_ACCESS_TOKEN"] = shopifyStorefrontToken;
+
 export default defineConfig({
   vite: {
     plugins: [supabaseEnvCompatibilityPlugin()],
     define: {
       "import.meta.env.VITE_SUPABASE_URL": JSON.stringify(supabaseUrl),
       "import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY": JSON.stringify(supabasePublishableKey),
+      ...(shopifyStorefrontToken
+        ? {
+            "import.meta.env.VITE_SHOPIFY_STOREFRONT_ACCESS_TOKEN":
+              JSON.stringify(shopifyStorefrontToken),
+          }
+        : {}),
     },
   },
   tanstackStart: {
