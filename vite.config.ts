@@ -37,6 +37,14 @@ const supabaseEnvCompatibilityPlugin = () => ({
 if (supabaseUrl) process.env["VITE_SUPABASE_URL"] = supabaseUrl;
 if (supabasePublishableKey) process.env["VITE_SUPABASE_PUBLISHABLE_KEY"] = supabasePublishableKey;
 
+// Bridge the managed Shopify Storefront token (public, client-safe) into the
+// browser bundle when the platform has not injected the VITE_ copy yet.
+const shopifyStorefrontToken =
+  process.env["VITE_SHOPIFY_STOREFRONT_ACCESS_TOKEN"] ??
+  process.env["SHOPIFY_STOREFRONT_ACCESS_TOKEN"];
+if (shopifyStorefrontToken)
+  process.env["VITE_SHOPIFY_STOREFRONT_ACCESS_TOKEN"] = shopifyStorefrontToken;
+
 export default defineConfig({
   vite: {
     plugins: [supabaseEnvCompatibilityPlugin()],
