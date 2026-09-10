@@ -51,6 +51,12 @@ export default defineConfig({
     define: {
       "import.meta.env.VITE_SUPABASE_URL": JSON.stringify(supabaseUrl),
       "import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY": JSON.stringify(supabasePublishableKey),
+      ...(shopifyStorefrontToken
+        ? {
+            "import.meta.env.VITE_SHOPIFY_STOREFRONT_ACCESS_TOKEN":
+              JSON.stringify(shopifyStorefrontToken),
+          }
+        : {}),
     },
   },
   tanstackStart: {
