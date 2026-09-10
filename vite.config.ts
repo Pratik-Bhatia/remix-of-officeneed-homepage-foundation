@@ -21,14 +21,25 @@ const supabaseEnvCompatibilityPlugin = () => ({
   enforce: "pre" as const,
   transform(code: string, id: string) {
     const normalizedId = id.replaceAll("\\", "/");
-    if (!normalizedId.endsWith("/src/integrations/supabase/client.ts")) return null;
+    const isSupabaseClient = normalizedId.endsWith("/src/integrations/supabase/client.ts");
+    const isShopifyClient = normalizedId.endsWith("/src/lib/shopify.ts");
+    if (!isSupabaseClient && !isShopifyClient) return null;
 
-    const updated = code
-      .replaceAll("import.meta.env['VITE_SUPABASE_URL']", "import.meta.env.VITE_SUPABASE_URL")
-      .replaceAll(
-        "import.meta.env['VITE_SUPABASE_PUBLISHABLE_KEY']",
-        "import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY",
+    let updated = code;
+    if (isSupabaseClient) {
+      updated = updated
+        .replaceAll("import.meta.env['VITE_SUPABASE_URL']", "import.meta.env.VITE_SUPABASE_URL")
+        .replaceAll(
+          "import.meta.env['VITE_SUPABASE_PUBLISHABLE_KEY']",
+          "import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY",
+        );
+    }
+    if (isShopifyClient) {
+      updated = updated.replaceAll(
+        'import.meta.env["VITE_SHOPIFY_STOREFRONT_ACCESS_TOKEN"]',
+        "import.meta.env.VITE_SHOPIFY_STOREFRONT_ACCESS_TOKEN",
       );
+    }
 
     return updated === code ? null : { code: updated, map: null };
   },
