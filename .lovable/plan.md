@@ -1,20 +1,26 @@
-# Fix "Sign ups are not allowed" popup on sign-in
+# Investigate which Shopify storefront owns the managed token
 
-## What's wrong
+No changes to the store, the site, or any credentials. This is a read-only fact-finding pass so we know exactly what to fix before touching anything.
 
-The navbar's sign-in popup (`AuthModal`) uses the site's **admin login system**, where I disabled new account creation earlier to lock down the admin area. The popup still shows a "Create one" toggle — anyone who taps it (or whose sign-in falls into the signup path) hits the "Sign ups are not allowed for this instance" error.
+## Confirmed so far
 
-Meanwhile, real customer accounts now live in your **Shopify store** (the system powering `/account` orders and saves). So the navbar popup is both broken and pointing at the wrong account system.
+- The token the site uses is issued by the Shopify app that Lovable installed on the store, not by the Headless channel.
+- Against the live store, that token can read products but is refused for both customer read and customer write.
+- The permissions already ticked on "My Store 2 Headless" do not apply to it.
 
-## Fix
+## What the investigation will establish
 
-1. **Point the navbar sign-in at Shopify customer accounts** — replace the navbar's `AuthModal` with a customer sign-in modal that uses the existing `signInCustomer` / `registerCustomer` from `src/lib/customer.ts` (same flow as the `/account` page: email + password, optional first/last name on register). On success, customers land on `/account` with their real orders and saves.
-2. **Remove the dead signup path** — `AuthModal.tsx` is only used for admin; it keeps email/password sign-in only, with no "Create one" toggle, so the confusing error can never appear.
-3. Keep `/auth` (admin sign-in) untouched.
+1. Whether the token behaves like a Headless-channel storefront token or a custom-app token, by probing which capability groups it can and cannot reach (products, collections, cart, checkout, customers, selling plans, metaobjects). The pattern of allowed scopes fingerprints the source.
+2. Whether the store has more than one storefront/app issuing Storefront tokens, using the store's own listing rather than guesswork.
+3. Whether the "My Store 2 Headless" public token in fact carries the customer scopes, so we know it is a real alternative before recommending it. This needs you to paste that token into a secure form once; it is never printed and never written into the code.
+4. A single recommendation: either the exact place in Shopify Admin to grant Customers read + write to the connected app, or a switch to the Headless token.
 
-## Technical details
+## What you will get
 
-- New `CustomerAuthModal` component (or reuse the `/account` SignInPanel logic) wired into `Navbar.tsx` in place of `AuthModal`.
-- After sign-in/register: `refreshSaves(true)` runs so saved products load immediately.
-- Registration errors from Shopify (e.g. "email already taken") surface as toast messages.
-- No database or auth-setting changes needed — public Supabase signups stay disabled.
+A short report naming the owning app or storefront as precisely as the store lets us determine, the exact permissions the current token holds, and one recommended path with the concrete steps for it.
+
+## Technical notes
+
+- Probing uses read-only Storefront GraphQL queries and permission-denied signatures; no mutations that create data.
+- Storefront API version stays 2025-07; `src/lib/shopify.ts` and `vite.config.ts` are untouched during the investigation.
+- If the Headless token has to be tested, it is stored as a project secret and read server-side only, never logged.
