@@ -7,7 +7,11 @@ const SHOPIFY_STORE_PERMANENT_DOMAIN = "har1k4-di.myshopify.com";
 const SHOPIFY_STOREFRONT_URL = `https://${SHOPIFY_STORE_PERMANENT_DOMAIN}/api/${SHOPIFY_API_VERSION}/graphql.json`;
 
 export async function resolveCustomerId(token: string): Promise<string> {
-  const storefrontToken = process.env["SHOPIFY_STOREFRONT_ACCESS_TOKEN"] as string;
+  // Prefer the Headless storefront token (has customer read/write scopes);
+  // fall back to the integration-managed token for catalogue-only access.
+  const storefrontToken = (process.env["SHOPIFY_HEADLESS_STOREFRONT_TOKEN"] ??
+    process.env["SHOPIFY_HEADLESS_STOREFRONT_TOKEN_TEST"] ??
+    process.env["SHOPIFY_STOREFRONT_ACCESS_TOKEN"]) as string;
   const response = await fetch(SHOPIFY_STOREFRONT_URL, {
     method: "POST",
     headers: {
