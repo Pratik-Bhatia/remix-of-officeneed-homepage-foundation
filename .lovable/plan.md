@@ -1,26 +1,32 @@
-# Investigate which Shopify storefront owns the managed token
+# Shopify storefront token: findings and recommendation
 
-No changes to the store, the site, or any credentials. This is a read-only fact-finding pass so we know exactly what to fix before touching anything.
+Investigation complete. Nothing has been changed on the store or the site. No token value was printed.
 
-## Confirmed so far
+## 1. Owner of the current token
 
-- The token the site uses is issued by the Shopify app that Lovable installed on the store, not by the Headless channel.
-- Against the live store, that token can read products but is refused for both customer read and customer write.
-- The permissions already ticked on "My Store 2 Headless" do not apply to it.
+The store is "My Store 2" (har1k4-di). The token the site uses is the one issued by Lovable's Shopify integration, running on the project's temporary store access granted when the store was claimed. It is not a token from the Headless channel, which is why the permissions ticked on "My Store 2 Headless" have no effect on it.
 
-## What the investigation will establish
+## 2. What the current token can and cannot do
 
-1. Whether the token behaves like a Headless-channel storefront token or a custom-app token, by probing which capability groups it can and cannot reach (products, collections, cart, checkout, customers, selling plans, metaobjects). The pattern of allowed scopes fingerprints the source.
-2. Whether the store has more than one storefront/app issuing Storefront tokens, using the store's own listing rather than guesswork.
-3. Whether the "My Store 2 Headless" public token in fact carries the customer scopes, so we know it is a real alternative before recommending it. This needs you to paste that token into a secure form once; it is never printed and never written into the code.
-4. A single recommendation: either the exact place in Shopify Admin to grant Customers read + write to the connected app, or a switch to the Headless token.
+Allowed: products, collections, store info, cart and checkout, localization.
+Refused: customers read, customers write, blog/page content, metaobjects, selling plans.
 
-## What you will get
+## 3. The "My Store 2 Headless" token
 
-A short report naming the owning app or storefront as precisely as the store lets us determine, the exact permissions the current token holds, and one recommended path with the concrete steps for it.
+Tested against the live store: products work, customer read works, customer login/registration works, content works. It carries everything the site needs.
 
-## Technical notes
+## 4. Recommendation
 
-- Probing uses read-only Storefront GraphQL queries and permission-denied signatures; no mutations that create data.
-- Storefront API version stays 2025-07; `src/lib/shopify.ts` and `vite.config.ts` are untouched during the investigation.
-- If the Headless token has to be tested, it is stored as a project secret and read server-side only, never logged.
+Point the site at the "My Store 2 Headless" public token instead of the integration token.
+
+Reason: it already has the correct permissions, verified live. The alternative — widening the integration token's permissions — depends on an app whose settings we cannot reach or guarantee, and that token is temporary access tied to store claiming.
+
+### Steps once approved
+
+1. Save the Headless public token under its permanent name via the secure form (the test copy already provided can be promoted; no value passes through chat).
+2. Point the browser-side storefront client and the server-side saves helper at that value, replacing the integration-supplied one. Files: `vite.config.ts` (env bridge) and `src/lib/shopify.ts`; `src/lib/saves.server.ts` reads the server-side name.
+3. Leave the existing managed secret in place and untouched.
+4. Re-run the eight checks: catalogue, images and variants, cart, customer login, registration, account page, saved products, typecheck.
+5. Delete the temporary test secret.
+
+Nothing in the Shopify Admin needs changing under this option.
