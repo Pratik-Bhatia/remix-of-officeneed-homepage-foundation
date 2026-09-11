@@ -50,7 +50,11 @@ if (supabasePublishableKey) process.env["VITE_SUPABASE_PUBLISHABLE_KEY"] = supab
 
 // Bridge the managed Shopify Storefront token (public, client-safe) into the
 // browser bundle when the platform has not injected the VITE_ copy yet.
+// Prefer the Headless storefront token (carries customer read/write scopes),
+// then any explicitly injected VITE copy, then the integration-managed token.
 const shopifyStorefrontToken =
+  process.env["SHOPIFY_HEADLESS_STOREFRONT_TOKEN"] ??
+  process.env["SHOPIFY_HEADLESS_STOREFRONT_TOKEN_TEST"] ??
   process.env["VITE_SHOPIFY_STOREFRONT_ACCESS_TOKEN"] ??
   process.env["SHOPIFY_STOREFRONT_ACCESS_TOKEN"];
 if (shopifyStorefrontToken)
