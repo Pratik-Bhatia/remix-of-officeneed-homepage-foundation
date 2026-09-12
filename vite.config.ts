@@ -70,6 +70,7 @@ export default defineConfig({
         ? {
             "import.meta.env.VITE_SHOPIFY_STOREFRONT_ACCESS_TOKEN":
               JSON.stringify(shopifyStorefrontToken),
+            __SHOPIFY_STOREFRONT_TOKEN__: JSON.stringify(shopifyStorefrontToken),
           }
         : {}),
     },
