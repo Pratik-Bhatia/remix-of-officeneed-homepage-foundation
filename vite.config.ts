@@ -41,7 +41,7 @@ const supabaseEnvCompatibilityPlugin = () => ({
       );
       if (shopifyStorefrontToken) {
         updated = updated.replaceAll(
-          "__SHOPIFY_STOREFRONT_TOKEN__",
+          '"__SHOPIFY_STOREFRONT_TOKEN__"',
           JSON.stringify(shopifyStorefrontToken),
         );
       }
