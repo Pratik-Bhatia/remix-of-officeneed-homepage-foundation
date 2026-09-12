@@ -6,13 +6,14 @@ import { toast } from "sonner";
 export const SHOPIFY_API_VERSION = "2025-07";
 export const SHOPIFY_STORE_PERMANENT_DOMAIN = "har1k4-di.myshopify.com";
 export const SHOPIFY_STOREFRONT_URL = `https://${SHOPIFY_STORE_PERMANENT_DOMAIN}/api/${SHOPIFY_API_VERSION}/graphql.json`;
-declare const __SHOPIFY_STOREFRONT_TOKEN__: string | undefined;
+// The build replaces this placeholder with the verified Headless storefront
+// token (a public, client-safe token). If it is left untouched, fall back to
+// the platform-injected VITE_ copy.
+const INJECTED_STOREFRONT_TOKEN = "__SHOPIFY_STOREFRONT_TOKEN__";
 
-// The build injects the verified Headless storefront token here. Fall back to
-// the platform-injected VITE_ copy only when the build-time value is absent.
-export const SHOPIFY_STOREFRONT_TOKEN = ((typeof __SHOPIFY_STOREFRONT_TOKEN__ !== "undefined" &&
-  __SHOPIFY_STOREFRONT_TOKEN__) ||
-  (import.meta.env["VITE_SHOPIFY_STOREFRONT_ACCESS_TOKEN"] as string)) as string;
+export const SHOPIFY_STOREFRONT_TOKEN = /^[A-Za-z0-9]+$/.test(INJECTED_STOREFRONT_TOKEN)
+  ? INJECTED_STOREFRONT_TOKEN
+  : (import.meta.env["VITE_SHOPIFY_STOREFRONT_ACCESS_TOKEN"] as string);
 
 export interface ShopifyImage {
   id?: string | null;
