@@ -39,6 +39,12 @@ const supabaseEnvCompatibilityPlugin = () => ({
         'import.meta.env["VITE_SHOPIFY_STOREFRONT_ACCESS_TOKEN"]',
         "import.meta.env.VITE_SHOPIFY_STOREFRONT_ACCESS_TOKEN",
       );
+      if (shopifyStorefrontToken) {
+        updated = updated.replaceAll(
+          '"__SHOPIFY_STOREFRONT_TOKEN__"',
+          JSON.stringify(shopifyStorefrontToken),
+        );
+      }
     }
 
     return updated === code ? null : { code: updated, map: null };
@@ -70,6 +76,7 @@ export default defineConfig({
         ? {
             "import.meta.env.VITE_SHOPIFY_STOREFRONT_ACCESS_TOKEN":
               JSON.stringify(shopifyStorefrontToken),
+            __SHOPIFY_STOREFRONT_TOKEN__: JSON.stringify(shopifyStorefrontToken),
           }
         : {}),
     },
