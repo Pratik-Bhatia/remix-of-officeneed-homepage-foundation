@@ -1,13 +1,12 @@
 /**
  * Shopify customer accounts via the Storefront API (classic customer accounts).
  * Handles sign-in, sign-up, profile and order history for the signed-in shopper.
+ *
+ * All Storefront API calls go through storefrontApiRequest() which proxies
+ * via the server-side shopify.functions.ts — the token never reaches the browser.
  */
 import { useCallback, useEffect, useState } from "react";
-import {
-  SHOPIFY_STOREFRONT_TOKEN,
-  SHOPIFY_STOREFRONT_URL,
-  formatMoney,
-} from "@/lib/shopify";
+import { storefrontApiRequest, formatMoney } from "@/lib/shopify";
 
 const TOKEN_KEY = "officeneed_customer_token";
 const TOKEN_EVENT = "officeneed-customer-token";
@@ -55,20 +54,6 @@ export interface Customer {
   orders: CustomerOrder[];
 }
 
-async function storefront<T>(query: string, variables: Record<string, unknown>): Promise<T> {
-  const response = await fetch(SHOPIFY_STOREFRONT_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Shopify-Storefront-Access-Token": SHOPIFY_STOREFRONT_TOKEN,
-    },
-    body: JSON.stringify({ query, variables }),
-  });
-  if (!response.ok) throw new Error(`Shopify request failed (${response.status})`);
-  const json = await response.json();
-  if (json.errors?.length) throw new Error(json.errors[0]?.message ?? "Shopify request failed");
-  return json.data as T;
-}
 
 /* ---------------------------------- token --------------------------------- */
 
@@ -171,8 +156,9 @@ type RawCustomer = {
 };
 
 export async function fetchCustomer(token: string): Promise<Customer | null> {
-  const data = await storefront<RawCustomer>(CUSTOMER_QUERY, { token });
-  const c = data.customer;
+  const resp = await storefrontApiRequest(CUSTOMER_QUERY, { token });
+  const data = resp?.data as RawCustomer | undefined;
+  const c = data?.customer;
   if (!c) return null;
   return {
     id: c.id,
@@ -205,12 +191,7 @@ export async function fetchCustomer(token: string): Promise<Customer | null> {
 /* --------------------------------- actions -------------------------------- */
 
 export async function signInCustomer(email: string, password: string): Promise<void> {
-  const data = await storefront<{
-    customerAccessTokenCreate: {
-      customerAccessToken: { accessToken: string; expiresAt: string } | null;
-      customerUserErrors: Array<{ message: string }>;
-    };
-  }>(
+  const resp = await storefrontApiRequest(
     `mutation Login($input: CustomerAccessTokenCreateInput!) {
        customerAccessTokenCreate(input: $input) {
          customerAccessToken { accessToken expiresAt }
@@ -219,7 +200,12 @@ export async function signInCustomer(email: string, password: string): Promise<v
      }`,
     { input: { email, password } },
   );
-  const result = data.customerAccessTokenCreate;
+  const result = (resp?.data as {
+    customerAccessTokenCreate: {
+      customerAccessToken: { accessToken: string; expiresAt: string } | null;
+      customerUserErrors: Array<{ message: string }>;
+    };
+  }).customerAccessTokenCreate;
   if (!result.customerAccessToken) {
     throw new Error(result.customerUserErrors[0]?.message ?? "Incorrect email or password.");
   }
@@ -233,21 +219,21 @@ export async function registerCustomer(input: {
   lastName?: string;
 }): Promise<void> {
   try {
-    const data = await storefront<{
-      customerCreate: { customerUserErrors: Array<{ message: string }> };
-    }>(
+    const resp = await storefrontApiRequest(
       `mutation Register($input: CustomerCreateInput!) {
          customerCreate(input: $input) { customerUserErrors { message } }
        }`,
       { input },
     );
-    const errors = data.customerCreate.customerUserErrors;
+    const errors = (resp?.data as { customerCreate: { customerUserErrors: Array<{ message: string }> } })
+      .customerCreate.customerUserErrors;
     if (errors.length) throw new Error(errors[0]?.message ?? "Could not create your account.");
     await signInCustomer(input.email, input.password);
-  } catch (error: any) {
-    if (error.message && error.message.includes("unauthenticated_write_customers")) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes("unauthenticated_write_customers")) {
       throw new Error(
-        "Registration is currently disabled by store configuration. The Storefront API token is missing the 'unauthenticated_write_customers' permission."
+        "Registration is currently disabled by store configuration. The Storefront API token is missing the 'unauthenticated_write_customers' permission.",
       );
     }
     throw error;
@@ -258,9 +244,7 @@ export async function updateCustomer(
   token: string,
   input: { firstName?: string; lastName?: string; phone?: string },
 ): Promise<void> {
-  const data = await storefront<{
-    customerUpdate: { customerUserErrors: Array<{ message: string }> };
-  }>(
+  const resp = await storefrontApiRequest(
     `mutation UpdateCustomer($token: String!, $customer: CustomerUpdateInput!) {
        customerUpdate(customerAccessToken: $token, customer: $customer) {
          customerUserErrors { message }
@@ -268,7 +252,8 @@ export async function updateCustomer(
      }`,
     { token, customer: input },
   );
-  const errors = data.customerUpdate.customerUserErrors;
+  const errors = (resp?.data as { customerUpdate: { customerUserErrors: Array<{ message: string }> } })
+    .customerUpdate.customerUserErrors;
   if (errors.length) throw new Error(errors[0]?.message ?? "Could not save your details.");
 }
 
@@ -277,7 +262,7 @@ export async function signOutCustomer(): Promise<void> {
   setCustomerToken(null);
   if (!token) return;
   try {
-    await storefront(
+    await storefrontApiRequest(
       `mutation Logout($token: String!) {
          customerAccessTokenDelete(customerAccessToken: $token) { deletedAccessToken }
        }`,

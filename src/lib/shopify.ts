@@ -1,19 +1,15 @@
 /**
  * Shopify Storefront API client for the connected OfficeNeed store.
+ *
+ * Browser code calls storefrontApiRequest() which proxies through the
+ * server-side proxyStorefrontRequest server function so the Shopify
+ * access token is never embedded in or sent from browser JavaScript.
  */
 import { toast } from "sonner";
+import { proxyStorefrontRequest } from "@/lib/shopify.functions";
 
 export const SHOPIFY_API_VERSION = "2025-07";
 export const SHOPIFY_STORE_PERMANENT_DOMAIN = "har1k4-di.myshopify.com";
-export const SHOPIFY_STOREFRONT_URL = `https://${SHOPIFY_STORE_PERMANENT_DOMAIN}/api/${SHOPIFY_API_VERSION}/graphql.json`;
-// The build replaces this placeholder with the verified Headless storefront
-// token (a public, client-safe token). If it is left untouched, fall back to
-// the platform-injected VITE_ copy.
-const INJECTED_STOREFRONT_TOKEN = "__SHOPIFY_STOREFRONT_TOKEN__";
-
-export const SHOPIFY_STOREFRONT_TOKEN = /^[A-Za-z0-9]+$/.test(INJECTED_STOREFRONT_TOKEN)
-  ? INJECTED_STOREFRONT_TOKEN
-  : (import.meta.env["VITE_SHOPIFY_STOREFRONT_ACCESS_TOKEN"] as string);
 
 export interface ShopifyImage {
   id?: string | null;
@@ -104,32 +100,34 @@ export const PRODUCT_BY_HANDLE_QUERY = `
   }
 `;
 
-export async function storefrontApiRequest(query: string, variables: Record<string, unknown> = {}) {
-  const response = await fetch(SHOPIFY_STOREFRONT_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Shopify-Storefront-Access-Token": SHOPIFY_STOREFRONT_TOKEN,
-    },
-    body: JSON.stringify({ query, variables }),
-  });
-
-  if (response.status === 402) {
-    toast.error("Shopify: Payment required", {
-      description:
-        "Shopify API access requires an active Shopify billing plan. Visit https://admin.shopify.com to upgrade.",
-    });
-    return;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function storefrontApiRequest(query: string, variables: Record<string, unknown> = {}): Promise<any> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let result: { data: Record<string, any> | null; errors: Array<{ message: string }> };
+  try {
+    result = await proxyStorefrontRequest({ data: { query, variables } });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (message.includes("Payment required")) {
+      toast.error("Shopify: Payment required", {
+        description:
+          "Shopify API access requires an active Shopify billing plan. Visit https://admin.shopify.com to upgrade.",
+      });
+      return undefined;
+    }
+    throw err;
   }
 
-  if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-
-  const data = await response.json();
-  if (data.errors) {
-    throw new Error(`Error calling Shopify: ${data.errors.map((e: { message: string }) => e.message).join(", ")}`);
+  if (result.errors?.length) {
+    throw new Error(
+      `Error calling Shopify: ${result.errors.map((e) => e.message).join(", ")}`,
+    );
   }
-  return data;
+  // Return the same shape as the old fetch().json() so all callers work:
+  // { data: { products: ... } }  /  { data: { cart: ... } }  etc.
+  return { data: result.data };
 }
+
 
 export async function fetchProducts(first = 100, query?: string): Promise<ShopifyProduct[]> {
   const data = await storefrontApiRequest(STOREFRONT_QUERY, { first, query: query ?? null });

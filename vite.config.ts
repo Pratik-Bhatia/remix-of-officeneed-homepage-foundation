@@ -22,30 +22,14 @@ const supabaseEnvCompatibilityPlugin = () => ({
   transform(code: string, id: string) {
     const normalizedId = id.replaceAll("\\", "/");
     const isSupabaseClient = normalizedId.endsWith("/src/integrations/supabase/client.ts");
-    const isShopifyClient = normalizedId.endsWith("/src/lib/shopify.ts");
-    if (!isSupabaseClient && !isShopifyClient) return null;
+    if (!isSupabaseClient) return null;
 
-    let updated = code;
-    if (isSupabaseClient) {
-      updated = updated
-        .replaceAll("import.meta.env['VITE_SUPABASE_URL']", "import.meta.env.VITE_SUPABASE_URL")
-        .replaceAll(
-          "import.meta.env['VITE_SUPABASE_PUBLISHABLE_KEY']",
-          "import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY",
-        );
-    }
-    if (isShopifyClient) {
-      updated = updated.replaceAll(
-        'import.meta.env["VITE_SHOPIFY_STOREFRONT_ACCESS_TOKEN"]',
-        "import.meta.env.VITE_SHOPIFY_STOREFRONT_ACCESS_TOKEN",
+    const updated = code
+      .replaceAll("import.meta.env['VITE_SUPABASE_URL']", "import.meta.env.VITE_SUPABASE_URL")
+      .replaceAll(
+        "import.meta.env['VITE_SUPABASE_PUBLISHABLE_KEY']",
+        "import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY",
       );
-      if (shopifyStorefrontToken) {
-        updated = updated.replaceAll(
-          '"__SHOPIFY_STOREFRONT_TOKEN__"',
-          JSON.stringify(shopifyStorefrontToken),
-        );
-      }
-    }
 
     return updated === code ? null : { code: updated, map: null };
   },
@@ -54,17 +38,6 @@ const supabaseEnvCompatibilityPlugin = () => ({
 if (supabaseUrl) process.env["VITE_SUPABASE_URL"] = supabaseUrl;
 if (supabasePublishableKey) process.env["VITE_SUPABASE_PUBLISHABLE_KEY"] = supabasePublishableKey;
 
-// Bridge the managed Shopify Storefront token (public, client-safe) into the
-// browser bundle when the platform has not injected the VITE_ copy yet.
-// Prefer the Headless storefront token (carries customer read/write scopes),
-// then any explicitly injected VITE copy, then the integration-managed token.
-const shopifyStorefrontToken =
-  process.env["SHOPIFY_HEADLESS_STOREFRONT_TOKEN"] ??
-  process.env["SHOPIFY_HEADLESS_STOREFRONT_TOKEN_TEST"] ??
-  process.env["VITE_SHOPIFY_STOREFRONT_ACCESS_TOKEN"] ??
-  process.env["SHOPIFY_STOREFRONT_ACCESS_TOKEN"];
-if (shopifyStorefrontToken)
-  process.env["VITE_SHOPIFY_STOREFRONT_ACCESS_TOKEN"] = shopifyStorefrontToken;
 
 export default defineConfig({
   vite: {
@@ -72,13 +45,6 @@ export default defineConfig({
     define: {
       "import.meta.env.VITE_SUPABASE_URL": JSON.stringify(supabaseUrl),
       "import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY": JSON.stringify(supabasePublishableKey),
-      ...(shopifyStorefrontToken
-        ? {
-            "import.meta.env.VITE_SHOPIFY_STOREFRONT_ACCESS_TOKEN":
-              JSON.stringify(shopifyStorefrontToken),
-            __SHOPIFY_STOREFRONT_TOKEN__: JSON.stringify(shopifyStorefrontToken),
-          }
-        : {}),
     },
   },
   tanstackStart: {
