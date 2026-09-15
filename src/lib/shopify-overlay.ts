@@ -175,7 +175,7 @@ function classify(node: ShopifyProductNode): { category: Product["category"]; su
   for (const rule of RULES) {
     if (rule.match.test(haystack)) return { category: rule.category, sub: rule.sub };
   }
-  return { category: "Office Stationery", sub: "Pen" };
+  return { category: "Corporate Gifting", sub: "Gift Sets" };
 }
 
 /** Trim to a length without cutting mid-word. */
@@ -417,14 +417,14 @@ export function useShopifyBestsellers(staticItems: BestsellerProduct[]) {
 
 
 export function useShopifyCollections() {
-  const { data } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ["shopify", "collections"],
     queryFn: async () => {
-      const edges = await fetchCollections(50);
+      const edges = await fetchCollections(250);
       return edges.map((e) => e.node);
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: 0,
     retry: 1,
   });
-  return data ?? [];
+  return { collections: data ?? [], isLoading };
 }

@@ -36,6 +36,9 @@ export const TAXONOMY: Record<MainCategory, CategoryNode> = {
       "Bags": { title: "Bags", id: null, handle: "bags" },
       "Diaries": { title: "Diaries", id: null, handle: "diaries" },
       "Luxury Pens": { title: "Luxury Pens", id: null, handle: "luxury-pens" },
+      "Metal Pen": { title: "Metal Pen", id: null, handle: "metal-pen" },
+      "Keychains": { title: "Keychains", id: null, handle: "keychains" },
+      "Mobile Stand": { title: "Mobile Stand", id: null, handle: "mobile-stand" },
     }
   },
   "Fragrance Gifting": {
@@ -67,6 +70,8 @@ export const TAXONOMY: Record<MainCategory, CategoryNode> = {
       "Computer Accessories": { title: "Computer Accessories", id: "gid://shopify/Collection/315533361245", handle: "computer-accessories-1" },
       "Cables & Adapters": { title: "Cables & Adapters", id: null, handle: "cables-and-adapters" },
       "Storage Devices": { title: "Storage Devices", id: null, handle: "storage-devices" },
+      "Printer": { title: "Printer", id: null, handle: "printer" },
+      "Consumables": { title: "Consumables", id: null, handle: "ink-and-cartridge" },
     }
   }
 };

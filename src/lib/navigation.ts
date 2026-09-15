@@ -21,13 +21,15 @@ export const navCategories: NavCategory[] = [
     id: "corporate-gifting",
     label: "Corporate Gifting",
     blurb: "Curated gifting programmes for teams, clients and milestones.",
-    
     items: [
       "Gift Sets",
       "Drinkware & Utensils",
-        "Bags",
-        "Diaries",
-        "Luxury Pens",
+      "Bags",
+      "Diaries",
+      "Luxury Pens",
+      "Metal Pen",
+      "Keychains",
+      "Mobile Stand",
     ],
   },
   {
@@ -50,7 +52,7 @@ export const navCategories: NavCategory[] = [
     id: "hardware-supplies",
     label: "Computer Peripherals",
     blurb: "Workstation hardware and peripherals for growing teams.",
-    items: ["Computer Accessories", "Cables & Adapters", "Storage Devices"],
+    items: ["Computer Accessories", "Cables & Adapters", "Storage Devices", "Printer", "Consumables"],
   },
 ];
 

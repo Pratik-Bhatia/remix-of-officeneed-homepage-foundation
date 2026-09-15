@@ -92,7 +92,6 @@ function ProductsPage() {
         const { collection: _omit, missingMapping: _m, ...rest } = prev;
         return next ? { ...rest, collection: next } : rest;
       },
-      replace: true,
     });
 
   const setSort = (next: ProductSort) =>
@@ -134,22 +133,27 @@ function ProductsPage() {
 
   const taxonomyMatch = collection ? getCategoryByHandle(collection) : null;
   const isAllProducts = !collection && !missingMapping;
+  const showSubcategoriesNav = isAllProducts || (taxonomyMatch && !taxonomyMatch.parentTitle);
 
-  const currentFilters = taxonomyMatch?.parentTitle
-    ? categoryFilters[taxonomyMatch.parentTitle as keyof typeof categoryFilters] 
-    : taxonomyMatch?.node.title 
-      ? categoryFilters[taxonomyMatch.node.title as keyof typeof categoryFilters]
-      : null;
+  let currentFilters = null;
+  if (taxonomyMatch) {
+    if (taxonomyMatch.node.title in categoryFilters) {
+      currentFilters = categoryFilters[taxonomyMatch.node.title as keyof typeof categoryFilters];
+    } else if (taxonomyMatch.parentTitle && taxonomyMatch.parentTitle in categoryFilters) {
+      currentFilters = categoryFilters[taxonomyMatch.parentTitle as keyof typeof categoryFilters];
+    }
+  }
 
   const catalogue = useShopifyCatalogue(products);
-  const collections = useShopifyCollections();
+  const { collections, isLoading: collectionsLoading } = useShopifyCollections();
 
-  const getCollectionImage = (handle: string, fallbackTitle: string) => {
+  /** Returns the Shopify-hosted image URL for a collection, or null if not yet loaded / unavailable. */
+  const getCollectionImage = (handle: string): string | null => {
     const shopifyCol = collections.find(c => c.handle === handle);
-    if (shopifyCol && shopifyCol.image?.url) {
-      return shopifyCol.image.url;
+    if (handle === "consumables") {
+      console.log("[icon-debug] consumables lookup →", { shopifyCol, allHandles: collections.map(c => c.handle) });
     }
-    return subcategoryImages[fallbackTitle] || categoryImages[fallbackTitle] || categoryImages["All Products"];
+    return shopifyCol?.image?.url ?? null;
   };
 
 
@@ -165,19 +169,22 @@ function ProductsPage() {
       } else if (missingMapping) {
         inCollection = p.category === missingMapping || (p.subcategories && p.subcategories.includes(missingMapping)) || false;
       } else if (collection) {
-        const hasShopifyCollection = !!(p.collectionHandles && p.collectionHandles.includes(collection));
-        let hasLocalTaxonomy = false;
-        
-        if (taxonomyMatch) {
-          if (taxonomyMatch.parentTitle) {
-            // It's a subcategory
-            hasLocalTaxonomy = !!p.subcategories?.includes(taxonomyMatch.node.title);
-          } else {
-            // It's a main category
-            hasLocalTaxonomy = p.category === taxonomyMatch.node.title;
+        const isShopifyProduct = Array.isArray(p.collectionHandles) && p.collectionHandles.length >= 0;
+        if (isShopifyProduct) {
+          // Shopify products: use ONLY the collection handles Shopify assigned.
+          // Never guess from title/tags/category fields â€” those come from classify()
+          // which is keyword-based and causes cross-category contamination.
+          inCollection = p.collectionHandles!.includes(collection);
+        } else {
+          // Static/legacy products (no Shopify data): fall back to local taxonomy.
+          if (taxonomyMatch) {
+            if (taxonomyMatch.parentTitle) {
+              inCollection = !!p.subcategories?.includes(taxonomyMatch.node.title);
+            } else {
+              inCollection = p.category === taxonomyMatch.node.title;
+            }
           }
         }
-        inCollection = hasShopifyCollection || hasLocalTaxonomy;
       }
       
       const matches =
@@ -196,7 +203,7 @@ function ProductsPage() {
   }, [catalogue, collection, isAllProducts, missingMapping, query, sort, activeFilters]);
 
   const FilterList = () => {
-    if (!currentFilters) return null;
+    if (!currentFilters || currentFilters.length === 0) return null;
     return (
       <div className="flex flex-col gap-8">
         {currentFilters.map((group) => (
@@ -234,61 +241,73 @@ function ProductsPage() {
             <h1 className="text-4xl sm:text-5xl font-display font-medium tracking-tight text-foreground">
               {isAllProducts ? "All Products" : missingMapping ? missingMapping : taxonomyMatch?.node.title}
             </h1>
-            <p className="mt-4 text-sm sm:text-base leading-relaxed text-muted-foreground">
-              {isAllProducts ? DESCRIPTION : `Explore our selection.`}
-            </p>
+            {isAllProducts && (
+              <p className="mt-4 text-sm sm:text-base leading-relaxed text-muted-foreground">
+                {DESCRIPTION}
+              </p>
+            )}
           </header>
 
-          <nav aria-label="Lineup" className="mt-8 mb-16 sm:mt-10 border-b border-border pb-8">
-            <ul className="flex items-start justify-start gap-6 sm:gap-10 overflow-x-auto pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden snap-x">
-              {isAllProducts ? (
-                MAIN_CATEGORIES.map((c) => {
-                  const node = TAXONOMY[c as MainCategory];
-                  if (!node.handle) return null;
-                  return (
-                    <li key={c} className="snap-center shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => setCollection(node.handle)}
-                        className="group flex flex-col items-center gap-3 w-20 sm:w-24 focus:outline-none"
-                      >
-                        <div className="size-14 sm:size-16 flex items-center justify-center transition-transform duration-300 group-hover:-translate-y-1">
-                          <img src={getCollectionImage(node.handle || "", c)} alt={c} className="w-full h-full object-contain mix-blend-multiply dark:mix-blend-normal" />
-                        </div>
-                        <span className="text-[11px] sm:text-xs font-medium text-foreground/80 group-hover:text-foreground text-center leading-tight">
-                          {c}
-                        </span>
-                      </button>
-                    </li>
-                  )
-                })
-              ) : taxonomyMatch && !taxonomyMatch.parentTitle ? (
-                Object.values(TAXONOMY[taxonomyMatch.node.title as MainCategory].subcategories).map((sub: any) => {
-                  if (!sub.handle) return null;
-                  return (
-                    <li key={sub.title} className="snap-center shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => setCollection(sub.handle)}
-                        className="group flex flex-col items-center gap-3 w-20 sm:w-24 focus:outline-none"
-                      >
-                        <div className="size-14 sm:size-16 flex items-center justify-center transition-transform duration-300 group-hover:-translate-y-1">
-                          <img src={getCollectionImage(sub.handle || "", sub.title)} alt={sub.title} className="w-full h-full object-contain mix-blend-multiply dark:mix-blend-normal" />
-                        </div>
-                        <span className="text-[11px] sm:text-xs font-medium text-foreground/80 group-hover:text-foreground text-center leading-tight">
-                          {sub.title}
-                        </span>
-                      </button>
-                    </li>
-                  );
-                })
-              ) : null}
-            </ul>
-          </nav>
-
-          <div className="mt-12 sm:mt-16 mb-6">
-            <h2 className="text-2xl sm:text-3xl font-display font-semibold tracking-tight">Explore our collection.</h2>
-          </div>
+          {showSubcategoriesNav && (
+            <nav aria-label="Lineup" className="mt-8 mb-16 sm:mt-10 border-b border-border pb-8">
+              <ul className="flex items-start justify-start gap-6 sm:gap-10 overflow-x-auto pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden snap-x">
+                {isAllProducts ? (
+                  MAIN_CATEGORIES.map((c) => {
+                    const node = TAXONOMY[c as MainCategory];
+                    if (!node.handle) return null;
+                    return (
+                      <li key={c} className="snap-center shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => setCollection(node.handle)}
+                          className="group flex flex-col items-center gap-3 w-20 sm:w-24 focus:outline-none"
+                        >
+                          <div className="size-14 sm:size-16 flex items-center justify-center transition-transform duration-300 group-hover:-translate-y-1">
+                            {collectionsLoading ? (
+                              <div className="w-full h-full rounded-xl bg-muted animate-pulse" aria-hidden />
+                            ) : getCollectionImage(node.handle || "") ? (
+                              <img src={getCollectionImage(node.handle || "")!} alt={c} className="w-full h-full object-contain mix-blend-multiply dark:mix-blend-normal" />
+                            ) : (
+                              <div className="w-full h-full rounded-xl bg-muted/50" aria-hidden />
+                            )}
+                          </div>
+                          <span className="text-[11px] sm:text-xs font-medium text-foreground/80 group-hover:text-foreground text-center leading-tight">
+                            {c}
+                          </span>
+                        </button>
+                      </li>
+                    )
+                  })
+                ) : taxonomyMatch && !taxonomyMatch.parentTitle ? (
+                  Object.values(TAXONOMY[taxonomyMatch.node.title as MainCategory].subcategories).map((sub: any) => {
+                    if (!sub.handle) return null;
+                    return (
+                      <li key={sub.title} className="snap-center shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => setCollection(sub.handle)}
+                          className="group flex flex-col items-center gap-3 w-20 sm:w-24 focus:outline-none"
+                        >
+                          <div className="size-14 sm:size-16 flex items-center justify-center transition-transform duration-300 group-hover:-translate-y-1">
+                            {collectionsLoading ? (
+                              <div className="w-full h-full rounded-xl bg-muted animate-pulse" aria-hidden />
+                            ) : getCollectionImage(sub.handle || "") ? (
+                              <img src={getCollectionImage(sub.handle || "")!} alt={sub.title} className="w-full h-full object-contain mix-blend-multiply dark:mix-blend-normal" />
+                            ) : (
+                              <div className="w-full h-full rounded-xl bg-muted/50" aria-hidden />
+                            )}
+                          </div>
+                          <span className="text-[11px] sm:text-xs font-medium text-foreground/80 group-hover:text-foreground text-center leading-tight">
+                            {sub.title}
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })
+                ) : null}
+              </ul>
+            </nav>
+          )}
 
           <div className="mt-6 flex flex-col gap-3 sm:mt-8 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-2">

@@ -11,7 +11,7 @@ export type FilterGroup = {
   options: FilterOption[];
 };
 
-export const categoryFilters: Record<ProductCategory, FilterGroup[]> = {
+export const categoryFilters: Record<string, FilterGroup[]> = {
   "Corporate Gifting": [
     {
       id: "price",
@@ -72,6 +72,8 @@ export const categoryFilters: Record<ProductCategory, FilterGroup[]> = {
       ],
     },
   ],
+  "Printer": [],
+  "Consumables": [],
   "Fragrance Gifting": [
     {
       id: "scent",
