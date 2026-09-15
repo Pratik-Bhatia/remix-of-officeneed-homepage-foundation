@@ -153,8 +153,10 @@ async function measureVisibleBounds(
         let maxY = -1;
         for (let y = 0; y < canvas.height; y++) {
           for (let x = 0; x < canvas.width; x++) {
-            // Alpha channel is at index [3] of each RGBA group
-            if ((data[(y * canvas.width + x) * 4 + 3] ?? 0) > 10) {
+            // Alpha channel at index [3]; threshold 96 ignores lightly
+            // anti-aliased edge pixels that would skew bounds for logos
+            // with soft edges or rounded corners.
+            if ((data[(y * canvas.width + x) * 4 + 3] ?? 0) > 96) {
               if (x < minX) minX = x;
               if (x > maxX) maxX = x;
               if (y < minY) minY = y;
@@ -271,6 +273,12 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
   const initialPinchRef = useRef<{ dist: number; angle: number; initialScale: number; initialRot: number } | null>(null);
   /** Prevents the pinch-zoom max-size warning from firing on every touch frame. */
   const pinchWarnedRef = useRef(false);
+  /**
+   * Tracks which mm input the user is currently typing in so the sync
+   * useEffect doesn't overwrite the field mid-keystroke.
+   * Set to null whenever neither field has focus.
+   */
+  const editingFieldRef = useRef<"W" | "H" | null>(null);
 
   useEffect(() => {
     if (open) {
@@ -305,20 +313,45 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
 
   /**
    * Keep the mm dimension inputs in sync with `logoScale` whenever it changes
-   * (drag, pinch, upload auto-size, method switch, etc.).
+   * (drag, pinch, upload auto-size, method switch, rotation, etc.).
+   *
+   * Single source of truth:
+   *   logicalWidthMm  = (scale / 100) * previewAreaWidthMm
+   *   logicalHeightMm = logicalWidthMm / logoAspect
+   *
+   * At 90° rotation the visual width is the logical height and vice-versa,
+   * so the fields are swapped before display.
+   *
+   * The field the user is CURRENTLY TYPING IN is skipped so that mid-keystroke
+   * values are not clobbered by the effect.
    */
   useEffect(() => {
     if (!brandingLimits || !logoNaturalDims) {
-      setSizeInputW("");
-      setSizeInputH("");
+      if (editingFieldRef.current === null) {
+        setSizeInputW("");
+        setSizeInputH("");
+      }
       return;
     }
     const scale = logoScale[0] ?? 0;
-    const { widthMm, heightMm } = scaleToPhysicalMm(scale, brandingLimits, logoAspect);
-    setSizeInputW(parseFloat(widthMm.toFixed(1)).toString());
-    setSizeInputH(parseFloat(heightMm.toFixed(1)).toString());
+    // Both dimensions computed from the same scale + aspect — never drifts.
+    const logicalWmm = (scale / 100) * brandingLimits.previewAreaWidthMm;
+    const logicalHmm = logicalWmm / logoAspect;
+
+    // When the logo is rotated 90° the visual W/H are swapped.
+    const rot = logoRotation[0] ?? 0;
+    const isSwapped = rot === 90;
+    const displayWmm = isSwapped ? logicalHmm : logicalWmm;
+    const displayHmm = isSwapped ? logicalWmm : logicalHmm;
+
+    if (editingFieldRef.current !== "W") {
+      setSizeInputW(parseFloat(displayWmm.toFixed(1)).toString());
+    }
+    if (editingFieldRef.current !== "H") {
+      setSizeInputH(parseFloat(displayHmm.toFixed(1)).toString());
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [logoScale[0], logoNaturalDims, printingMethod]);
+  }, [logoScale[0], logoNaturalDims, printingMethod, logoRotation[0]]);
 
   // ---------------------------------------------------------------------------
   // Logo Size mm input handlers
@@ -337,35 +370,80 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
       toast.info(`Maximum logo size is ${maxLogoSizeMm} mm for ${printingMethod}.`);
     } else if (rawScale < minEffectiveScale) {
       clamped = minEffectiveScale;
-      if (rawScale < minEffectiveScale * 0.5) {
-        // Only warn when the user typed something clearly below 1 mm
-        toast.info(`Minimum logo size is ${MIN_LOGO_SIZE_MM} mm.`);
-      }
+      toast.info(`Minimum logo size is ${MIN_LOGO_SIZE_MM} mm.`);
     }
     setLogoScale([clamped]);
   };
 
+  /**
+   * Width input change.
+   * Marks this field as active (editingFieldRef = "W") so the sync effect does
+   * not clobber it mid-keystroke.  Also immediately updates the Height field
+   * to show the proportional value without waiting for the next render cycle.
+   * Accounts for 90° rotation: the visual "Width" field maps to the logo's
+   * logical height when the logo is rotated 90°.
+   */
   const handleWidthChange = (val: string) => {
+    editingFieldRef.current = "W";
     setSizeInputW(val);
-    const wMm = parseFloat(val);
-    if (!isFinite(wMm) || wMm <= 0 || !brandingLimits || !logoNaturalDims) return;
-    applyScaleWithLimits(widthMmToScale(wMm, brandingLimits));
+    const enteredMm = parseFloat(val);
+    if (!isFinite(enteredMm) || enteredMm <= 0 || !brandingLimits || !logoNaturalDims) return;
+
+    const isSwapped = (logoRotation[0] ?? 0) === 90;
+    if (isSwapped) {
+      // Visual "Width" = logical height at 90° rotation
+      applyScaleWithLimits(heightMmToScale(enteredMm, brandingLimits, logoAspect));
+      // Immediately show logical width in the H field
+      const logicalWmm = enteredMm * logoAspect;
+      setSizeInputH(parseFloat(logicalWmm.toFixed(1)).toString());
+    } else {
+      applyScaleWithLimits(widthMmToScale(enteredMm, brandingLimits));
+      // Immediately show logical height in the H field
+      const logicalHmm = enteredMm / logoAspect;
+      setSizeInputH(parseFloat(logicalHmm.toFixed(1)).toString());
+    }
   };
 
+  /**
+   * Height input change — mirror of handleWidthChange.
+   * Visual "Height" maps to logical width at 90° rotation.
+   */
   const handleHeightChange = (val: string) => {
+    editingFieldRef.current = "H";
     setSizeInputH(val);
-    const hMm = parseFloat(val);
-    if (!isFinite(hMm) || hMm <= 0 || !brandingLimits || !logoNaturalDims) return;
-    applyScaleWithLimits(heightMmToScale(hMm, brandingLimits, logoAspect));
+    const enteredMm = parseFloat(val);
+    if (!isFinite(enteredMm) || enteredMm <= 0 || !brandingLimits || !logoNaturalDims) return;
+
+    const isSwapped = (logoRotation[0] ?? 0) === 90;
+    if (isSwapped) {
+      // Visual "Height" = logical width at 90° rotation
+      applyScaleWithLimits(widthMmToScale(enteredMm, brandingLimits));
+      // Immediately show logical height in the W field
+      const logicalHmm = enteredMm / logoAspect;
+      setSizeInputW(parseFloat(logicalHmm.toFixed(1)).toString());
+    } else {
+      applyScaleWithLimits(heightMmToScale(enteredMm, brandingLimits, logoAspect));
+      // Immediately show logical width in the W field
+      const logicalWmm = enteredMm * logoAspect;
+      setSizeInputW(parseFloat(logicalWmm.toFixed(1)).toString());
+    }
   };
 
-  /** On blur, reset the raw input string to the canonical scale-derived value. */
+  /**
+   * Called on input blur or Enter.  Clears the active-field guard and
+   * re-syncs both fields to the canonical scale-derived values (including
+   * rotation awareness and correct rounding).
+   */
   const syncInputsFromScale = () => {
+    editingFieldRef.current = null;
     if (!brandingLimits || !logoNaturalDims) return;
     const scale = logoScale[0] ?? 0;
-    const { widthMm, heightMm } = scaleToPhysicalMm(scale, brandingLimits, logoAspect);
-    setSizeInputW(parseFloat(widthMm.toFixed(1)).toString());
-    setSizeInputH(parseFloat(heightMm.toFixed(1)).toString());
+    const logicalWmm = (scale / 100) * brandingLimits.previewAreaWidthMm;
+    const logicalHmm = logicalWmm / logoAspect;
+    const rot = logoRotation[0] ?? 0;
+    const isSwapped = rot === 90;
+    setSizeInputW(parseFloat((isSwapped ? logicalHmm : logicalWmm).toFixed(1)).toString());
+    setSizeInputH(parseFloat((isSwapped ? logicalWmm : logicalHmm).toFixed(1)).toString());
   };
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
