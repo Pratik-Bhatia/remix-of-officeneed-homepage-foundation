@@ -10,6 +10,7 @@ import { Upload, X, Check, Loader2, RotateCw, Move, Pencil, AlertCircle, FlipHor
 import { motion } from "motion/react";
 import html2canvas from "html2canvas";
 import { submitCorporateQuote } from "@/lib/corporate-quotes.functions";
+import { getBrandingLimits, computeEffectiveMaxScale, type PrintingMethod } from "@/lib/branding-limits";
 
 interface ProductCustomizerProps {
   product: any;
@@ -119,6 +120,63 @@ const processLogos = (src: string): Promise<{ uvLogo: string; laserLogo: string 
 };
 
 
+// ---------------------------------------------------------------------------
+// Visible-bounds measurement
+// Scans the non-transparent pixels of a processed logo image to determine its
+// actual visible bounding box, ignoring transparent padding from the original
+// canvas.  This ensures the physical-size restriction is applied to the logo
+// artwork itself rather than empty transparent space.
+// ---------------------------------------------------------------------------
+async function measureVisibleBounds(
+  src: string,
+): Promise<{ w: number; h: number }> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    if (!src.startsWith("blob:") && !src.startsWith("data:")) {
+      img.crossOrigin = "anonymous";
+    }
+    img.onload = () => {
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          resolve({ w: img.naturalWidth, h: img.naturalHeight });
+          return;
+        }
+        ctx.drawImage(img, 0, 0);
+        const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        let minX = canvas.width;
+        let maxX = -1;
+        let minY = canvas.height;
+        let maxY = -1;
+        for (let y = 0; y < canvas.height; y++) {
+          for (let x = 0; x < canvas.width; x++) {
+            // Alpha channel is at index [3] of each RGBA group
+            if ((data[(y * canvas.width + x) * 4 + 3] ?? 0) > 10) {
+              if (x < minX) minX = x;
+              if (x > maxX) maxX = x;
+              if (y < minY) minY = y;
+              if (y > maxY) maxY = y;
+            }
+          }
+        }
+        if (maxX < 0) {
+          // No visible pixels found -- fall back to natural dimensions
+          resolve({ w: img.naturalWidth, h: img.naturalHeight });
+        } else {
+          resolve({ w: maxX - minX + 1, h: maxY - minY + 1 });
+        }
+      } catch {
+        resolve({ w: img.naturalWidth, h: img.naturalHeight });
+      }
+    };
+    img.onerror = () => resolve({ w: 100, h: 100 });
+    img.src = src;
+  });
+}
+
 export function ProductCustomizer({ product, selectedVariant, open, onOpenChange }: ProductCustomizerProps) {
   const [step, setStep] = useState<Step>("customize");
   
@@ -136,6 +194,12 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
   const [laserLogo, setLaserLogo] = useState<string | null>(null);
   const [isProcessingLaser, setIsProcessingLaser] = useState(false);
   const [userSelectedPrintingMethod, setUserSelectedPrintingMethod] = useState<"Laser Engraving" | "UV Printing">("Laser Engraving");
+  /**
+   * Visible bounding-box dimensions (px) of the current processed logo.
+   * Derived from the background-removed image so transparent padding is excluded.
+   * Used to enforce the physical branding-size limit with correct aspect ratio.
+   */
+  const [logoNaturalDims, setLogoNaturalDims] = useState<{ w: number; h: number } | null>(null);
   
   
 
@@ -168,6 +232,29 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
   
   const activeMixBlend = "normal";
 
+  // ---------------------------------------------------------------------------
+  // Physical branding-size constraint (Laser 30 mm / UV 25 mm for drinkware)
+  // ---------------------------------------------------------------------------
+  const brandingLimits = getBrandingLimits(
+    product.category,
+    product.subcategories?.[0] ?? "",
+    printingMethod as PrintingMethod,
+  );
+
+  // Aspect ratio of the logo's VISIBLE bounding box (width / height).
+  // Falls back to 1 (square) until the logo is loaded and measured.
+  const logoAspect = logoNaturalDims ? logoNaturalDims.w / logoNaturalDims.h : 1;
+
+  /**
+   * The hard upper bound for `logoScale` (0-100) given the current printing
+   * method and logo aspect ratio.  Resolves to 100 when no limits are set
+   * (i.e., product type not in PRODUCT_BRANDING_LIMITS) so existing behaviour
+   * is fully preserved for non-drinkware products.
+   */
+  const effectiveMaxScale = brandingLimits
+    ? computeEffectiveMaxScale(brandingLimits, logoAspect)
+    : 100;
+
 
   const initialPinchRef = useRef<{ dist: number; angle: number; initialScale: number; initialRot: number } | null>(null);
 
@@ -184,9 +271,23 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
       setFlipV(false);
       setIsSelected(false);
       setErrorMsg(null);
+      setLogoNaturalDims(null);
       setFormData(prev => ({ ...prev, quantity: "1" }));
     }
   }, [open, product]);
+
+  /**
+   * When the user switches between Laser and UV (or quantity crosses the 25-unit
+   * threshold that unlocks UV), clamp the current logoScale to the new physical
+   * maximum.  The logo is NEVER automatically enlarged when switching back to a
+   * method with a larger limit -- the user must manually resize up (but still
+   * can't exceed the new maximum).
+   */
+  useEffect(() => {
+    if (!logo || !logoNaturalDims) return;
+    setLogoScale(prev => [Math.min(prev[0] ?? effectiveMaxScale, effectiveMaxScale)]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [printingMethod]);
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -225,6 +326,40 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
             setUvLogo(res.uvLogoUrl);
             setLaserLogo(res.laserLogoUrl);
             toast.success("Logo processing complete!");
+
+            // -------------------------------------------------------------------
+            // Auto-size the logo to fit within the physical branding maximum.
+            //
+            // We measure the VISIBLE bounding box (non-transparent pixels) of the
+            // background-removed UV logo so that transparent padding in the
+            // original file does not skew the size calculation.
+            //
+            // Aspect ratio is preserved: the longest dimension (width OR height)
+            // is constrained to `maxLogoSizeMm`.  If no branding limits are
+            // configured for this product, the scale is left at the default.
+            // -------------------------------------------------------------------
+            try {
+              const bounds = await measureVisibleBounds(res.uvLogoUrl);
+              setLogoNaturalDims(bounds);
+
+              // Re-derive limits now that we have dimensions (printingMethod
+              // captured from closure at upload time -- correct initial method).
+              const currentLimits = getBrandingLimits(
+                product.category,
+                product.subcategories?.[0] ?? "",
+                printingMethod as PrintingMethod,
+              );
+              if (currentLimits) {
+                const aspect = bounds.w / bounds.h;
+                const maxScale = computeEffectiveMaxScale(currentLimits, aspect);
+                // Start the logo at its maximum allowed physical size.
+                setLogoScale([maxScale]);
+              }
+              // If no limits apply (non-drinkware products), keep scale = 50.
+            } catch {
+              // Measurement failed -- keep the default scale; physical limits
+              // will still be enforced via the resize clamps below.
+            }
           }
         } catch (error: any) {
           console.error("Failed to process logo:", error);
@@ -250,7 +385,11 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
   const handleResetPosition = () => {
     setLogoPos({ x: 0, y: 0 });
     setLogoRotation([0]);
-    setLogoScale([50]);
+    // Reset to the physical maximum for the current method (or 50 if unconstrained).
+    const resetScale = brandingLimits && logoNaturalDims
+      ? computeEffectiveMaxScale(brandingLimits, logoAspect)
+      : 50;
+    setLogoScale([resetScale]);
     setFlipH(false);
     setFlipV(false);
   };
@@ -337,7 +476,8 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
       const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
       const scaleMultiplier = dist / initialPinchRef.current.dist;
       let newScale = initialPinchRef.current.initialScale * scaleMultiplier;
-      newScale = Math.max(15, Math.min(100, newScale));
+      // Hard clamp: never exceed the physical branding-size maximum.
+      newScale = Math.max(15, Math.min(effectiveMaxScale, newScale));
       setLogoScale([Math.round(newScale)]);
     }
   };
@@ -362,7 +502,8 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
       const dist = Math.hypot(moveEvent.clientX - centerX, moveEvent.clientY - centerY);
       const ratio = dist / startDist;
       let newScale = startScale * ratio;
-      newScale = Math.max(15, Math.min(100, newScale));
+      // Hard clamp: never exceed the physical branding-size maximum.
+      newScale = Math.max(15, Math.min(effectiveMaxScale, newScale));
       setLogoScale([newScale]);
     };
     const onPointerUp = () => {
