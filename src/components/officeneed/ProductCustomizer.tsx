@@ -6,11 +6,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Upload, X, Check, Loader2, RotateCw, Move, Pencil, AlertCircle, FlipHorizontal2, FlipVertical2, ArrowLeft } from "lucide-react";
+import { Upload, X, Check, Loader2, RotateCw, Move, Pencil, AlertCircle, FlipHorizontal2, FlipVertical2, ArrowLeft, Lock } from "lucide-react";
 import { motion } from "motion/react";
 import html2canvas from "html2canvas";
 import { submitCorporateQuote } from "@/lib/corporate-quotes.functions";
-import { getBrandingLimits, computeEffectiveMaxScale, type PrintingMethod } from "@/lib/branding-limits";
+import { getBrandingLimits, computeEffectiveMaxScale, computeMinEffectiveScale, scaleToPhysicalMm, widthMmToScale, heightMmToScale, MIN_LOGO_SIZE_MM, type PrintingMethod } from "@/lib/branding-limits";
 
 interface ProductCustomizerProps {
   product: any;
@@ -200,6 +200,9 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
    * Used to enforce the physical branding-size limit with correct aspect ratio.
    */
   const [logoNaturalDims, setLogoNaturalDims] = useState<{ w: number; h: number } | null>(null);
+  /** Raw string values for the Width / Height mm inputs (allows partial typing). */
+  const [sizeInputW, setSizeInputW] = useState("");
+  const [sizeInputH, setSizeInputH] = useState("");
   
   
 
@@ -255,8 +258,19 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
     ? computeEffectiveMaxScale(brandingLimits, logoAspect)
     : 100;
 
+  /**
+   * Lower bound for `logoScale`: the longest dimension must be >= 1 mm.
+   * Falls back to a legacy 15% floor for unconstrained products so the logo
+   * cannot be shrunk to invisibility by accident.
+   */
+  const minEffectiveScale = brandingLimits
+    ? computeMinEffectiveScale(brandingLimits, logoAspect)
+    : 15;
+
 
   const initialPinchRef = useRef<{ dist: number; angle: number; initialScale: number; initialRot: number } | null>(null);
+  /** Prevents the pinch-zoom max-size warning from firing on every touch frame. */
+  const pinchWarnedRef = useRef(false);
 
   useEffect(() => {
     if (open) {
@@ -288,6 +302,71 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
     setLogoScale(prev => [Math.min(prev[0] ?? effectiveMaxScale, effectiveMaxScale)]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [printingMethod]);
+
+  /**
+   * Keep the mm dimension inputs in sync with `logoScale` whenever it changes
+   * (drag, pinch, upload auto-size, method switch, etc.).
+   */
+  useEffect(() => {
+    if (!brandingLimits || !logoNaturalDims) {
+      setSizeInputW("");
+      setSizeInputH("");
+      return;
+    }
+    const scale = logoScale[0] ?? 0;
+    const { widthMm, heightMm } = scaleToPhysicalMm(scale, brandingLimits, logoAspect);
+    setSizeInputW(parseFloat(widthMm.toFixed(1)).toString());
+    setSizeInputH(parseFloat(heightMm.toFixed(1)).toString());
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [logoScale[0], logoNaturalDims, printingMethod]);
+
+  // ---------------------------------------------------------------------------
+  // Logo Size mm input handlers
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Core: apply a desired logoScale value while enforcing min/max physical
+   * limits and showing user-friendly messages.
+   */
+  const applyScaleWithLimits = (rawScale: number) => {
+    if (!brandingLimits) return;
+    const { maxLogoSizeMm } = brandingLimits;
+    let clamped = rawScale;
+    if (rawScale > effectiveMaxScale) {
+      clamped = effectiveMaxScale;
+      toast.info(`Maximum logo size is ${maxLogoSizeMm} mm for ${printingMethod}.`);
+    } else if (rawScale < minEffectiveScale) {
+      clamped = minEffectiveScale;
+      if (rawScale < minEffectiveScale * 0.5) {
+        // Only warn when the user typed something clearly below 1 mm
+        toast.info(`Minimum logo size is ${MIN_LOGO_SIZE_MM} mm.`);
+      }
+    }
+    setLogoScale([clamped]);
+  };
+
+  const handleWidthChange = (val: string) => {
+    setSizeInputW(val);
+    const wMm = parseFloat(val);
+    if (!isFinite(wMm) || wMm <= 0 || !brandingLimits || !logoNaturalDims) return;
+    applyScaleWithLimits(widthMmToScale(wMm, brandingLimits));
+  };
+
+  const handleHeightChange = (val: string) => {
+    setSizeInputH(val);
+    const hMm = parseFloat(val);
+    if (!isFinite(hMm) || hMm <= 0 || !brandingLimits || !logoNaturalDims) return;
+    applyScaleWithLimits(heightMmToScale(hMm, brandingLimits, logoAspect));
+  };
+
+  /** On blur, reset the raw input string to the canonical scale-derived value. */
+  const syncInputsFromScale = () => {
+    if (!brandingLimits || !logoNaturalDims) return;
+    const scale = logoScale[0] ?? 0;
+    const { widthMm, heightMm } = scaleToPhysicalMm(scale, brandingLimits, logoAspect);
+    setSizeInputW(parseFloat(widthMm.toFixed(1)).toString());
+    setSizeInputH(parseFloat(heightMm.toFixed(1)).toString());
+  };
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -462,6 +541,7 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
       const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
       const angle = (Math.atan2(t2.clientY - t1.clientY, t2.clientX - t1.clientX) * 180) / Math.PI;
       initialPinchRef.current = { dist, angle, initialScale: logoScale[0]!, initialRot: logoRotation[0]! };
+      pinchWarnedRef.current = false; // reset per-gesture warning
     } else {
       initialPinchRef.current = null;
     }
@@ -477,7 +557,12 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
       const scaleMultiplier = dist / initialPinchRef.current.dist;
       let newScale = initialPinchRef.current.initialScale * scaleMultiplier;
       // Hard clamp: never exceed the physical branding-size maximum.
-      newScale = Math.max(15, Math.min(effectiveMaxScale, newScale));
+      const hitMax = newScale > effectiveMaxScale;
+      newScale = Math.max(minEffectiveScale, Math.min(effectiveMaxScale, newScale));
+      if (hitMax && !pinchWarnedRef.current && brandingLimits) {
+        pinchWarnedRef.current = true;
+        toast.info(`Maximum logo size is ${brandingLimits.maxLogoSizeMm} mm for ${printingMethod}.`);
+      }
       setLogoScale([Math.round(newScale)]);
     }
   };
@@ -498,12 +583,19 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
     const centerY = rect.top + rect.height / 2;
     const startDist = Math.hypot(e.clientX - centerX, e.clientY - centerY);
     const startScale = logoScale[0]!;
+    // Show the max-size warning at most once per drag gesture
+    let hasWarnedMax = false;
     const onPointerMove = (moveEvent: PointerEvent) => {
       const dist = Math.hypot(moveEvent.clientX - centerX, moveEvent.clientY - centerY);
       const ratio = dist / startDist;
       let newScale = startScale * ratio;
       // Hard clamp: never exceed the physical branding-size maximum.
-      newScale = Math.max(15, Math.min(effectiveMaxScale, newScale));
+      const hitMax = newScale > effectiveMaxScale;
+      newScale = Math.max(minEffectiveScale, Math.min(effectiveMaxScale, newScale));
+      if (hitMax && !hasWarnedMax && brandingLimits) {
+        hasWarnedMax = true;
+        toast.info(`Maximum logo size is ${brandingLimits.maxLogoSizeMm} mm for ${printingMethod}.`);
+      }
       setLogoScale([newScale]);
     };
     const onPointerUp = () => {
@@ -688,6 +780,72 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
                       </p>
 
                       <div className="pl-9 space-y-6 pt-2">
+
+                        {/* ── Logo Size mm control ─────────────────────────── */}
+                        {brandingLimits && logoNaturalDims && logo && (
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-1.5">
+                              <Label className="text-xs font-medium text-foreground/80">Logo Size</Label>
+                              <Lock className="w-3 h-3 text-muted-foreground/50" aria-label="Aspect ratio locked" />
+                            </div>
+                            <div className="flex items-center gap-3">
+                              {/* Width */}
+                              <div className="flex flex-col gap-1">
+                                <span className="text-[10px] text-muted-foreground">Width</span>
+                                <div className="flex items-center gap-1">
+                                  <Input
+                                    id="logo-size-width"
+                                    type="number"
+                                    step="0.1"
+                                    min={0.1}
+                                    value={sizeInputW}
+                                    onChange={e => handleWidthChange(e.target.value)}
+                                    onBlur={syncInputsFromScale}
+                                    onKeyDown={e => e.key === "Enter" && syncInputsFromScale()}
+                                    className="w-[4.5rem] h-8 text-sm text-center px-2 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                                    aria-label="Logo width in millimetres"
+                                  />
+                                  <span className="text-xs text-muted-foreground select-none">mm</span>
+                                </div>
+                              </div>
+
+                              {/* Ratio lock divider */}
+                              <div className="flex flex-col items-center gap-0.5 pt-4 text-muted-foreground/40 select-none" aria-hidden>
+                                <div className="w-px h-2.5 bg-current" />
+                                <span className="text-[10px] font-medium leading-none">×</span>
+                                <div className="w-px h-2.5 bg-current" />
+                              </div>
+
+                              {/* Height */}
+                              <div className="flex flex-col gap-1">
+                                <span className="text-[10px] text-muted-foreground">Height</span>
+                                <div className="flex items-center gap-1">
+                                  <Input
+                                    id="logo-size-height"
+                                    type="number"
+                                    step="0.1"
+                                    min={0.1}
+                                    value={sizeInputH}
+                                    onChange={e => handleHeightChange(e.target.value)}
+                                    onBlur={syncInputsFromScale}
+                                    onKeyDown={e => e.key === "Enter" && syncInputsFromScale()}
+                                    className="w-[4.5rem] h-8 text-sm text-center px-2 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                                    aria-label="Logo height in millimetres"
+                                  />
+                                  <span className="text-xs text-muted-foreground select-none">mm</span>
+                                </div>
+                              </div>
+
+                              {/* Live longest-dim indicator */}
+                              <div className="flex flex-col gap-1 pt-4">
+                                <span className="text-[10px] text-muted-foreground/70 leading-none">
+                                  max {brandingLimits.maxLogoSizeMm} mm
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
                         <div className="space-y-3">
                           <div className="flex justify-between items-center">
                             <Label className="text-xs font-medium text-foreground/80">Rotation</Label>

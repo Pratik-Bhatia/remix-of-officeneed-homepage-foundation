@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Physical branding-size limits for the Product Customizer.
  *
  * All `maxLogoSizeMm` values represent the maximum physical dimension
@@ -143,4 +143,72 @@ export function computeEffectiveMaxScale(
   }
   // Tall -- constrain via the height; width must shrink proportionally
   return maxScaleForWidth * logoAspect;
+}
+
+// ---------------------------------------------------------------------------
+// Minimum size
+// ---------------------------------------------------------------------------
+
+/**
+ * The smallest allowed logo: the longest visible dimension must be at least
+ * this many millimetres.  Never allow 0, negative, or invalid values.
+ */
+export const MIN_LOGO_SIZE_MM = 1;
+
+/**
+ * Mirror of `computeEffectiveMaxScale` for the lower bound.
+ *
+ * Returns the minimum `logoScale%` that keeps the longest dimension of the
+ * logo at exactly `MIN_LOGO_SIZE_MM`.
+ *
+ *   Wide / square (aspect >= 1):  width is the longest side.
+ *       minScale = mmToLogoScale(MIN_LOGO_SIZE_MM, previewAreaWidthMm)
+ *
+ *   Tall (aspect < 1):  height is the longest side.
+ *       minScale = mmToLogoScale(MIN_LOGO_SIZE_MM, previewAreaWidthMm) * aspect
+ */
+export function computeMinEffectiveScale(
+  limits: BrandingLimits,
+  logoAspect: number,
+): number {
+  const minScaleForWidth = mmToLogoScale(MIN_LOGO_SIZE_MM, limits.previewAreaWidthMm);
+  if (logoAspect >= 1) {
+    return minScaleForWidth;
+  }
+  return minScaleForWidth * logoAspect;
+}
+
+/**
+ * Given a `logoScale%` and branding limits, return the physical width and
+ * height of the logo in mm.
+ *
+ * The logo renders as `width: X%` with `height: auto` so:
+ *   widthMm  = (scale / 100) * previewAreaWidthMm
+ *   heightMm = widthMm / aspect
+ */
+export function scaleToPhysicalMm(
+  scale: number,
+  limits: BrandingLimits,
+  logoAspect: number,
+): { widthMm: number; heightMm: number } {
+  const widthMm = (scale / 100) * limits.previewAreaWidthMm;
+  const heightMm = widthMm / logoAspect;
+  return { widthMm, heightMm };
+}
+
+/**
+ * Inverse of `scaleToPhysicalMm`: given a desired physical width (mm) and
+ * the branding limits, return the corresponding `logoScale%`.
+ */
+export function widthMmToScale(widthMm: number, limits: BrandingLimits): number {
+  return (widthMm / limits.previewAreaWidthMm) * 100;
+}
+
+/**
+ * Inverse via height: given a desired physical height (mm), return logoScale%.
+ * heightMm = widthMm / aspect  →  widthMm = heightMm * aspect
+ */
+export function heightMmToScale(heightMm: number, limits: BrandingLimits, logoAspect: number): number {
+  const widthMm = heightMm * logoAspect;
+  return widthMmToScale(widthMm, limits);
 }
