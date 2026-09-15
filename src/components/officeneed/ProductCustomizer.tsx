@@ -333,22 +333,12 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
       }
       return;
     }
-    const scale = logoScale[0] ?? 0;
-    // Both dimensions computed from the same scale + aspect — never drifts.
-    const logicalWmm = (scale / 100) * brandingLimits.previewAreaWidthMm;
-    const logicalHmm = logicalWmm / logoAspect;
-
-    // When the logo is rotated 90° the visual W/H are swapped.
-    const rot = logoRotation[0] ?? 0;
-    const isSwapped = rot === 90;
-    const displayWmm = isSwapped ? logicalHmm : logicalWmm;
-    const displayHmm = isSwapped ? logicalWmm : logicalHmm;
-
+    const { wMm, hMm } = getDisplayMmFromScale(logoScale[0] ?? 0);
     if (editingFieldRef.current !== "W") {
-      setSizeInputW(parseFloat(displayWmm.toFixed(1)).toString());
+      setSizeInputW(parseFloat(wMm.toFixed(1)).toString());
     }
     if (editingFieldRef.current !== "H") {
-      setSizeInputH(parseFloat(displayHmm.toFixed(1)).toString());
+      setSizeInputH(parseFloat(hMm.toFixed(1)).toString());
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [logoScale[0], logoNaturalDims, printingMethod, logoRotation[0]]);
@@ -360,12 +350,19 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
   /**
    * Core: apply a desired logoScale value while enforcing min/max physical
    * limits and showing user-friendly messages.
+   *
+   * Returns the CLAMPED scale that was actually applied.  Callers must derive
+   * any displayed mm values from this return value -- NEVER from the raw,
+   * potentially out-of-range, requested scale -- so an invalid entry (e.g.
+   * "31" when the max is 30) can never remain visible in the UI.
    */
-  const applyScaleWithLimits = (rawScale: number) => {
-    if (!brandingLimits) return;
+  const applyScaleWithLimits = (rawScale: number): number => {
+    if (!brandingLimits) return rawScale;
     const { maxLogoSizeMm } = brandingLimits;
     let clamped = rawScale;
-    if (rawScale > effectiveMaxScale) {
+    if (!isFinite(rawScale)) {
+      clamped = minEffectiveScale;
+    } else if (rawScale > effectiveMaxScale) {
       clamped = effectiveMaxScale;
       toast.info(`Maximum logo size is ${maxLogoSizeMm} mm for ${printingMethod}.`);
     } else if (rawScale < minEffectiveScale) {
@@ -373,13 +370,36 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
       toast.info(`Minimum logo size is ${MIN_LOGO_SIZE_MM} mm.`);
     }
     setLogoScale([clamped]);
+    return clamped;
+  };
+
+  /**
+   * Single source of truth for the mm values shown in the Width/Height
+   * inputs: both are always derived from `logoScale` (the one canonical
+   * transform, also used by drag/pinch/resize) plus the logo's original
+   * aspect ratio, which keeps the two fields permanently locked together and
+   * in sync with the actual preview/print size. Accounts for the 90°
+   * rotation swap (visual width <-> logical height).
+   */
+  const getDisplayMmFromScale = (scale: number): { wMm: number; hMm: number } => {
+    if (!brandingLimits) return { wMm: 0, hMm: 0 };
+    const logicalWmm = (scale / 100) * brandingLimits.previewAreaWidthMm;
+    const logicalHmm = logicalWmm / logoAspect;
+    const isSwapped = (logoRotation[0] ?? 0) === 90;
+    return isSwapped
+      ? { wMm: logicalHmm, hMm: logicalWmm }
+      : { wMm: logicalWmm, hMm: logicalHmm };
   };
 
   /**
    * Width input change.
    * Marks this field as active (editingFieldRef = "W") so the sync effect does
-   * not clobber it mid-keystroke.  Also immediately updates the Height field
-   * to show the proportional value without waiting for the next render cycle.
+   * not clobber it mid-keystroke. The requested value is converted to a scale,
+   * hard-clamped by `applyScaleWithLimits`, and BOTH mm fields are then
+   * immediately re-derived from that clamped scale (via getDisplayMmFromScale)
+   * -- so a value that exceeds the physical maximum (or drops below the 1mm
+   * floor) is corrected on the spot, never left on screen, and Height stays
+   * locked to the logo's original aspect ratio (never clamped independently).
    * Accounts for 90° rotation: the visual "Width" field maps to the logo's
    * logical height when the logo is rotated 90°.
    */
@@ -390,18 +410,13 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
     if (!isFinite(enteredMm) || enteredMm <= 0 || !brandingLimits || !logoNaturalDims) return;
 
     const isSwapped = (logoRotation[0] ?? 0) === 90;
-    if (isSwapped) {
-      // Visual "Width" = logical height at 90° rotation
-      applyScaleWithLimits(heightMmToScale(enteredMm, brandingLimits, logoAspect));
-      // Immediately show logical width in the H field
-      const logicalWmm = enteredMm * logoAspect;
-      setSizeInputH(parseFloat(logicalWmm.toFixed(1)).toString());
-    } else {
-      applyScaleWithLimits(widthMmToScale(enteredMm, brandingLimits));
-      // Immediately show logical height in the H field
-      const logicalHmm = enteredMm / logoAspect;
-      setSizeInputH(parseFloat(logicalHmm.toFixed(1)).toString());
-    }
+    const requestedScale = isSwapped
+      ? heightMmToScale(enteredMm, brandingLimits, logoAspect)
+      : widthMmToScale(enteredMm, brandingLimits);
+    const clampedScale = applyScaleWithLimits(requestedScale);
+    const { wMm, hMm } = getDisplayMmFromScale(clampedScale);
+    setSizeInputW(parseFloat(wMm.toFixed(1)).toString());
+    setSizeInputH(parseFloat(hMm.toFixed(1)).toString());
   };
 
   /**
@@ -415,18 +430,13 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
     if (!isFinite(enteredMm) || enteredMm <= 0 || !brandingLimits || !logoNaturalDims) return;
 
     const isSwapped = (logoRotation[0] ?? 0) === 90;
-    if (isSwapped) {
-      // Visual "Height" = logical width at 90° rotation
-      applyScaleWithLimits(widthMmToScale(enteredMm, brandingLimits));
-      // Immediately show logical height in the W field
-      const logicalHmm = enteredMm / logoAspect;
-      setSizeInputW(parseFloat(logicalHmm.toFixed(1)).toString());
-    } else {
-      applyScaleWithLimits(heightMmToScale(enteredMm, brandingLimits, logoAspect));
-      // Immediately show logical width in the W field
-      const logicalWmm = enteredMm * logoAspect;
-      setSizeInputW(parseFloat(logicalWmm.toFixed(1)).toString());
-    }
+    const requestedScale = isSwapped
+      ? widthMmToScale(enteredMm, brandingLimits)
+      : heightMmToScale(enteredMm, brandingLimits, logoAspect);
+    const clampedScale = applyScaleWithLimits(requestedScale);
+    const { wMm, hMm } = getDisplayMmFromScale(clampedScale);
+    setSizeInputW(parseFloat(wMm.toFixed(1)).toString());
+    setSizeInputH(parseFloat(hMm.toFixed(1)).toString());
   };
 
   /**
@@ -437,13 +447,9 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
   const syncInputsFromScale = () => {
     editingFieldRef.current = null;
     if (!brandingLimits || !logoNaturalDims) return;
-    const scale = logoScale[0] ?? 0;
-    const logicalWmm = (scale / 100) * brandingLimits.previewAreaWidthMm;
-    const logicalHmm = logicalWmm / logoAspect;
-    const rot = logoRotation[0] ?? 0;
-    const isSwapped = rot === 90;
-    setSizeInputW(parseFloat((isSwapped ? logicalHmm : logicalWmm).toFixed(1)).toString());
-    setSizeInputH(parseFloat((isSwapped ? logicalWmm : logicalHmm).toFixed(1)).toString());
+    const { wMm, hMm } = getDisplayMmFromScale(logoScale[0] ?? 0);
+    setSizeInputW(parseFloat(wMm.toFixed(1)).toString());
+    setSizeInputH(parseFloat(hMm.toFixed(1)).toString());
   };
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
