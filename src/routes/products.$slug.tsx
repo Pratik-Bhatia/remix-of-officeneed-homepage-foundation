@@ -555,7 +555,7 @@ function ProductDetail() {
                       value={quantity}
                       min={min}
                       onChange={(e) => handleQuantityChange(Math.max(min, Number(e.target.value) || min))}
-                      className="flex-1 min-w-0 h-full bg-transparent text-center text-sm font-semibold tabular-nums outline-none appearance-none"
+                      className="flex-1 min-w-0 h-full bg-transparent text-center text-sm font-semibold tabular-nums outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                     />
                     <button
                       type="button"

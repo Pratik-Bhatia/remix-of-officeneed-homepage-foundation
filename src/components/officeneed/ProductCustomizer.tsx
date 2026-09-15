@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Upload, X, Check, Loader2, RotateCw, Move, Pencil, AlertCircle, FlipHorizontal2, FlipVertical2, ArrowLeft, Lock } from "lucide-react";
+import { Upload, X, Check, Loader2, RotateCw, Move, Pencil, AlertCircle, FlipHorizontal2, FlipVertical2, ArrowLeft, Lock, Minus, Plus } from "lucide-react";
 import { motion } from "motion/react";
 import html2canvas from "html2canvas";
 import { submitCorporateQuote } from "@/lib/corporate-quotes.functions";
@@ -992,17 +992,35 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
                   <Label className="text-base font-semibold">Quantity</Label>
                   <div className="flex items-center gap-3">
                     <span className="text-xs text-muted-foreground">Min 1</span>
-                    <Input 
-                      type="number" 
-                      min={1} 
-                      value={formData.quantity} 
-                      onChange={e => {
-                        const val = parseInt(e.target.value, 10);
-                        if (val < 1) return;
-                        setFormData({...formData, quantity: e.target.value});
-                      }}
-                      className="w-24 bg-background font-medium text-center"
-                    />
+                    <div className="inline-flex h-9 w-24 shrink-0 items-center border border-input rounded-md overflow-hidden bg-background">
+                      <button
+                        type="button"
+                        aria-label="Decrease quantity"
+                        onClick={() => setFormData(prev => ({ ...prev, quantity: String(Math.max(1, quantityNum - 1)) }))}
+                        className="px-2 h-full flex items-center justify-center text-foreground/60 hover:text-foreground hover:bg-muted/50 transition-colors"
+                      >
+                        <Minus className="w-3 h-3" strokeWidth={2} />
+                      </button>
+                      <Input
+                        type="number"
+                        min={1}
+                        value={formData.quantity}
+                        onChange={e => {
+                          const val = parseInt(e.target.value, 10);
+                          if (val < 1) return;
+                          setFormData({...formData, quantity: e.target.value});
+                        }}
+                        className="flex-1 min-w-0 h-full border-0 rounded-none bg-transparent px-1 font-medium text-center shadow-none focus-visible:ring-0 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                      />
+                      <button
+                        type="button"
+                        aria-label="Increase quantity"
+                        onClick={() => setFormData(prev => ({ ...prev, quantity: String(quantityNum + 1) }))}
+                        className="px-2 h-full flex items-center justify-center text-foreground/60 hover:text-foreground hover:bg-muted/50 transition-colors"
+                      >
+                        <Plus className="w-3 h-3" strokeWidth={2} />
+                      </button>
+                    </div>
                   </div>
                 </div>
                 
