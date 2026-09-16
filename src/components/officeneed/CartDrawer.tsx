@@ -5,8 +5,7 @@ import { ShoppingBag, Minus, Plus, Trash2, Loader2, Package, Bookmark, User, Log
 import { useCartStore } from "@/stores/cartStore";
 import { formatMoney } from "@/lib/shopify";
 import { cn } from "@/lib/utils";
-import { supabase } from "@/integrations/supabase/client";
-import type { User as SupabaseUser } from "@supabase/supabase-js";
+import { useCustomer } from "@/lib/customer";
 import { lockScroll, unlockScroll } from "@/lib/scroll-lock";
 
 export function CartDrawer({ triggerClassName }: { triggerClassName?: string }) {
@@ -19,25 +18,11 @@ export function CartDrawer({ triggerClassName }: { triggerClassName?: string }) 
   const getCheckoutUrl = useCartStore((s) => s.getCheckoutUrl);
   const syncCart = useCartStore((s) => s.syncCart);
 
-  const [user, setUser] = useState<SupabaseUser | null>(null);
+  const { customer, status } = useCustomer();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
-    let unsubscribe = () => {};
-    try {
-      void supabase.auth.getSession()
-        .then(({ data: { session } }) => setUser(session?.user ?? null))
-        .catch(() => setUser(null));
-      const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-        setUser(session?.user ?? null);
-      });
-      unsubscribe = () => subscription.unsubscribe();
-    } catch {
-      // Keep guest cart browsing available if auth configuration is absent.
-      setUser(null);
-    }
-    return () => unsubscribe();
   }, []);
 
   const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
@@ -82,10 +67,10 @@ export function CartDrawer({ triggerClassName }: { triggerClassName?: string }) 
   };
 
   const profileLinks = [
-    { icon: Package, label: "Orders", to: "/" },
-    { icon: Bookmark, label: "Your Saves", to: "/" },
-    { icon: User, label: "Account", to: "/" },
-  ];
+    { icon: Package, label: "Orders", to: "/account/orders" },
+    { icon: Bookmark, label: "Your Saves", to: "/account/saves" },
+    { icon: User, label: "Account", to: "/account/profile" },
+  ] as const;
 
   return (
     <>
@@ -136,12 +121,17 @@ export function CartDrawer({ triggerClassName }: { triggerClassName?: string }) 
 
               {items.length === 0 ? (
                 <div className="flex flex-col min-h-[300px]">
-                  {!user && (
+                  {status === "out" && (
                     <p className="mt-1 md:mt-2 text-[13px] md:text-sm text-muted-foreground">
                       <button onClick={() => {
                         setIsOpen(false);
                         window.dispatchEvent(new CustomEvent("open-auth-modal"));
                       }} className="text-foreground underline underline-offset-4 font-medium hover:text-primary transition-colors">Sign in</button> to see if you have any saved items.
+                    </p>
+                  )}
+                  {status === "in" && (
+                    <p className="mt-1 md:mt-2 text-[13px] md:text-sm text-muted-foreground">
+                      Signed in as {customer?.firstName ? customer.firstName : customer?.email}.
                     </p>
                   )}
 
@@ -160,9 +150,9 @@ export function CartDrawer({ triggerClassName }: { triggerClassName?: string }) 
                           </Link>
                         </li>
                       ))}
-                      {!user && (
+                      {status === "out" && (
                         <li>
-                          <button 
+                          <button
                             onClick={() => {
                               setIsOpen(false);
                               window.dispatchEvent(new CustomEvent("open-auth-modal"));
