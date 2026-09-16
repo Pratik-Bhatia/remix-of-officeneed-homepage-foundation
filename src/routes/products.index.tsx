@@ -3,7 +3,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { Search, SlidersHorizontal, PackageSearch } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { categoryFilters } from "@/lib/filters";
+import { buildFilterGroups, type FilterGroup } from "@/lib/filters";
 import { Navbar } from "@/components/officeneed/Navbar";
 import { Footer } from "@/components/officeneed/Footer";
 import { ProductCard } from "@/components/officeneed/ProductCard";
@@ -89,7 +89,12 @@ function ProductsPage() {
   const setCollection = (next: string | null) =>
     navigate({
       search: (prev: ProductsSearch) => {
-        const { collection: _omit, missingMapping: _m, ...rest } = prev;
+        // Changing category/subcategory always clears active filters: filter
+        // kinds and bucket values are category-specific (e.g. Corporate's
+        // price buckets don't mean anything in Fragrance), so a stale
+        // selection carried across categories would silently filter out
+        // every product instead of being ignored.
+        const { collection: _omit, missingMapping: _m, f: _f, ...rest } = prev;
         return next ? { ...rest, collection: next } : rest;
       },
     });
@@ -135,14 +140,14 @@ function ProductsPage() {
   const isAllProducts = !collection && !missingMapping;
   const showSubcategoriesNav = isAllProducts || (taxonomyMatch && !taxonomyMatch.parentTitle);
 
-  let currentFilters = null;
-  if (taxonomyMatch) {
-    if (taxonomyMatch.node.title in categoryFilters) {
-      currentFilters = categoryFilters[taxonomyMatch.node.title as keyof typeof categoryFilters];
-    } else if (taxonomyMatch.parentTitle && taxonomyMatch.parentTitle in categoryFilters) {
-      currentFilters = categoryFilters[taxonomyMatch.parentTitle as keyof typeof categoryFilters];
-    }
-  }
+  // The MainCategory a subcategory page belongs to (e.g. "Luxury Pens" ->
+  // "Corporate Gifting"), or the category itself on a top-level page.
+  // Filter kinds are always resolved against this, never the subcategory
+  // title, so e.g. the "Printer" subcategory correctly gets Computer
+  // Peripherals' filters instead of silently showing none.
+  const mainCategoryTitle = taxonomyMatch
+    ? ((taxonomyMatch.parentTitle ?? taxonomyMatch.node.title) as MainCategory)
+    : undefined;
 
   const catalogue = useShopifyCatalogue(products);
   const { collections, isLoading: collectionsLoading } = useShopifyCollections();
@@ -157,56 +162,74 @@ function ProductsPage() {
   };
 
 
-  const visible = useMemo(() => {
+  // Products in scope for the current category/subcategory only (no search
+  // query, no active filters applied yet). This is what filter options are
+  // derived from, so a subcategory only ever offers values its own products
+  // actually support (e.g. "Under ₹100" won't appear if nothing here is).
+  const categoryScoped = useMemo(() => {
     if (missingMapping) return [];
-
-    const q = query.trim().toLowerCase();
-    const filtered = catalogue.filter((p) => {
-      // Filter by the actual Shopify collection membership OR local taxonomy mapping fallback
-      let inCollection = false;
-      if (isAllProducts) {
-        inCollection = true;
-      } else if (missingMapping) {
-        inCollection = p.category === missingMapping || (p.subcategories && p.subcategories.includes(missingMapping)) || false;
-      } else if (collection) {
-        const isShopifyProduct = Array.isArray(p.collectionHandles) && p.collectionHandles.length >= 0;
-        if (isShopifyProduct) {
-          // Shopify products: use ONLY the collection handles Shopify assigned.
-          // Never guess from title/tags/category fields â€” those come from classify()
-          // which is keyword-based and causes cross-category contamination.
-          inCollection = p.collectionHandles!.includes(collection);
-        } else {
-          // Static/legacy products (no Shopify data): fall back to local taxonomy.
-          if (taxonomyMatch) {
-            if (taxonomyMatch.parentTitle) {
-              inCollection = !!p.subcategories?.includes(taxonomyMatch.node.title);
-            } else {
-              inCollection = p.category === taxonomyMatch.node.title;
-            }
-          }
-        }
+    return catalogue.filter((p) => {
+      if (isAllProducts) return true;
+      const isShopifyProduct = Array.isArray(p.collectionHandles) && p.collectionHandles.length >= 0;
+      if (isShopifyProduct) {
+        // Shopify products: use ONLY the collection handles Shopify assigned.
+        // Never guess from title/tags/category fields — those come from classify()
+        // which is keyword-based and causes cross-category contamination.
+        return collection ? p.collectionHandles!.includes(collection) : false;
       }
-      
+      // Static/legacy products (no Shopify data): fall back to local taxonomy.
+      if (!taxonomyMatch) return false;
+      if (taxonomyMatch.parentTitle) return !!p.subcategories?.includes(taxonomyMatch.node.title);
+      return p.category === taxonomyMatch.node.title;
+    });
+  }, [catalogue, collection, isAllProducts, missingMapping, taxonomyMatch]);
+
+  const filterGroups = useMemo(
+    () => buildFilterGroups(mainCategoryTitle, categoryScoped),
+    [mainCategoryTitle, categoryScoped],
+  );
+
+  // Defense-in-depth against stale filters surviving a category change via
+  // back/forward navigation, a refresh, or a shared link: only a value that
+  // actually appears as a real option for the current category/subcategory
+  // is honored. Anything else is silently dropped rather than being applied
+  // and incorrectly filtering out every product (e.g. a leftover Fragrance
+  // "Scent Family" pick that would otherwise never match a Corporate item).
+  const validActiveFilters = useMemo(() => {
+    const validValuesByKind = new Map(filterGroups.map((g) => [g.id, new Set(g.options.map((o) => o.value))]));
+    const result: Record<string, string[]> = {};
+    for (const [kind, values] of Object.entries(activeFilters)) {
+      const validSet = validValuesByKind.get(kind);
+      if (!validSet) continue;
+      const kept = values.filter((v) => validSet.has(v));
+      if (kept.length) result[kind] = kept;
+    }
+    return result;
+  }, [activeFilters, filterGroups]);
+
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const filtered = categoryScoped.filter((p) => {
       const matches =
         p.summary.toLowerCase().includes(q) ||
         p.name.toLowerCase().includes(q);
-        
-      const passesFilters = Object.entries(activeFilters).every(([groupId, requiredValues]) => {
+
+      const passesFilters = Object.entries(validActiveFilters).every(([groupId, requiredValues]) => {
         if (!requiredValues.length) return true;
         const productValues = p.filterAttributes?.[groupId] || [];
         return requiredValues.some((v) => productValues.includes(v));
       });
 
-      return inCollection && matches && passesFilters;
+      return matches && passesFilters;
     });
     return sortProducts(filtered, sort);
-  }, [catalogue, collection, isAllProducts, missingMapping, query, sort, activeFilters]);
+  }, [categoryScoped, query, sort, validActiveFilters]);
 
   const FilterList = () => {
-    if (!currentFilters || currentFilters.length === 0) return null;
+    if (filterGroups.length === 0) return null;
     return (
       <div className="flex flex-col gap-8">
-        {currentFilters.map((group) => (
+        {filterGroups.map((group) => (
           <div key={group.id}>
             <h3 className="text-sm font-medium tracking-tight mb-4">{group.label}</h3>
             <div className="space-y-3">
@@ -337,7 +360,7 @@ function ProductsPage() {
           </div>
 
           <div className="mt-8 sm:mt-10 lg:flex lg:gap-12 xl:gap-16">
-            {currentFilters && (
+            {filterGroups.length > 0 && (
               <aside className="hidden lg:block w-64 shrink-0">
                 <FilterList />
               </aside>
@@ -373,7 +396,7 @@ function ProductsPage() {
                     </div>
                   ))}
                 </div>
-              ) : visible.length === 0 && (query || Object.keys(activeFilters).length > 0) ? (
+              ) : visible.length === 0 && (query || Object.keys(validActiveFilters).length > 0) ? (
                 <p className="text-sm text-muted-foreground mt-4 lg:mt-0">
                   No products match your search or filters. Try adjusting them.
                 </p>

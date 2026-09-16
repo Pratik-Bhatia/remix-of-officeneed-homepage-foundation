@@ -11,6 +11,8 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchProducts, fetchCollections, formatMoney, type ShopifyProductNode, type ShopifyCollectionNode } from "@/lib/shopify";
 import type { Product } from "@/lib/products";
 import type { BestsellerProduct } from "@/lib/bestsellers";
+import { MAIN_CATEGORIES, productBelongsToCategory, type MainCategory } from "@/lib/taxonomy";
+import { deriveFilterAttributes } from "@/lib/filters";
 
 export type ShopifyIndex = Map<string, ShopifyProductNode>;
 
@@ -237,10 +239,14 @@ function truncateWords(text: string, max: number): string {
   return `${(lastSpace > 40 ? cut.slice(0, lastSpace) : cut).replace(/[.,;:\-\s]+$/, "")}…`;
 }
 
-function priceBucket(amount: number): string {
-  if (amount < 2000) return "under_2000";
-  if (amount <= 5000) return "2000_5000";
-  return "above_5000";
+/**
+ * Real Shopify collection membership as the source of truth for which
+ * MainCategory a product belongs to (same approach already used for
+ * OfficeGPT eligibility) -- deliberately not `classify()`, which is
+ * keyword-based and known to cross-contaminate categories.
+ */
+function resolveMainCategory(collectionHandles: string[]): MainCategory | undefined {
+  return MAIN_CATEGORIES.find((cat) => productBelongsToCategory(collectionHandles, cat));
 }
 
 const PLACEHOLDER_IMAGE =
@@ -261,9 +267,10 @@ export function shopifyNodeToProduct(node: ShopifyProductNode): Product {
 
   const amount = parseFloat(node.priceRange?.minVariantPrice?.amount ?? "0");
   const variants = node.variants?.edges?.map((e) => e.node) ?? [];
+  const collectionHandles = node.collections?.edges.map(e => e.node.handle) ?? [];
 
   return {
-    collectionHandles: node.collections?.edges.map(e => e.node.handle) ?? [],
+    collectionHandles,
     slug: node.handle,
     name: node.title,
     ...extracted,
@@ -275,7 +282,7 @@ export function shopifyNodeToProduct(node: ShopifyProductNode): Product {
     ...(variants[0]?.sku ? { sku: variants[0].sku } : {}),
     category,
     subcategories: [sub],
-    filterAttributes: { price: [priceBucket(amount)] },
+    filterAttributes: deriveFilterAttributes(node, resolveMainCategory(collectionHandles), amount),
     summary,
     description: description || summary,
     ...(amount > 0
