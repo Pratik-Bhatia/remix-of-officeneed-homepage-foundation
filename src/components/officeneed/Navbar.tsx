@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { lockScroll, unlockScroll } from "@/lib/scroll-lock";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { Menu, MessageSquare, Search, User, X, ChevronDown } from "lucide-react";
 import logoUrl from "@/assets/officeneed-logo.png";
 import { primaryNavCategories as navCategories, navItemTarget, navCategoryTarget } from "@/lib/navigation";
@@ -10,6 +10,8 @@ import { cn } from "@/lib/utils";
 import { SearchModal } from "./SearchModal";
 import { CustomerAuthModal } from "./CustomerAuthModal";
 import { useCustomer } from "@/lib/customer";
+import { getOfficeGptContextCategory } from "@/lib/taxonomy";
+import type { OfficeGptOpenContext } from "@/components/officeneed/ChatWidget";
 
 function Logo({ className }: { className?: string }) {
   return (
@@ -116,10 +118,31 @@ export function Navbar() {
     if (closeTimer.current) clearTimeout(closeTimer.current);
   };
 
+  /**
+   * Current products-listing collection, if that's where the shopper is --
+   * read directly from the router's live location rather than duplicated
+   * route-matching logic. `location.search` here is the router's generic
+   * parsed search object (query-string values only, not narrowed by any
+   * route's `validateSearch`), which is all `collection` needs since its
+   * value is a plain string either way.
+   */
+  const productsCollection = useRouterState({
+    select: (s) =>
+      s.location.pathname.startsWith("/products")
+        ? (s.location.search as Record<string, unknown>)?.["collection"]
+        : undefined,
+  });
+
   const openChat = () => {
-    // Reuse an existing chatbot trigger when one is present; otherwise this is
-    // a clean hook point for connecting the OfficeNeed chatbot later.
-    window.dispatchEvent(new CustomEvent("officeneed:open-chat"));
+    // Fresh-conversation context only: ChatWidget's own kickoff effect
+    // ignores this entirely when a conversation is already in progress, so
+    // this never overwrites an active OfficeGPT session's category or
+    // answers -- see ChatWidget.tsx's "kick off the conversation" effect.
+    const category = getOfficeGptContextCategory(
+      typeof productsCollection === "string" ? productsCollection : undefined,
+    );
+    const detail: OfficeGptOpenContext | undefined = category ? { category } : undefined;
+    window.dispatchEvent(new CustomEvent("officeneed:open-chat", { detail }));
   };
 
   const active = navCategories.find((c) => c.id === openId) ?? null;

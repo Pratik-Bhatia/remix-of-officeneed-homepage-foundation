@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { toast } from "sonner";
 import { ArrowLeft, Check, Sparkles, ChevronRight, X, FlaskConical, Loader2, ShoppingBag } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { FragranceQuizAnswers, FragranceMatch } from "@/lib/fragrance-engine";
@@ -38,47 +39,75 @@ const NOTES = [
 
 
 
-function QuizAddToCart({ productSlug }: { productSlug: string }) {
+/**
+ * Adds a fragrance recommendation to the existing cart (`useCartStore`) --
+ * the same store and mutations the product detail page uses; no separate
+ * cart implementation.
+ *
+ * The recommendation result only carries a display-only `variants?: string[]`
+ * (variant titles, not real Shopify variant ids/availability), so -- exactly
+ * as it already did before this fix -- this fetches the live product at
+ * click-time to get real variant data, rather than the recommendation engine
+ * being changed to carry it.
+ *
+ * Variant selection mirrors the product detail page's own default-variant
+ * rule (`products.$slug.tsx`: `variants.find(v => v.availableForSale) ??
+ * variants[0]`) instead of blindly using the first variant, and the sold-out
+ * / failure handling mirrors that same page's `handleBuyNow` (toast, no
+ * silent failure).
+ */
+function QuizAddToCart({ productSlug, productName }: { productSlug: string; productName: string }) {
   const [loading, setLoading] = useState(false);
   const addItem = useCartStore(s => s.addItem);
   const [success, setSuccess] = useState(false);
 
   const handleAdd = async () => {
+    if (loading || success) return; // guard against double-submission
     setLoading(true);
     setSuccess(false);
     try {
       const node = await fetchProductByHandle(productSlug);
       if (!node) throw new Error("Product not found");
-      const variant = node.variants?.edges?.[0]?.node;
+      const variants = node.variants?.edges?.map(e => e.node) ?? [];
+      // Same safe-default rule as the product page: prefer an in-stock
+      // variant, fall back to the first one -- never invent new logic here.
+      const variant = variants.find(v => v.availableForSale) ?? variants[0];
       if (!variant) throw new Error("No variant");
+      if (!variant.availableForSale) {
+        toast.error("This option is currently sold out.");
+        return;
+      }
       await addItem({
         product: { node },
         variantId: variant.id,
         variantTitle: variant.title,
-        price: { amount: variant.price?.amount ?? "0", currencyCode: variant.price?.currencyCode ?? "INR" },
+        price: variant.price ?? node.priceRange?.minVariantPrice ?? { amount: "0", currencyCode: "INR" },
         quantity: 1,
         selectedOptions: variant.selectedOptions ?? []
       });
       setSuccess(true);
+      toast.success("Added to cart", { description: productName });
       setTimeout(() => setSuccess(false), 2000);
     } catch (e) {
       console.error(e);
+      toast.error("Failed to add to cart");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <button 
-      onClick={handleAdd} 
+    <button
+      onClick={handleAdd}
       disabled={loading || success}
+      aria-label={success ? "Added to cart" : `Add ${productName} to cart`}
       className={cn(
-        "flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-sm font-semibold transition-colors",
+        "flex flex-1 items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition-colors",
         success ? "bg-green-600 text-white" : "bg-foreground text-background hover:bg-foreground/90 disabled:opacity-50"
       )}
     >
       {loading ? <Loader2 size={16} className="animate-spin" /> : success ? <Check size={16} /> : <ShoppingBag size={16} />}
-      {loading ? "Adding..." : success ? "Added to Cart" : "Add to Cart"}
+      {loading ? "Adding..." : success ? "Added" : "Add to Cart"}
     </button>
   );
 }
@@ -168,10 +197,39 @@ export function FragranceQuiz({ products, onClose, onReset }: { products: Produc
                         )}
                       </div>
                     </div>
-                    
-                    <a href={`/products/${m.product.slug}`} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-2 w-full bg-foreground text-background py-2.5 rounded-xl text-sm font-semibold hover:bg-foreground/90 transition-colors">
-                      View Product <ChevronRight size={16} />
-                    </a>
+
+                    {/* Already computed by the recommendation engine but
+                        previously never shown -- a plain, honest reason
+                        ("matches your preference for X") rather than any
+                        claim of AI reasoning, since the matching is a
+                        deterministic description/tag comparison. */}
+                    <p className="text-sm text-muted-foreground mb-4">{m.explanation}</p>
+
+                    {/* A product only has `price` set when Shopify returned a
+                        real, positive amount (see shopifyNodeToProduct in
+                        shopify-overlay.ts) -- the same signal already used
+                        everywhere else in the app to distinguish a
+                        purchasable product from an "Enquire for price" /
+                        POA one. Only purchasable products get Add to Cart;
+                        POA products keep the original View-Product-only
+                        layout unchanged. */}
+                    {m.product.price ? (
+                      <div className="flex gap-2">
+                        <QuizAddToCart productSlug={m.product.slug} productName={m.product.name} />
+                        <a
+                          href={`/products/${m.product.slug}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-border py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-secondary"
+                        >
+                          View Product
+                        </a>
+                      </div>
+                    ) : (
+                      <a href={`/products/${m.product.slug}`} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-2 w-full bg-foreground text-background py-2.5 rounded-xl text-sm font-semibold hover:bg-foreground/90 transition-colors">
+                        View Product <ChevronRight size={16} />
+                      </a>
+                    )}
                   </div>
                 </div>
               ))}
@@ -213,7 +271,7 @@ export function FragranceQuiz({ products, onClose, onReset }: { products: Produc
           </button>
         </div>
         <p className="text-center text-[11px] font-sans text-[#6b7280] pb-1">
-          Recommendations are AI-assisted and may vary. Please verify product details before purchase.
+          Recommendations are based on your answers and current product data. Please verify product details before purchase.
         </p>
       </div>
     </div>

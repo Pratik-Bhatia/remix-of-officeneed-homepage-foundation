@@ -113,23 +113,6 @@ export function mergeBestseller(
   };
 }
 
-/**
- * Loads the full Shopify catalogue once and exposes it as a lookup index.
- * Failures are swallowed — the static catalogue keeps rendering.
- */
-export function useShopifyIndex() {
-  const { data } = useQuery({
-    queryKey: ["shopify", "catalog-index"],
-    queryFn: async () => {
-      const edges = await fetchProducts(250);
-      return buildShopifyIndex(edges.map((e) => e.node));
-    },
-    staleTime: 5 * 60 * 1000,
-    retry: 1,
-  });
-  return data;
-}
-
 /* ------------------------------------------------------------------ */
 /* Mapping live Shopify products into the site's Product shape         */
 /* ------------------------------------------------------------------ */
@@ -264,34 +247,6 @@ const PLACEHOLDER_IMAGE =
   "https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=1200&q=75";
 
 /** Convert a live Shopify product into the site's static `Product` shape. */
-
-function parseFragranceProfile(node: ShopifyProductNode) {
-  if (!node.metafields) return undefined;
-  
-  const profile: any = {};
-  let hasData = false;
-
-  for (const m of node.metafields) {
-    if (!m || !m.key) continue;
-    try {
-      if (m.type === "list.single_line_text_field" || m.type === "json") {
-        profile[m.key] = JSON.parse(m.value);
-      } else if (m.type === "boolean") {
-        profile[m.key] = m.value === "true";
-      } else {
-        profile[m.key] = m.value;
-      }
-      hasData = true;
-        if (m.key === "ai_subtitle") {
-          profile.ai_subtitle = m.value;
-        }
-    } catch (e) {
-      console.warn("Failed to parse metafield", m.key, m.value);
-    }
-  }
-  
-  return hasData ? profile : undefined;
-}
 
 export function shopifyNodeToProduct(node: ShopifyProductNode): Product {
   const { category, sub } = classify(node);

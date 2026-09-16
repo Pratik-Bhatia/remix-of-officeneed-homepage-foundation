@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Send, X, MessageSquare, Plus, Check, Loader2, Paperclip, ChevronRight, CheckCircle2, Gift, Briefcase, Sparkles, Laptop, Printer , ArrowRight } from "lucide-react";
+import { Send, X, Plus, Check, Loader2, Paperclip, ChevronRight, CheckCircle2, Gift, Sparkles } from "lucide-react";
 import { uploadEnquiryAttachment } from "@/lib/uploads.functions";
 import logoUrl from "@/assets/officeneed-logo.png";
 import { AiAssistantIcon } from "@/components/officeneed/AiAssistantIcon";
@@ -13,12 +14,14 @@ import {
   refineStep,
   parseQuantity,
   recommendProducts,
+  purposeToMainCategory,
   type ChatAnswers,
   type ChatStep,
 } from "@/lib/chat-flow";
 import { products as staticProducts } from "@/lib/products";
 import type { Product } from "@/lib/products";
-import { useShopifyCatalogue } from "@/lib/shopify-overlay";
+import { useShopifyCatalogue, shopifyCatalogueQueryOptions } from "@/lib/shopify-overlay";
+import { getDisplayCategoryLabel } from "@/lib/taxonomy";
 import { submitEnquiry } from "@/lib/enquiries.functions";
 
 type Bubble = {
@@ -27,6 +30,10 @@ type Bubble = {
   text?: string;
   isActionable?: boolean; // If this bubble contains products to show
   products?: Product[];
+  /** Corporate Gifting "why this" text per product slug (see chat-flow.ts's
+   *  RecommendationResult.explanations). Fragrance's own per-match
+   *  explanation is unrelated and lives entirely in FragranceQuiz.tsx. */
+  explanations?: Record<string, string>;
 };
 
 let seq = 0;
@@ -35,10 +42,44 @@ const uid = () => `m${++seq}`;
 const GREETING =
   "Hi! I'm OfficeGPT. I'll help you find the right products for your requirement.";
 
+/**
+ * Optional payload for the shared `officeneed:open-chat` event, letting a
+ * caller that already knows the shopper's context (e.g. a future Fragrance
+ * or Corporate Gifting page CTA) skip the generic "What are you shopping
+ * for?" question. Existing generic callers (Hero's "Try the Assistant",
+ * the Navbar chat icon) keep dispatching the event with no detail at all --
+ * this is purely additive, no existing dispatch site needed to change.
+ */
+export type OfficeGptOpenContext = { category?: "fragrance" | "corporate" };
+
+const CONTEXT_GREETING: Record<"fragrance" | "corporate", string> = {
+  fragrance: "I see you're exploring Fragrance Gifting. Let's help you find the right fragrance.",
+  corporate: "I see you're exploring Corporate Gifting. Let's find options based on your requirement.",
+};
+
+// Only the purposes actually offered by the "purpose" step's options
+// (chatSteps[0] in chat-flow.ts) belong here -- this previously listed 5
+// additional categories ("Employee Joining Kits", "Festive Gifts", "Office
+// Supplies", "Hardware & IT", "Printing & Branding") that the step never
+// actually offers, so they could never be selected.
+const PURPOSE_ICON: Record<string, typeof Gift> = {
+  "Corporate Gifting": Gift,
+  "Fragrance Gifting": Sparkles,
+};
+
 export function ChatWidget() {
   const [open, setOpen] = useState(false);
   const [phase, setPhase] = useState<"qualification" | "refinement" | "enquiry" | "done" | "fragrance">("qualification");
   const catalogue = useShopifyCatalogue(staticProducts);
+  // Same query key as useShopifyCatalogue() above -- react-query dedupes
+  // this to the shared cached request, no extra network call -- read here
+  // only to know whether the catalogue is still loading or failed, so we
+  // never present recommendations against an empty fallback catalogue as if
+  // it were a real "no matches" result.
+  const { isLoading: catalogueLoading, isError: catalogueError } = useQuery(shopifyCatalogueQueryOptions);
+  /** Set right after qualification/refinement completes; resolved by the
+   *  effect below once the catalogue has actually finished loading. */
+  const [pendingRecommendation, setPendingRecommendation] = useState<{ answers: ChatAnswers; refinement?: string } | null>(null);
   const [stepIndex, setStepIndex] = useState(0);
   const [answers, setAnswers] = useState<ChatAnswers>({});
   const [messages, setMessages] = useState<Bubble[]>([]);
@@ -62,9 +103,32 @@ export function ChatWidget() {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const navigate = useNavigate();
+  /**
+   * Handoff from the open-chat event listener to the "kick off the
+   * conversation" effect below -- a ref, not state, because it's read once
+   * at the moment a genuinely fresh conversation starts and then cleared,
+   * never something that should itself trigger a render. Only ever
+   * consulted when `messages.length === 0` (see that effect), so it can
+   * never retroactively alter an already-open or state-preserved
+   * conversation -- reopening an in-progress session (generic, Fragrance, or
+   * Corporate) via any launcher is completely unaffected by this.
+   */
+  const pendingCategoryRef = useRef<"fragrance" | "corporate" | null>(null);
 
   const currentStepList = phase === "qualification" ? chatSteps : phase === "enquiry" ? enquirySteps : [];
   const step: ChatStep | undefined = phase === "refinement" ? refineStep : currentStepList[stepIndex];
+
+  /**
+   * Recommended products are now filtered by real Shopify collection
+   * membership (see chat-flow.ts), not the classify()-derived `p.category`
+   * field -- so `p.category` can no longer be trusted as a display label for
+   * a recommended product (it may name the wrong category entirely, e.g.
+   * "Office Stationery" for a pen Shopify has collectioned under Corporate
+   * Gifting). Derive the label from the same Shopify collection data instead.
+   */
+  const wantedMainCategory = purposeToMainCategory[answers.purpose ?? ""];
+  const displayCategory = (p: Product) =>
+    wantedMainCategory ? getDisplayCategoryLabel(p.collectionHandles, wantedMainCategory) : p.category;
 
   // Scroll lock for mobile fullscreen
   useEffect(() => {
@@ -95,18 +159,130 @@ export function ChatWidget() {
   }, [open]);
 
   useEffect(() => {
-    const onOpen = () => setOpen(true);
+    const onOpen = (e: Event) => {
+      const detail = (e as CustomEvent<OfficeGptOpenContext | undefined>).detail;
+      // Recorded for the kickoff effect below to consume -- see that
+      // effect for why a fresh-conversation guard makes this safe.
+      pendingCategoryRef.current = detail?.category ?? null;
+      setOpen(true);
+    };
     window.addEventListener("officeneed:open-chat", onOpen);
     return () => window.removeEventListener("officeneed:open-chat", onOpen);
   }, []);
 
-  // Kick off the conversation
+  // Kick off the conversation -- generic by default, or context-aware when
+  // opened via `officeneed:open-chat` with a `{ category }` detail payload.
+  // Only ever runs for a genuinely fresh conversation (`messages.length ===
+  // 0`), so an in-progress or state-preserved session reopened through ANY
+  // launcher -- generic or contextual -- is never altered by this.
   useEffect(() => {
     if (!open || messages.length > 0) return;
+    const category = pendingCategoryRef.current;
+    pendingCategoryRef.current = null; // consume once; never leaks into a later fresh session
+
+    if (category === "fragrance") {
+      // Introduce the context in the SAME conversation, then hand off to the
+      // existing Fragrance flow (its own first question is "Who is this
+      // fragrance for?" -- unchanged, not re-implemented here).
+      setMessages([{ id: uid(), role: "bot", text: CONTEXT_GREETING.fragrance }]);
+      setTyping(true);
+      window.setTimeout(() => {
+        setTyping(false);
+        setPhase("fragrance");
+      }, 900);
+      return;
+    }
+
+    if (category === "corporate") {
+      // Pre-fill exactly what a real "Corporate Gifting" button click would
+      // have produced (answers.purpose + a matching user bubble) so every
+      // downstream mechanism -- Back navigation, recommendation scoring,
+      // the enquiry summary -- sees the identical state shape it already
+      // knows how to handle, rather than a special-cased shortcut.
+      setAnswers({ purpose: "Corporate Gifting" });
+      setStepIndex(1);
+      setMessages([
+        { id: uid(), role: "bot", text: CONTEXT_GREETING.corporate },
+        { id: uid(), role: "user", text: "Corporate Gifting" },
+      ]);
+      pushBot(chatSteps[1]!.question, 700);
+      return;
+    }
+
+    // Generic entry -- unchanged.
     setMessages([{ id: uid(), role: "bot", text: GREETING }]);
     pushBot(chatSteps[0]!.question, 500);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+
+  /**
+   * Resolves a pending recommendation request (set after qualification
+   * completes, or after a "Show Premium/Budget Options" refinement) once the
+   * shared catalogue query has actually settled. Never presents
+   * recommendations against a still-loading or failed fetch, and
+   * distinguishes "still loading" / "couldn't load" / "no exact match" from
+   * a real set of results, instead of the previous behaviour of always
+   * saying "here are a few options" and sometimes showing an empty carousel.
+   */
+  useEffect(() => {
+    if (!pendingRecommendation) return;
+
+    if (catalogueLoading) {
+      setTyping(true);
+      setLoadingMsg("Finding the best options for you...");
+      return;
+    }
+
+    const { answers: pendingAnswers, refinement } = pendingRecommendation;
+    setPendingRecommendation(null);
+    setTyping(false);
+    setLoadingMsg("");
+
+    if (catalogueError || catalogue.length === 0) {
+      pushBot(
+        "I couldn't load our product catalogue just now, so I can't show recommendations yet. You're welcome to try again in a moment, or go ahead and share your details -- our team will follow up with the right options directly.",
+        400,
+      );
+      return;
+    }
+
+    const { products: picks, noConfirmedPriceMatch, explanations } = recommendProducts(catalogue, pendingAnswers, refinement);
+    setCurrentRecommendations(picks);
+
+    if (picks.length === 0) {
+      pushBot(
+        "I couldn't find an exact match for that combination right now. You can adjust your answers, or go straight to enquiry and our team will help directly.",
+        400,
+      );
+      pushBot(refineStep.question, 1400);
+      return;
+    }
+
+    if (refinement) {
+      pushBot(`Here are some options based on your preference for "${refinement}":`, 400, picks, true, explanations);
+      pushBot(refineStep.question, 1400);
+      return;
+    }
+
+    // Exact bulk-order fulfillment isn't confirmable from the data we have
+    // (no MOQ/inventory-count source exists in Shopify for this store -- see
+    // chat-flow.ts), so for larger quantity requests we say so plainly
+    // rather than silently implying every option was vetted for that exact
+    // quantity.
+    const requestedQty = parseQuantity(pendingAnswers.quantity);
+    const bulkNote =
+      pendingAnswers.purpose === "Corporate Gifting" && requestedQty && requestedQty >= 50
+        ? " Exact bulk availability for your quantity isn't listed online, so we'll confirm it when you enquire."
+        : "";
+    // A POA ("price on request") product must never be presented as a
+    // confirmed budget match -- if that's all we found, say so plainly.
+    const priceNote = noConfirmedPriceMatch
+      ? " I couldn't find a product with a confirmed price in that exact budget, so these are priced on request -- we'll confirm pricing for your requirement when you enquire."
+      : "";
+    pushBot(`Based on what you've told me, here are a few options I'd recommend.${priceNote}${bulkNote}`, 400, picks, true, explanations);
+    pushBot(refineStep.question, 1400);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingRecommendation, catalogueLoading, catalogueError, catalogue]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -116,11 +292,11 @@ export function ChatWidget() {
     if (open && step && !step.options) inputRef.current?.focus();
   }, [open, step, typing]);
 
-  function pushBot(text: string, delay = 650, products?: Product[], isActionable?: boolean) {
+  function pushBot(text: string, delay = 650, products?: Product[], isActionable?: boolean, explanations?: Record<string, string>) {
     setTyping(true);
     window.setTimeout(() => {
       setTyping(false);
-      setMessages((m) => [...m, { id: uid(), role: "bot", text, ...(products ? { products } : {}), ...(isActionable !== undefined ? { isActionable } : {}) }]);
+      setMessages((m) => [...m, { id: uid(), role: "bot", text, ...(products ? { products } : {}), ...(isActionable !== undefined ? { isActionable } : {}), ...(explanations ? { explanations } : {}) }]);
     }, delay);
   }
 
@@ -302,12 +478,12 @@ export function ChatWidget() {
         setStepIndex(nextIndex);
         pushBot(chatSteps[nextIndex]!.question, 500);
       } else {
-        // We finished qualification � show recommendations
+        // We finished qualification -- hand off to the effect below, which
+        // waits for the catalogue to actually be ready (loading/error/empty
+        // are all handled there) instead of presenting recommendations
+        // against a possibly-still-loading or failed fetch.
         setPhase("refinement");
-        const picks = recommendProducts(catalogue, next);
-        setCurrentRecommendations(picks);
-        pushBot("Based on what you've told me, here are a few options I'd recommend.", 800, picks, true);
-        pushBot(refineStep.question, 1800);
+        setPendingRecommendation({ answers: next });
       }
     } else if (phase === "refinement") {
       if (clean === "Start Over") {
@@ -317,11 +493,11 @@ export function ChatWidget() {
          setStepIndex(0);
          pushBot(enquirySteps[0]!.question, 600);
       } else {
-         // Show Premium / Show Budget
-         const picks = recommendProducts(catalogue, next, clean);
-         setCurrentRecommendations(picks);
-         pushBot(`Here are some options based on your preference for "${clean}":`, 800, picks, true);
-         pushBot(refineStep.question, 1800);
+         // Show Premium / Show Budget -- routed through the same pending
+         // effect as the initial recommendation so loading/error/no-match
+         // are handled consistently (in practice the catalogue is already
+         // loaded by this point, so it resolves on the very next tick).
+         setPendingRecommendation({ answers: next, refinement: clean });
       }
     } else if (phase === "enquiry") {
       await proceedEnquiry(next);
@@ -351,7 +527,7 @@ export function ChatWidget() {
       const selectedProducts = productPayload.map(p => ({
         slug: p.slug,
         name: p.name,
-        category: p.category,
+        category: displayCategory(p),
         quantity: qtyNum || 1,
         priceStr: p.price ?? "POA",
         priceNum: p.price ? parseInt(p.price.replace(/[^0-9]/g, ''), 10) || 0 : 0
@@ -364,7 +540,7 @@ export function ChatWidget() {
         data: {
           productSlug: top ? top.slug : "general-enquiry",
           productName: top ? top.name : "General Enquiry",
-          category: top ? top.category : "General",
+          category: top ? displayCategory(top) : "General",
           quantity: qtyNum,
           name: final.name ?? "Chat visitor",
           company: final.company ?? "",
@@ -411,6 +587,12 @@ export function ChatWidget() {
   }
 
   function restart() {
+    // Defensive: "Start Over" always returns to the generic qualification
+    // flow, never re-applies a Fragrance/Corporate context -- this ref
+    // should already be null by the time a real conversation exists (the
+    // kickoff effect consumes it immediately), but clearing it here removes
+    // any doubt that the user could stay "locked into" a prior context.
+    pendingCategoryRef.current = null;
     setMessages([]);
     setAnswers({});
     setStepIndex(0);
@@ -425,6 +607,26 @@ export function ChatWidget() {
     setAttachments([]);
     setMessages([{ id: uid(), role: "bot", text: GREETING }]);
     pushBot(chatSteps[0]!.question, 500);
+  }
+
+  /**
+   * Lets the user revise a previous qualification answer -- parity with the
+   * Fragrance flow's Back navigation, which this flow previously had no
+   * equivalent for. Removes the current step's question+answer pair from
+   * the transcript, clears the stored answer for the step being returned
+   * to, and moves the composer back one step so it can be re-answered.
+   */
+  function goBack() {
+    if (typing || phase !== "qualification" || stepIndex === 0) return;
+    const prevIndex = stepIndex - 1;
+    const prevStepId = chatSteps[prevIndex]!.id;
+    setMessages((m) => m.slice(0, -2));
+    setAnswers((a) => {
+      const next = { ...a };
+      delete next[prevStepId];
+      return next;
+    });
+    setStepIndex(prevIndex);
   }
 
   const toggleProduct = (slug: string) => {
@@ -495,13 +697,33 @@ export function ChatWidget() {
           </div>
 
           {phase === "fragrance" ? (
-              <FragranceQuiz 
-                products={catalogue} 
-                onClose={() => setOpen(false)} 
-                onReset={restart} 
+              <FragranceQuiz
+                products={catalogue}
+                onClose={() => setOpen(false)}
+                onReset={restart}
               />
             ) : (
               <>
+            {/* Progress / back navigation -- same pattern as the Fragrance
+                flow's own bar, shown only while stepping through the initial
+                qualification questions (purpose/occasion/quantity/budget/
+                timeline), so both experiences feel like the same product. */}
+            {phase === "qualification" && (
+              <div className="flex items-center justify-between px-4 pt-3 pb-1 shrink-0">
+                <button
+                  type="button"
+                  onClick={goBack}
+                  disabled={stepIndex === 0}
+                  aria-label="Back to previous question"
+                  className="flex items-center gap-1 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-0 disabled:pointer-events-none"
+                >
+                  <ChevronRight className="size-4 rotate-180" /> Back
+                </button>
+                <span className="text-xs font-bold tracking-widest text-muted-foreground">
+                  {stepIndex + 1} OF {chatSteps.length}
+                </span>
+              </div>
+            )}
             {/* Transcript / Conversation */}
           <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto overscroll-contain px-5 py-5 pb-8 bg-[#F9FAFB]/50">
             {messages.map((m) => (
@@ -539,16 +761,25 @@ export function ChatWidget() {
                                 className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                               />
                               <div className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-white/90 backdrop-blur-sm text-[10px] font-bold uppercase tracking-wider text-foreground">
-                                {p.category}
+                                {displayCategory(p)}
                               </div>
                             </div>
                           )}
                           <div className="p-3.5 flex flex-col flex-1">
                             <h4 className="font-semibold text-sm leading-tight line-clamp-2 mb-1">{p.name}</h4>
-                            <p className="text-sm font-medium text-muted-foreground mb-4">
+                            <p className="text-sm font-medium text-muted-foreground mb-1">
                               {p.price ? `${p.startingPrice ? "From " : ""}${p.price}` : "Enquire for price"}
                             </p>
-                            
+                            {/* "Why this" explanation, built only from real
+                                recommendation signals (chat-flow.ts) -- kept
+                                small and muted so it supports the name/price
+                                rather than competing with them. */}
+                            {m.explanations?.[p.slug] && (
+                              <p className="text-xs leading-snug text-muted-foreground/80 mb-4">
+                                {m.explanations[p.slug]}
+                              </p>
+                            )}
+
                             <div className="mt-auto space-y-2">
                               <button
                                 onClick={() => toggleProduct(p.slug)}
@@ -650,16 +881,7 @@ export function ChatWidget() {
                 <p className="text-[12px] font-semibold text-muted-foreground uppercase tracking-wider text-center">Choose a category</p>
                 <div className="grid grid-cols-2 gap-2.5">
                   {step.options.map((opt) => {
-                    const iconMap: Record<string, any> = {
-                      "Corporate Gifting": Gift,
-                      "Fragrance Gifting": Sparkles,
-                      "Employee Joining Kits": Briefcase,
-                      "Festive Gifts": Sparkles,
-                      "Office Supplies": Paperclip,
-                      "Hardware & IT": Laptop,
-                      "Printing & Branding": Printer,
-                    };
-                    const Icon = iconMap[opt];
+                    const Icon = PURPOSE_ICON[opt];
                     return (
                       <button
                         key={opt}
@@ -743,18 +965,27 @@ export function ChatWidget() {
                 </button>
               </div>
             ) : step?.options ? (
-              <div className="flex flex-wrap gap-2 justify-end">
-                {step.options.map((opt) => (
-                  <button
-                    key={opt}
-                    type="button"
-                    disabled={typing}
-                    onClick={() => void answer(opt)}
-                    className="rounded-full border border-border/80 bg-white px-4 py-2 text-[14px] font-medium text-foreground shadow-sm transition-all hover:border-foreground/30 hover:bg-[#FAFAF8] active:scale-95 disabled:opacity-50"
-                  >
-                    {opt}
-                  </button>
-                ))}
+              <div className="flex flex-col gap-2">
+                {/* Only the timeline step currently sets `disclaimer` -- this
+                    renders wherever the step data actually has one, rather
+                    than hardcoding a step-id check, so it can't silently
+                    drift out of sync with chat-flow.ts again. */}
+                {step.disclaimer && (
+                  <p className="px-1 text-[12px] leading-snug text-muted-foreground">{step.disclaimer}</p>
+                )}
+                <div className="flex flex-wrap gap-2 justify-end">
+                  {step.options.map((opt) => (
+                    <button
+                      key={opt}
+                      type="button"
+                      disabled={typing}
+                      onClick={() => void answer(opt)}
+                      className="rounded-full border border-border/80 bg-white px-4 py-2 text-[14px] font-medium text-foreground shadow-sm transition-all hover:border-foreground/30 hover:bg-[#FAFAF8] active:scale-95 disabled:opacity-50"
+                    >
+                      {opt}
+                    </button>
+                  ))}
+                </div>
               </div>
             ) : step?.inputType === "file" ? (
               <div className="flex flex-col gap-3">
@@ -815,7 +1046,7 @@ export function ChatWidget() {
               </p>
             )}
             <p className="mt-3 text-center text-[11px] text-[#6b7280] font-sans">
-                Recommendations are AI-assisted and may vary. Please verify product details before purchase.
+                Recommendations are based on your answers and current product data. Please verify product details before purchase.
               </p>
           </div>
           </>

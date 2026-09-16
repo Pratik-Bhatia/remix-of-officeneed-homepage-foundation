@@ -1,4 +1,5 @@
 import type { Product } from "./products";
+import { productBelongsToCategory } from "./taxonomy";
 
 export type FragranceQuizAnswers = {
   gender?: "For Him" | "For Her" | "Unisex / Anyone";
@@ -15,23 +16,13 @@ export type FragranceMatch = {
   explanation: string;
 };
 
-// Simplified maps for overlapping concepts
-const GENDER_MAP: Record<string, string> = {
-  "Men's fragrance": "Men",
-  "Man": "Men",
-  "Women's fragrance": "Women",
-  "Woman": "Women",
-  "Unisex fragrance": "Unisex",
-  "Unisex / Anyone": "Unisex"
-};
-
-function arrayIntersect(arr1?: string[], arr2?: string[]) {
-  if (!arr1 || !arr2 || arr1.length === 0 || arr2.length === 0) return 0;
-  return arr1.filter(v => arr2.some(v2 => v.toLowerCase().includes(v2.toLowerCase()) || v2.toLowerCase().includes(v.toLowerCase()))).length;
-}
-
 export function getFragranceRecommendations(products: Product[], answers: FragranceQuizAnswers): FragranceMatch[] {
-  let eligibleProducts = products.filter(p => p.category === "Fragrance Gifting" || p.subcategories?.includes("Perfume Gift Sets") || p.subcategories?.includes("European Perfume") || p.subcategories?.includes("Middle Eastern Perfume"));
+  // SOURCE OF TRUTH: real Shopify collection membership (perfumes /
+  // european-perfume / eastern-perfume / perfume-gift-set), not
+  // classify()-derived category/subcategories. This also keeps out
+  // products Shopify has separately collectioned as "body-deodorant"
+  // rather than "perfumes" -- see fragrance-engine tests.
+  let eligibleProducts = products.filter(p => productBelongsToCategory(p.collectionHandles, "Fragrance Gifting"));
 
   // 1. Strict Gender Filtering (Pre-LLM Logic Fix)
   if (answers.gender) {
