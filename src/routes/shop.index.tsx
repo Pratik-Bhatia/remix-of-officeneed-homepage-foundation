@@ -29,7 +29,7 @@ export const Route = createFileRoute("/shop/")({
 function ShopPage() {
   const { data: products, isLoading, error } = useQuery({
     queryKey: ["shopify-products"],
-    queryFn: () => fetchProducts(60),
+    queryFn: () => fetchProducts(250),
   });
 
   return (
