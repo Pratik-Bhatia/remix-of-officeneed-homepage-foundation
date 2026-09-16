@@ -112,7 +112,7 @@ function QuizAddToCart({ productSlug, productName }: { productSlug: string; prod
   );
 }
 
-export function FragranceQuiz({ products, onClose, onReset }: { products: Product[], onClose: () => void, onReset: () => void }) {
+export function FragranceQuiz({ products, onClose, onReset, onAnswer }: { products: Product[], onClose: () => void, onReset: () => void, onAnswer?: () => void }) {
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [answers, setAnswers] = useState<FragranceQuizAnswers>(() => {
     const saved = typeof window !== 'undefined' ? sessionStorage.getItem('officeGpt_quizState') : null;
@@ -142,6 +142,11 @@ export function FragranceQuiz({ products, onClose, onReset }: { products: Produc
   }, [step, answers, products]);
 
   const updateAnswer = (key: keyof FragranceQuizAnswers, value: any) => {
+    // Lets the parent ChatWidget know a REAL answer was given here, so it
+    // can stop re-evaluating page context on this conversation -- see
+    // ChatWidget.tsx's `hasAnswered`. Purely a notification; no recommendation
+    // logic, question, or scoring behavior here is affected by this call.
+    onAnswer?.();
     setAnswers(prev => ({ ...prev, [key]: value }));
     next();
   };

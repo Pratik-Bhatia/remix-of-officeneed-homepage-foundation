@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { Send, X, Plus, Check, Loader2, Paperclip, ChevronRight, CheckCircle2, Gift, Sparkles } from "lucide-react";
 import { uploadEnquiryAttachment } from "@/lib/uploads.functions";
 import logoUrl from "@/assets/officeneed-logo.png";
@@ -21,7 +21,7 @@ import {
 import { products as staticProducts } from "@/lib/products";
 import type { Product } from "@/lib/products";
 import { useShopifyCatalogue, shopifyCatalogueQueryOptions } from "@/lib/shopify-overlay";
-import { getDisplayCategoryLabel } from "@/lib/taxonomy";
+import { getDisplayCategoryLabel, getOfficeGptContextCategory } from "@/lib/taxonomy";
 import { submitEnquiry } from "@/lib/enquiries.functions";
 
 type Bubble = {
@@ -83,6 +83,31 @@ export function ChatWidget() {
   const [stepIndex, setStepIndex] = useState(0);
   const [answers, setAnswers] = useState<ChatAnswers>({});
   const [messages, setMessages] = useState<Bubble[]>([]);
+  /**
+   * True once the shopper has given at least one REAL answer in the current
+   * conversation (qualification/refinement/enquiry via `answer()`, or a
+   * Fragrance quiz question via FragranceQuiz's `onAnswer`). Distinguishes a
+   * conversation genuinely worth protecting from being re-seeded from an
+   * unanswered one -- e.g. the greeting/first-question a context-seed or
+   * Start Over just displayed does NOT by itself count as "answered", so
+   * the kickoff effect below can keep re-evaluating the current page's
+   * context on every reopen until the shopper actually responds to
+   * something, and never again afterwards. See that effect for how this
+   * differs from (and fixes) the previous "is the transcript empty" check.
+   */
+  const [hasAnswered, setHasAnswered] = useState(false);
+  /**
+   * Bumped by `restart()` on every call, unconditionally. `hasAnswered`
+   * alone isn't a reliable effect trigger for this -- if Start Over is
+   * clicked before any real answer was ever given (e.g. Fragrance's Start
+   * Over is reachable from its very first, unanswered question), setting
+   * `hasAnswered` back to `false` is a no-op (it was already false), so
+   * that dependency wouldn't change and the kickoff effect wouldn't re-run
+   * on its own. Including this counter in that effect's dependency array
+   * guarantees every Start Over forces a fresh re-seed regardless of what
+   * `hasAnswered` was already set to.
+   */
+  const [resetSignal, setResetSignal] = useState(0);
   const [typing, setTyping] = useState(false);
   const [loadingMsg, setLoadingMsg] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -106,14 +131,34 @@ export function ChatWidget() {
   /**
    * Handoff from the open-chat event listener to the "kick off the
    * conversation" effect below -- a ref, not state, because it's read once
-   * at the moment a genuinely fresh conversation starts and then cleared,
-   * never something that should itself trigger a render. Only ever
-   * consulted when `messages.length === 0` (see that effect), so it can
-   * never retroactively alter an already-open or state-preserved
-   * conversation -- reopening an in-progress session (generic, Fragrance, or
-   * Corporate) via any launcher is completely unaffected by this.
+   * per effect run and cleared immediately, never something that should
+   * itself trigger a render. Only ever consulted while `!hasAnswered` (see
+   * that effect), so it can never retroactively alter a conversation the
+   * shopper has actually started answering -- reopening such a session
+   * (generic, Fragrance, or Corporate) via the launcher is unaffected by
+   * this, no matter which page it's reopened from.
    */
   const pendingCategoryRef = useRef<"fragrance" | "corporate" | null>(null);
+  /** Cancels a pending "switch to the Fragrance flow" handoff (see the
+   *  kickoff effect) if the effect re-seeds again before that 900ms timer
+   *  fires -- e.g. a very fast close-and-reopen with no answer given yet --
+   *  so a stale timeout can never overwrite a later, different re-seed. */
+  const fragranceHandoffTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /**
+   * Current products-listing collection, if that's where the shopper is --
+   * read directly from the router's live location (moved here from Navbar,
+   * which no longer has an OfficeGPT launcher of its own). `location.search`
+   * is the router's generic parsed search object (query-string values only,
+   * not narrowed by any route's `validateSearch`), which is all `collection`
+   * needs since its value is a plain string either way.
+   */
+  const productsCollection = useRouterState({
+    select: (s) =>
+      s.location.pathname.startsWith("/products")
+        ? (s.location.search as Record<string, unknown>)?.["collection"]
+        : undefined,
+  });
 
   const currentStepList = phase === "qualification" ? chatSteps : phase === "enquiry" ? enquirySteps : [];
   const step: ChatStep | undefined = phase === "refinement" ? refineStep : currentStepList[stepIndex];
@@ -170,15 +215,49 @@ export function ChatWidget() {
     return () => window.removeEventListener("officeneed:open-chat", onOpen);
   }, []);
 
-  // Kick off the conversation -- generic by default, or context-aware when
-  // opened via `officeneed:open-chat` with a `{ category }` detail payload.
-  // Only ever runs for a genuinely fresh conversation (`messages.length ===
-  // 0`), so an in-progress or state-preserved session reopened through ANY
-  // launcher -- generic or contextual -- is never altered by this.
+  // Kick off (or re-seed) the conversation -- generic by default, or
+  // context-aware based on the shopper's current page. Runs whenever the
+  // widget opens while `!hasAnswered`, i.e. the shopper hasn't yet given a
+  // real answer in this conversation -- NOT merely "the transcript is
+  // empty" (a context-seed or Start Over already puts a greeting/question
+  // in the transcript before any real answer exists). This is what lets
+  // Start Over, or simply closing and reopening with nothing answered yet,
+  // keep reflecting wherever the shopper actually is right now -- while a
+  // conversation with even one real answer is permanently protected from
+  // ever being re-seeded, no matter which page it's reopened from.
   useEffect(() => {
-    if (!open || messages.length > 0) return;
-    const category = pendingCategoryRef.current;
+    if (!open || hasAnswered) return;
+
+    // Cancel any earlier pending Fragrance handoff -- if this run seeds
+    // something else (or seeds Fragrance again), the old timer must never
+    // be left free to fire later and stomp on it.
+    if (fragranceHandoffTimeoutRef.current !== null) {
+      clearTimeout(fragranceHandoffTimeoutRef.current);
+      fragranceHandoffTimeoutRef.current = null;
+    }
+
+    // Prefer an explicit category carried by the triggering event (set by
+    // the listener below); otherwise fall back to live-evaluating the
+    // CURRENT route via the same taxonomy lookup the floating launcher
+    // itself uses. This fallback is what makes context re-evaluation
+    // immune to staleness: even if no fresh event fired (e.g. Start Over,
+    // which only flips `hasAnswered` back to false), this always reflects
+    // the page the shopper is on at the moment this effect actually runs,
+    // never a value captured earlier.
+    const category = pendingCategoryRef.current ?? getOfficeGptContextCategory(
+      typeof productsCollection === "string" ? productsCollection : undefined,
+    );
     pendingCategoryRef.current = null; // consume once; never leaks into a later fresh session
+
+    // Since this effect can now legitimately fire more than once in the same
+    // (still-unanswered) session -- e.g. Start Over on a Corporate page,
+    // then navigating to an unrelated page and reopening -- every re-seed
+    // starts from the same clean baseline, so nothing an EARLIER re-seed
+    // set (answers.purpose, stepIndex, phase) can leak into a later,
+    // differently-categorized one.
+    setPhase("qualification");
+    setAnswers({});
+    setStepIndex(0);
 
     if (category === "fragrance") {
       // Introduce the context in the SAME conversation, then hand off to the
@@ -186,7 +265,8 @@ export function ChatWidget() {
       // fragrance for?" -- unchanged, not re-implemented here).
       setMessages([{ id: uid(), role: "bot", text: CONTEXT_GREETING.fragrance }]);
       setTyping(true);
-      window.setTimeout(() => {
+      fragranceHandoffTimeoutRef.current = setTimeout(() => {
+        fragranceHandoffTimeoutRef.current = null;
         setTyping(false);
         setPhase("fragrance");
       }, 900);
@@ -213,7 +293,7 @@ export function ChatWidget() {
     setMessages([{ id: uid(), role: "bot", text: GREETING }]);
     pushBot(chatSteps[0]!.question, 500);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [open, hasAnswered, resetSignal]);
 
   /**
    * Resolves a pending recommendation request (set after qualification
@@ -436,7 +516,12 @@ export function ChatWidget() {
     if (!step || typing) return;
     const clean = value.trim();
     if (!clean && !step.optional) return;
-    
+
+    // A real answer has now been given -- permanently protects this
+    // conversation from being re-seeded by page context from here on (see
+    // the kickoff effect above).
+    setHasAnswered(true);
+
     if (step.inputType === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean)) {
       setMessages((m) => [
         ...m,
@@ -587,11 +672,10 @@ export function ChatWidget() {
   }
 
   function restart() {
-    // Defensive: "Start Over" always returns to the generic qualification
-    // flow, never re-applies a Fragrance/Corporate context -- this ref
-    // should already be null by the time a real conversation exists (the
-    // kickoff effect consumes it immediately), but clearing it here removes
-    // any doubt that the user could stay "locked into" a prior context.
+    // Always resolve context live from wherever the shopper is RIGHT NOW,
+    // never from a value captured at an earlier moment -- discard any
+    // leftover event-provided category so the kickoff effect's route-based
+    // fallback is what actually decides what comes next.
     pendingCategoryRef.current = null;
     setMessages([]);
     setAnswers({});
@@ -605,8 +689,13 @@ export function ChatWidget() {
     setExactQuantityError("");
     setUploads([]);
     setAttachments([]);
-    setMessages([{ id: uid(), role: "bot", text: GREETING }]);
-    pushBot(chatSteps[0]!.question, 500);
+    setHasAnswered(false);
+    // Guarantees the kickoff effect above re-runs even if `hasAnswered` was
+    // already false (see that state's comment) -- it then re-seeds the
+    // conversation, generic/Fragrance/Corporate, based on the CURRENT page.
+    // Nothing is seeded directly in this function, so there is only one
+    // place that ever decides how a conversation starts.
+    setResetSignal((n) => n + 1);
   }
 
   /**
@@ -643,15 +732,32 @@ export function ChatWidget() {
     void answer(draft);
   };
 
+  /**
+   * The floating launcher is now the SINGLE OfficeGPT entry point (the
+   * Navbar's duplicate launcher was removed). It resolves the current page's
+   * category the same way the removed Navbar launcher did, then dispatches
+   * the very same `officeneed:open-chat` event this component already
+   * listens for below -- so every trigger on the site (this button, and
+   * Hero's generic "Try the Assistant") funnels through one opening
+   * mechanism, not two separate code paths.
+   */
+  const openLauncher = () => {
+    const category = getOfficeGptContextCategory(
+      typeof productsCollection === "string" ? productsCollection : undefined,
+    );
+    const detail: OfficeGptOpenContext | undefined = category ? { category } : undefined;
+    window.dispatchEvent(new CustomEvent("officeneed:open-chat", { detail }));
+  };
+
   return (
     <>
-      {/* Floating Launcher Button */}
+      {/* Floating Launcher Button -- the single OfficeGPT entry point */}
       <div className={cn(
         "fixed bottom-6 right-6 z-[100] transition-all duration-300",
         open ? "opacity-0 pointer-events-none translate-y-4 scale-95" : "opacity-100 translate-y-0 scale-100"
       )}>
         <button
-          onClick={() => setOpen(true)}
+          onClick={openLauncher}
           className="group flex items-center justify-center size-14 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
           aria-label="Open OfficeGPT"
         >
@@ -701,6 +807,7 @@ export function ChatWidget() {
                 products={catalogue}
                 onClose={() => setOpen(false)}
                 onReset={restart}
+                onAnswer={() => setHasAnswered(true)}
               />
             ) : (
               <>
