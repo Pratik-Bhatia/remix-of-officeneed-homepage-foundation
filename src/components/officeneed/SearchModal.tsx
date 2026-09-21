@@ -1,5 +1,5 @@
 import { lockScroll, unlockScroll } from "@/lib/scroll-lock";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Search, X, ArrowRight } from "lucide-react";
 import { products } from "@/lib/products";
@@ -18,12 +18,22 @@ const quickLinks = [
 
 import { useShopifyCatalogue, shopifyCatalogueQueryOptions } from "@/lib/shopify-overlay";
 import { useQuery } from "@tanstack/react-query";
+import { searchProducts, getSearchSuggestion } from "@/lib/search";
 
 export function SearchModal({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const catalogue = useShopifyCatalogue(products);
+
+  // Relevance scoring (tokenizing + fuzzy fallback) is more work than the
+  // old plain substring filter, so live-typing suggestions are debounced --
+  // pressing Enter still searches immediately via handleKeyDown, unaffected.
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedQuery(query), 150);
+    return () => clearTimeout(id);
+  }, [query]);
 
   // Read the query state from the same cache key used by useShopifyCatalogue
   const { isLoading, isError } = useQuery(shopifyCatalogueQueryOptions);
@@ -36,6 +46,7 @@ export function SearchModal({ open, onOpenChange }: { open: boolean; onOpenChang
     } else {
       unlockScroll();
       setQuery("");
+      setDebouncedQuery("");
     }
     return () => { unlockScroll(); };
   }, [open]);
@@ -56,25 +67,28 @@ export function SearchModal({ open, onOpenChange }: { open: boolean; onOpenChang
   };
 
   const normalizedQuery = query.trim().toLowerCase();
-  
-  // Find matching categories
-  const matchingCategories = normalizedQuery 
-    ? primaryNavCategories.filter(cat => 
-        cat.label.toLowerCase().includes(normalizedQuery) || 
+  const normalizedDebouncedQuery = debouncedQuery.trim().toLowerCase();
+
+  // Find matching categories (cheap, kept on the un-debounced query for
+  // instant feedback -- this is still a plain substring check, not scoring).
+  const matchingCategories = normalizedQuery
+    ? primaryNavCategories.filter(cat =>
+        cat.label.toLowerCase().includes(normalizedQuery) ||
         cat.items.some(i => i.toLowerCase().includes(normalizedQuery))
       ).slice(0, 2)
     : [];
 
-  const searchResults = normalizedQuery
-    ? catalogue
-        .filter(
-          (p) =>
-            p.name.toLowerCase().includes(normalizedQuery) ||
-            p.category.toLowerCase().includes(normalizedQuery) ||
-            (p.subcategories && p.subcategories.some(s => s.toLowerCase().includes(normalizedQuery)))
-        )
-        .slice(0, 5)
-    : [];
+  // Relevance-ranked, typo-tolerant search over the already-loaded catalogue
+  // (see src/lib/search.ts), debounced so it isn't re-run on every keystroke.
+  const searchResults = useMemo(
+    () => (normalizedDebouncedQuery ? searchProducts(catalogue, debouncedQuery).slice(0, 5) : []),
+    [catalogue, normalizedDebouncedQuery, debouncedQuery],
+  );
+
+  const searchSuggestion = useMemo(
+    () => (normalizedDebouncedQuery && searchResults.length === 0 ? getSearchSuggestion(catalogue, debouncedQuery) : null),
+    [catalogue, normalizedDebouncedQuery, debouncedQuery, searchResults.length],
+  );
 
   if (!open) return null;
 
@@ -206,7 +220,17 @@ export function SearchModal({ open, onOpenChange }: { open: boolean; onOpenChang
             ) : (
               <div className="flex h-[150px] flex-col items-center justify-center text-center animate-in fade-in duration-300">
                 <p className="text-base md:text-lg font-medium text-foreground">No results found for "{query}"</p>
-                <p className="mt-1 text-[13px] md:text-sm text-muted-foreground">Try checking for spelling errors or try a different term.</p>
+                {searchSuggestion ? (
+                  <button
+                    type="button"
+                    onClick={() => setQuery(searchSuggestion)}
+                    className="mt-1 text-[13px] md:text-sm font-medium text-primary hover:underline"
+                  >
+                    Did you mean "{searchSuggestion}"?
+                  </button>
+                ) : (
+                  <p className="mt-1 text-[13px] md:text-sm text-muted-foreground">Try checking for spelling errors or try a different term.</p>
+                )}
               </div>
             )}
           </div>

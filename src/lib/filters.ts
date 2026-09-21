@@ -18,43 +18,57 @@ import type { Product } from "./products";
 export type FilterOption = { label: string; value: string };
 export type FilterGroup = { id: string; label: string; options: FilterOption[] };
 
-type PriceBucket = { value: string; label: string; test: (amount: number) => boolean };
+export type PriceBucket = { value: string; label: string; test: (amount: number) => boolean };
+
+function formatINR(n: number): string {
+  return `₹${Math.round(n).toLocaleString("en-IN")}`;
+}
+
+/** Rounds a raw cutoff to a "nice" step sized to its own magnitude (₹297 -> ₹300, not ₹297). */
+function niceRound(n: number): number {
+  if (n < 200) return Math.round(n / 10) * 10;
+  if (n < 1000) return Math.round(n / 50) * 50;
+  if (n < 5000) return Math.round(n / 100) * 100;
+  if (n < 20000) return Math.round(n / 500) * 500;
+  return Math.round(n / 1000) * 1000;
+}
 
 /**
- * Price bucket cutoffs are category-specific because each category's real
- * price distribution is very different (e.g. every priced Fragrance product
- * is >= ₹4,000, so the flat ₹2,000/₹5,000 split used to leave Fragrance's
- * "Under ₹2,000" bucket permanently empty). Cutoffs below were chosen from
- * the live per-category price distribution (~25/50/75th percentiles) so each
- * bucket holds a meaningful share of real products.
+ * Price buckets are computed from the real price distribution of the
+ * products actually in scope (the current category or subcategory) rather
+ * than a fixed, hand-picked table. A fixed per-category table breaks down
+ * the moment a category contains subcategories with very different price
+ * ranges -- e.g. Fragrance Gifting's ₹4,000+ imported perfumes vs. its
+ * Body Deodorant subcategory, which is entirely ₹225-₹349. Cutoffs are the
+ * real 33rd/66th percentile of the visible products' prices, rounded to a
+ * readable step, so buckets always reflect what's actually on screen.
  */
-const PRICE_BUCKETS_BY_CATEGORY: Record<MainCategory, PriceBucket[]> = {
-  "Officeneed Exclusive": [
-    { value: "under_100", label: "Under ₹100", test: (a) => a < 100 },
-    { value: "100_200", label: "₹100 – ₹200", test: (a) => a >= 100 && a <= 200 },
-    { value: "above_200", label: "Above ₹200", test: (a) => a > 200 },
-  ],
-  "Corporate Gifting": [
-    { value: "under_500", label: "Under ₹500", test: (a) => a < 500 },
-    { value: "500_2000", label: "₹500 – ₹2,000", test: (a) => a >= 500 && a <= 2000 },
-    { value: "above_2000", label: "Above ₹2,000", test: (a) => a > 2000 },
-  ],
-  "Fragrance Gifting": [
-    { value: "under_6000", label: "Under ₹6,000", test: (a) => a < 6000 },
-    { value: "6000_10000", label: "₹6,000 – ₹10,000", test: (a) => a >= 6000 && a <= 10000 },
-    { value: "above_10000", label: "Above ₹10,000", test: (a) => a > 10000 },
-  ],
-  "Office Stationery": [
-    { value: "under_100", label: "Under ₹100", test: (a) => a < 100 },
-    { value: "100_300", label: "₹100 – ₹300", test: (a) => a >= 100 && a <= 300 },
-    { value: "above_300", label: "Above ₹300", test: (a) => a > 300 },
-  ],
-  "Computer Peripherals": [
-    { value: "under_700", label: "Under ₹700", test: (a) => a < 700 },
-    { value: "700_1500", label: "₹700 – ₹1,500", test: (a) => a >= 700 && a <= 1500 },
-    { value: "above_1500", label: "Above ₹1,500", test: (a) => a > 1500 },
-  ],
-};
+export function computePriceBuckets(products: Product[]): PriceBucket[] {
+  const amounts = products
+    .map((p) => p.priceAmount)
+    .filter((a): a is number => typeof a === "number" && a > 0)
+    .sort((a, b) => a - b);
+  if (amounts.length === 0) return [];
+
+  const min = amounts[0]!;
+  const max = amounts[amounts.length - 1]!;
+  if (min === max) return []; // every visible product costs the same -- a price filter would be meaningless
+
+  const at = (p: number) => amounts[Math.min(amounts.length - 1, Math.floor(amounts.length * p))]!;
+  const cut1 = niceRound(at(1 / 3));
+  let cut2 = niceRound(at(2 / 3));
+  if (cut2 <= cut1) cut2 = niceRound(cut1 + Math.max(1, max - cut1));
+  if (cut2 <= cut1) cut2 = cut1 + 1;
+
+  const buckets: PriceBucket[] = [
+    { value: `under_${cut1}`, label: `Under ${formatINR(cut1)}`, test: (a) => a < cut1 },
+    { value: `${cut1}_${cut2}`, label: `${formatINR(cut1)} – ${formatINR(cut2)}`, test: (a) => a >= cut1 && a <= cut2 },
+    { value: `above_${cut2}`, label: `Above ${formatINR(cut2)}`, test: (a) => a > cut2 },
+  ];
+
+  // Drop any bucket none of the currently visible products actually fall into.
+  return buckets.filter((b) => amounts.some((a) => b.test(a)));
+}
 
 /** Which filter kinds each category is allowed to show. The ONLY place this is decided. */
 export const FILTER_KINDS_BY_CATEGORY: Record<MainCategory, string[]> = {
@@ -65,7 +79,12 @@ export const FILTER_KINDS_BY_CATEGORY: Record<MainCategory, string[]> = {
   // already covers via real collection membership. No MOQ field exists in
   // the catalogue (confirmed), so Minimum Order is intentionally omitted.
   "Corporate Gifting": ["price"],
-  "Fragrance Gifting": ["price", "scentFamily", "volume", "type"],
+  // "gender" only produces a group for subcategories whose products actually
+  // carry a "Men Deodorant"/"Women Deodorant" tag (currently Body Deodorant
+  // only -- European/Middle Eastern Perfume use different, non-gendered tags),
+  // so it's harmless to offer at the category level: buildFilterGroups drops
+  // any group with no qualifying options.
+  "Fragrance Gifting": ["price", "gender", "scentFamily", "volume", "type"],
   // Same "tags == subcategory" situation as Corporate Gifting — no
   // orthogonal Type signal exists beyond the subcategory itself.
   "Office Stationery": ["price"],
@@ -74,11 +93,18 @@ export const FILTER_KINDS_BY_CATEGORY: Record<MainCategory, string[]> = {
 
 const FILTER_KIND_LABELS: Record<string, string> = {
   price: "Price Range",
+  gender: "Gender",
   scentFamily: "Scent Family",
   volume: "Volume",
   type: "Type",
   connectivity: "Connectivity",
 };
+
+/** Verified live: Body Deodorant products carry a literal "Men Deodorant" / "Women Deodorant" tag. */
+const GENDER_TAGS: Array<{ value: string; label: string; tag: string }> = [
+  { value: "men", label: "Men", tag: "men deodorant" },
+  { value: "women", label: "Women", tag: "women deodorant" },
+];
 
 /**
  * Kept in sync with the notes vocabulary `fragrance-engine.ts` already uses
@@ -122,8 +148,8 @@ const CONNECTIVITY_TAGS = ["bluetooth", "wireless"];
 const MIN_OPTION_PRODUCTS = 2;
 
 function minCountFor(kind: string, mainCategory: MainCategory): number {
-  if (kind === "price") return 1;
   if (kind === "type" && mainCategory === "Fragrance Gifting") return 1;
+  if (kind === "gender") return 1;
   return MIN_OPTION_PRODUCTS;
 }
 
@@ -131,21 +157,20 @@ function minCountFor(kind: string, mainCategory: MainCategory): number {
  * Computes this product's raw values for every filter kind its category
  * supports. Pure and per-product — safe to run once per product when the
  * catalogue loads (see shopify-overlay.ts), no extra Shopify requests.
+ * Price is handled separately (see computePriceBuckets) since it depends on
+ * the price distribution of the current view, not just the single product.
  */
 export function deriveFilterAttributes(
   node: ShopifyProductNode,
   mainCategory: MainCategory | undefined,
-  amount: number,
 ): Record<string, string[]> {
   const attrs: Record<string, string[]> = {};
   if (!mainCategory) return attrs;
 
-  // Price: POA/zero-price products get no bucket at all (never "Under ₹X").
-  const buckets = PRICE_BUCKETS_BY_CATEGORY[mainCategory];
-  const bucket = amount > 0 ? buckets.find((b) => b.test(amount)) : undefined;
-  attrs["price"] = bucket ? [bucket.value] : [];
-
   if (mainCategory === "Fragrance Gifting") {
+    const tags = (node.tags ?? []).map((t) => t.toLowerCase());
+    attrs["gender"] = GENDER_TAGS.filter((g) => tags.includes(g.tag)).map((g) => g.value);
+
     const text = `${node.description ?? ""} ${(node.tags ?? []).join(" ")}`.toLowerCase();
     attrs["scentFamily"] = FRAGRANCE_NOTES.filter((n) => text.includes(n.toLowerCase()));
 
@@ -166,8 +191,8 @@ export function deriveFilterAttributes(
 }
 
 function labelForValue(mainCategory: MainCategory, kind: string, value: string): string {
-  if (kind === "price") {
-    return PRICE_BUCKETS_BY_CATEGORY[mainCategory].find((b) => b.value === value)?.label ?? value;
+  if (kind === "gender") {
+    return GENDER_TAGS.find((g) => g.value === value)?.label ?? value;
   }
   if (kind === "type" && mainCategory === "Fragrance Gifting") {
     return FRAGRANCE_TYPE_PHRASES.find((t) => t.value === value)?.label ?? value;
@@ -198,6 +223,15 @@ export function buildFilterGroups(
   const groups: FilterGroup[] = [];
 
   for (const kind of kinds) {
+    if (kind === "price") {
+      const buckets = computePriceBuckets(products);
+      const options: FilterOption[] = buckets
+        .filter((b) => products.some((p) => typeof p.priceAmount === "number" && b.test(p.priceAmount)))
+        .map((b) => ({ value: b.value, label: b.label }));
+      if (options.length > 0) groups.push({ id: "price", label: FILTER_KIND_LABELS["price"]!, options });
+      continue;
+    }
+
     const counts = new Map<string, number>();
     for (const p of products) {
       for (const v of p.filterAttributes?.[kind] ?? []) {

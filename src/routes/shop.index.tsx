@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { Navbar } from "@/components/officeneed/Navbar";
 import { Footer } from "@/components/officeneed/Footer";
-import { fetchProducts, formatMoney } from "@/lib/shopify";
+import { fetchAllProducts, formatMoney } from "@/lib/shopify";
 
 export const Route = createFileRoute("/shop/")({
   component: ShopPage,
@@ -29,7 +29,7 @@ export const Route = createFileRoute("/shop/")({
 function ShopPage() {
   const { data: products, isLoading, error } = useQuery({
     queryKey: ["shopify-products"],
-    queryFn: () => fetchProducts(250),
+    queryFn: () => fetchAllProducts(),
   });
 
   return (

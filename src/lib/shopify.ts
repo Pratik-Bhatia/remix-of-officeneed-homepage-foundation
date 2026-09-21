@@ -7,6 +7,7 @@
  */
 import { toast } from "sonner";
 import { proxyStorefrontRequest } from "@/lib/shopify.functions";
+import { REQUIRED_METAFIELD_IDENTIFIERS } from "@/lib/product-details-schema";
 
 export const SHOPIFY_API_VERSION = "2025-07";
 export const SHOPIFY_STORE_PERMANENT_DOMAIN = "har1k4-di.myshopify.com";
@@ -47,7 +48,7 @@ export interface ShopifyProductNode {
   variants: { edges: Array<{ node: ShopifyVariantNode }> };
   options: Array<{ name: string; values: string[] }>;
   collections?: { edges: Array<{ node: { handle: string } }> };
-  metafields?: Array<{ key: string; value: string; type: string } | null>;
+  metafields?: Array<{ namespace: string; key: string; value: string } | null>;
 }
 
 export interface ShopifyProduct {
@@ -87,16 +88,31 @@ const PRODUCT_FIELDS = `
 `;
 
 export const STOREFRONT_QUERY = `
-  query GetProducts($first: Int!, $query: String) {
-    products(first: $first, query: $query) {
-      edges { node { ${PRODUCT_FIELDS} } }
+  query GetProducts($first: Int!, $query: String, $after: String) {
+    products(first: $first, query: $query, after: $after) {
+      edges { cursor node { ${PRODUCT_FIELDS} } }
+      pageInfo { hasNextPage }
     }
   }
 `;
 
+// Only the single-product PDP query fetches metafields -- the bulk catalogue
+// query (STOREFRONT_QUERY, used for the /products grid) deliberately doesn't,
+// since Product Details is only ever rendered on the PDP.
+const METAFIELD_IDENTIFIERS_GQL = REQUIRED_METAFIELD_IDENTIFIERS
+  .map((m) => `{namespace: "${m.namespace}", key: "${m.key}"}`)
+  .join(", ");
+
 export const PRODUCT_BY_HANDLE_QUERY = `
   query GetProduct($handle: String!) {
-    product(handle: $handle) { ${PRODUCT_FIELDS} }
+    product(handle: $handle) {
+      ${PRODUCT_FIELDS}
+      metafields(identifiers: [${METAFIELD_IDENTIFIERS_GQL}]) {
+        namespace
+        key
+        value
+      }
+    }
   }
 `;
 
@@ -130,8 +146,37 @@ export async function storefrontApiRequest(query: string, variables: Record<stri
 
 
 export async function fetchProducts(first = 100, query?: string): Promise<ShopifyProduct[]> {
-  const data = await storefrontApiRequest(STOREFRONT_QUERY, { first, query: query ?? null });
+  const data = await storefrontApiRequest(STOREFRONT_QUERY, { first, query: query ?? null, after: null });
   return data?.data?.products?.edges ?? [];
+}
+
+/**
+ * Fetches the ENTIRE catalogue via cursor pagination.
+ *
+ * The Storefront API caps `first` at 250 per request regardless of what's
+ * passed -- a single fetchProducts(250) call silently drops every product
+ * past the 250th once the store grows beyond that (confirmed live: this
+ * store has 253 products, so 3 were invisible site-wide -- not specific to
+ * any one category, just whichever products happened to fall after #250 in
+ * Shopify's default ordering). This walks pageInfo.hasNextPage/cursor until
+ * every product has been fetched, so the site's catalogue always matches
+ * Shopify's real count regardless of how large the store grows.
+ */
+export async function fetchAllProducts(query?: string): Promise<ShopifyProduct[]> {
+  const all: ShopifyProduct[] = [];
+  let after: string | null = null;
+  // Sanity cap (40 * 250 = 10,000 products) so a pagination/API bug can
+  // never spin forever rather than reflecting an unrealistic catalogue size.
+  for (let page = 0; page < 40; page++) {
+    const data = await storefrontApiRequest(STOREFRONT_QUERY, { first: 250, query: query ?? null, after });
+    const products = data?.data?.products;
+    const edges: Array<{ cursor: string; node: ShopifyProductNode }> = products?.edges ?? [];
+    if (edges.length === 0) break;
+    all.push(...edges.map((e) => ({ node: e.node })));
+    if (!products?.pageInfo?.hasNextPage) break;
+    after = edges[edges.length - 1]?.cursor ?? null;
+  }
+  return all;
 }
 
 export async function fetchProductByHandle(handle: string): Promise<ShopifyProductNode | null> {

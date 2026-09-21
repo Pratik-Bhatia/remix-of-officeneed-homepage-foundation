@@ -8,11 +8,14 @@
  * present in Shopify falls back to the existing static data.
  */
 import { useQuery } from "@tanstack/react-query";
-import { fetchProducts, fetchCollections, formatMoney, type ShopifyProductNode, type ShopifyCollectionNode } from "@/lib/shopify";
+import { fetchProducts, fetchAllProducts, fetchCollections, formatMoney, type ShopifyProductNode, type ShopifyCollectionNode } from "@/lib/shopify";
 import type { Product } from "@/lib/products";
 import type { BestsellerProduct } from "@/lib/bestsellers";
 import { MAIN_CATEGORIES, productBelongsToCategory, type MainCategory } from "@/lib/taxonomy";
 import { deriveFilterAttributes } from "@/lib/filters";
+import { buildProductSpecifications, hasStructuredSchema } from "@/lib/product-details-schema";
+import { getDevFallbackMetafieldValue } from "@/lib/product-details-dev-fallback";
+import { deriveKeyFeatures } from "@/lib/key-features";
 
 export type ShopifyIndex = Map<string, ShopifyProductNode>;
 
@@ -76,6 +79,7 @@ export function mergeProduct(product: Product, node?: ShopifyProductNode): Produ
     ...node.descriptionHtml ? { descriptionHtml: node.descriptionHtml } : {},
     ...(node.vendor ? { vendor: node.vendor } : {}),
     ...(node.tags?.length ? { tags: node.tags } : {}),
+    ...(node.productType ? { productType: node.productType } : {}),
     ...(Number.isFinite(amount) && amount > 0
       ? { priceAmount: amount, currencyCode: node.priceRange.minVariantPrice.currencyCode }
       : {}),
@@ -165,7 +169,14 @@ function classify(node: ShopifyProductNode): { category: Product["category"]; su
 
 /** Trim to a length without cutting mid-word. */
 
-function extractStructuredData(html: string) {
+/**
+ * @param suppressProductDetails When true, a "Specifications"/"Product
+ *   Details" header found in the description is dropped instead of becoming
+ *   a customSection -- used for categories that now have a real, structured
+ *   Product Details schema (see product-details-schema.ts), so the PDP never
+ *   shows two competing "PRODUCT DETAILS" accordions for the same product.
+ */
+function extractStructuredData(html: string, suppressProductDetails = false) {
   if (!html) return { descriptionHtml: html };
 
   const sections: { title: string; contentHtml: string }[] = [];
@@ -214,9 +225,15 @@ function extractStructuredData(html: string) {
     } else if (title.includes("FEATURE")) {
       result.customSections = result.customSections || [];
       result.customSections.push({ title: "KEY FEATURES", contentHtml: content });
+      // Stashed raw so shopifyNodeToProduct() can de-duplicate against the
+      // product's resolved Product Details once those are known (this
+      // function runs before that) -- see deriveKeyFeatures() usage below.
+      result.rawKeyFeaturesHtml = content;
     } else if (title.includes("SPECIFICATION") || title.includes("DETAIL")) {
-      result.customSections = result.customSections || [];
-      result.customSections.push({ title: "PRODUCT DETAILS", contentHtml: content });
+      if (!suppressProductDetails) {
+        result.customSections = result.customSections || [];
+        result.customSections.push({ title: "PRODUCT DETAILS", contentHtml: content });
+      }
     } else if (title.includes("FRAGRANCE NOTE")) {
       result.customSections = result.customSections || [];
       result.customSections.push({ title: "FRAGRANCE NOTES", contentHtml: content });
@@ -254,35 +271,74 @@ const PLACEHOLDER_IMAGE =
 
 /** Convert a live Shopify product into the site's static `Product` shape. */
 
+/**
+ * Reads a metafield by (namespace, key) from the live Shopify data queried
+ * for this node, falling back to the temporary Phase 1 dev fallback (see
+ * product-details-dev-fallback.ts) only when Shopify has no value yet.
+ */
+function metafieldLookup(node: ShopifyProductNode): (namespace: string, key: string) => string | undefined {
+  const values = new Map<string, string>();
+  for (const mf of node.metafields ?? []) {
+    if (mf?.value) values.set(`${mf.namespace}.${mf.key}`, mf.value);
+  }
+  return (namespace, key) =>
+    values.get(`${namespace}.${key}`) ?? getDevFallbackMetafieldValue(node.handle, namespace, key);
+}
+
 export function shopifyNodeToProduct(node: ShopifyProductNode): Product {
   const { category, sub } = classify(node);
   const images = nodeImages(node);
-  
+  const collectionHandles = node.collections?.edges.map(e => e.node.handle) ?? [];
+  const mainCategory = resolveMainCategory(collectionHandles);
+
   const description = (node.description ?? "").trim();
   const summary = description
     ? truncateWords(description.replace(/\s+/g, " "), 150)
     : `${node.title}  available through OfficeNeed.`;
-  
-  const extracted = extractStructuredData(node.descriptionHtml || "");
+
+  const hasSchema = hasStructuredSchema(mainCategory);
+  const extracted = extractStructuredData(node.descriptionHtml || "", hasSchema);
+  const specifications = buildProductSpecifications(mainCategory, metafieldLookup(node));
+
+  // Once Product Details is a real, structured schema for this category,
+  // Key Features must stop repeating those same specifications under a
+  // different label -- de-duplicate the raw "Key Features" bullets against
+  // the resolved specifications, keeping only genuine benefit content, and
+  // drop the old raw customSection so it isn't rendered twice.
+  const { rawKeyFeaturesHtml, ...extractedRest } = extracted;
+  let features: string[] | undefined;
+  let customSections = extractedRest.customSections;
+  if (hasSchema && rawKeyFeaturesHtml) {
+    features = deriveKeyFeatures(rawKeyFeaturesHtml, specifications);
+    customSections = customSections?.filter((s: { title: string }) => s.title !== "KEY FEATURES");
+    if (customSections && customSections.length === 0) customSections = undefined;
+  }
 
   const amount = parseFloat(node.priceRange?.minVariantPrice?.amount ?? "0");
   const variants = node.variants?.edges?.map((e) => e.node) ?? [];
-  const collectionHandles = node.collections?.edges.map(e => e.node.handle) ?? [];
 
   return {
     collectionHandles,
     slug: node.handle,
     name: node.title,
-    ...extracted,
+    ...extractedRest,
+    // Explicitly overrides extractedRest's raw customSections (which may
+    // still include the un-filtered "KEY FEATURES" entry) -- a conditional
+    // spread here would NOT override an already-set key with an empty
+    // object, so this must always be assigned, even when undefined.
+    customSections,
+    ...(features?.length ? { features } : {}),
     ...(node.tags?.length ? { tags: node.tags } : {}),
     ...(node.vendor ? { vendor: node.vendor } : {}),
+    ...(node.productType ? { productType: node.productType } : {}),
     ...(amount > 0
       ? { priceAmount: amount, currencyCode: node.priceRange.minVariantPrice.currencyCode }
       : {}),
     ...(variants[0]?.sku ? { sku: variants[0].sku } : {}),
     category,
     subcategories: [sub],
-    filterAttributes: deriveFilterAttributes(node, resolveMainCategory(collectionHandles), amount),
+    filterAttributes: deriveFilterAttributes(node, mainCategory),
+    ...(specifications.length ? { specifications } : {}),
     summary,
     description: description || summary,
     ...(amount > 0
@@ -304,7 +360,7 @@ export function shopifyNodeToProduct(node: ShopifyProductNode): Product {
 export const shopifyCatalogueQueryOptions = {
   queryKey: ["shopify", "catalog"] as const,
   queryFn: async () => {
-    const edges = await fetchProducts(250);
+    const edges = await fetchAllProducts();
     return edges.map((e) => e.node);
   },
   staleTime: 5 * 60 * 1000,

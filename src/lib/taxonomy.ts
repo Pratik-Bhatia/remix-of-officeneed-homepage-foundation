@@ -48,7 +48,8 @@ export const TAXONOMY: Record<MainCategory, CategoryNode> = {
     subcategories: {
       "European Perfume": { title: "European Perfume", id: "gid://shopify/Collection/315489419357", handle: "european-perfume" },
       "Middle Eastern Perfume": { title: "Middle Eastern Perfume", id: "gid://shopify/Collection/315489550429", handle: "eastern-perfume" },
-      "Perfume Gift Sets": { title: "Perfume Gift Sets", id: null, handle: "perfume-gift-set" }
+      "Perfume Gift Sets": { title: "Perfume Gift Sets", id: null, handle: "perfume-gift-set" },
+      "Body Deodorant": { title: "Body Deodorant", id: "gid://shopify/Collection/315905540189", handle: "body-deodorant" }
     }
   },
   "Office Stationery": {

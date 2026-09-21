@@ -74,6 +74,8 @@ export type Product = {
   currencyCode?: string;
   vendor?: string;
   tags?: string[];
+  /** Shopify's product_type field -- already fetched by the Storefront query, exposed for search/filtering. */
+  productType?: string;
 };
 
 /** Category tabs for the listing page. Mirrors the site catalogue naming. */

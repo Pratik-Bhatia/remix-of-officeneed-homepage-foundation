@@ -1,9 +1,10 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { Search, SlidersHorizontal, PackageSearch } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { buildFilterGroups, type FilterGroup } from "@/lib/filters";
+import { buildFilterGroups, computePriceBuckets, type FilterGroup } from "@/lib/filters";
+import { searchProducts, getSearchSuggestion } from "@/lib/search";
 import { Navbar } from "@/components/officeneed/Navbar";
 import { Footer } from "@/components/officeneed/Footer";
 import { ProductCard } from "@/components/officeneed/ProductCard";
@@ -112,7 +113,17 @@ function ProductsPage() {
     });
 
   const activeFilters = search.f ?? {};
-  
+  const hasActiveFilters = Object.keys(activeFilters).length > 0;
+
+  const clearAllFilters = () =>
+    navigate({
+      search: (prev: ProductsSearch) => {
+        const { f: _omit, ...rest } = prev;
+        return rest;
+      },
+      replace: true,
+    });
+
   const toggleFilter = (groupId: string, value: string) => {
     navigate({
       search: (prev: ProductsSearch) => {
@@ -138,16 +149,30 @@ function ProductsPage() {
 
   const taxonomyMatch = collection ? getCategoryByHandle(collection) : null;
   const isAllProducts = !collection && !missingMapping;
-  const showSubcategoriesNav = isAllProducts || (taxonomyMatch && !taxonomyMatch.parentTitle);
 
   // The MainCategory a subcategory page belongs to (e.g. "Luxury Pens" ->
-  // "Corporate Gifting"), or the category itself on a top-level page.
-  // Filter kinds are always resolved against this, never the subcategory
-  // title, so e.g. the "Printer" subcategory correctly gets Computer
-  // Peripherals' filters instead of silently showing none.
+  // "Corporate Gifting"), or the category itself on a top-level page. This
+  // is the single reusable resolution used for BOTH the page heading and
+  // the subcategory navigation below, so a subcategory page (e.g. Printer)
+  // and its parent's own page (Computer Peripherals) render the identical
+  // nav from the identical source -- no per-category branching anywhere.
+  // Filter kinds are also always resolved against this, never the
+  // subcategory title, so e.g. the "Printer" subcategory correctly gets
+  // Computer Peripherals' filters instead of silently showing none.
   const mainCategoryTitle = taxonomyMatch
     ? ((taxonomyMatch.parentTitle ?? taxonomyMatch.node.title) as MainCategory)
     : undefined;
+
+  // Subcategory nav now stays visible on subcategory pages too (previously
+  // it only rendered on "All Products" or a top-level category page, so
+  // entering a subcategory like Printer hid it entirely). Whenever a
+  // MainCategory is resolved -- whether the current page IS that category
+  // or is one of its subcategories -- its full subcategory list is shown.
+  const showSubcategoriesNav = isAllProducts || !!mainCategoryTitle;
+  // Only meaningful once the user has actually drilled into a specific
+  // subcategory; on the parent category's own page this is undefined, so
+  // no subcategory icon is incorrectly highlighted there.
+  const activeSubcategoryHandle = taxonomyMatch?.parentTitle ? collection : undefined;
 
   const catalogue = useShopifyCatalogue(products);
   const { collections, isLoading: collectionsLoading } = useShopifyCollections();
@@ -189,6 +214,11 @@ function ProductsPage() {
     [mainCategoryTitle, categoryScoped],
   );
 
+  // Price buckets are derived from the real price spread of categoryScoped
+  // (see computePriceBuckets), so filtering by "price" must test against
+  // these same bucket definitions rather than a precomputed attribute.
+  const priceBuckets = useMemo(() => computePriceBuckets(categoryScoped), [categoryScoped]);
+
   // Defense-in-depth against stale filters surviving a category change via
   // back/forward navigation, a refresh, or a shared link: only a value that
   // actually appears as a real option for the current category/subcategory
@@ -207,23 +237,50 @@ function ProductsPage() {
     return result;
   }, [activeFilters, filterGroups]);
 
-  const visible = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const filtered = categoryScoped.filter((p) => {
-      const matches =
-        p.summary.toLowerCase().includes(q) ||
-        p.name.toLowerCase().includes(q);
+  // Relevance-ranked when there's a query (see src/lib/search.ts); untouched
+  // order otherwise. sortProducts' "Featured" branch is a stable sort with no
+  // real featuredRank on most products, so it preserves this relevance order
+  // by default -- picking an explicit sort (e.g. Price) still overrides it,
+  // same as any other e-commerce search-within-sort UX.
+  const searched = useMemo(
+    () => (query.trim() ? searchProducts(categoryScoped, query) : categoryScoped),
+    [categoryScoped, query],
+  );
 
+  // Scoped to categoryScoped (the current category/subcategory), not the
+  // whole catalogue -- a suggestion should never point outside where the
+  // user is currently browsing.
+  const searchSuggestion = useMemo(
+    () => (query.trim() ? getSearchSuggestion(categoryScoped, query) : null),
+    [categoryScoped, query],
+  );
+
+  const visible = useMemo(() => {
+    const filtered = searched.filter((p) => {
       const passesFilters = Object.entries(validActiveFilters).every(([groupId, requiredValues]) => {
         if (!requiredValues.length) return true;
+        if (groupId === "price") {
+          if (typeof p.priceAmount !== "number") return false;
+          return requiredValues.some((v) => priceBuckets.find((b) => b.value === v)?.test(p.priceAmount!));
+        }
         const productValues = p.filterAttributes?.[groupId] || [];
         return requiredValues.some((v) => productValues.includes(v));
       });
 
-      return matches && passesFilters;
+      return passesFilters;
     });
     return sortProducts(filtered, sort);
-  }, [categoryScoped, query, sort, validActiveFilters]);
+  }, [searched, sort, validActiveFilters, priceBuckets]);
+
+  // On mobile the subcategory nav scrolls horizontally; when a subcategory
+  // page loads (including via browser Back/Forward), bring its active icon
+  // into view instead of leaving the user to discover it's off-screen.
+  const activeSubcategoryRef = useRef<HTMLLIElement>(null);
+  useEffect(() => {
+    if (activeSubcategoryHandle) {
+      activeSubcategoryRef.current?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+    }
+  }, [activeSubcategoryHandle]);
 
   const FilterList = () => {
     if (filterGroups.length === 0) return null;
@@ -256,13 +313,14 @@ function ProductsPage() {
     <div className="min-h-screen bg-background">
       <Navbar />
       <main className="w-full overflow-clip">
-        <div className="mx-auto w-full max-w-[1600px] px-5 py-10 sm:px-8 sm:py-12 lg:px-12 lg:py-16">
-
-
-
+        {/* White navigation area: main category heading + subcategory icon
+            row. Stays on the page's default white background -- the visual
+            handoff to the catalogue's #F5F5F7 body happens right at the
+            subcategory nav's own divider below, not before it. */}
+        <div className="mx-auto w-full max-w-[1600px] px-5 pt-10 sm:px-8 sm:pt-12 lg:px-12 lg:pt-16">
           <header className="max-w-2xl mb-10">
-            <h1 className="text-4xl sm:text-5xl font-display font-medium tracking-tight text-foreground">
-              {isAllProducts ? "All Products" : missingMapping ? missingMapping : taxonomyMatch?.node.title}
+            <h1 className="text-4xl sm:text-5xl font-display font-medium leading-tight tracking-tight text-foreground">
+              {isAllProducts ? "All Products" : missingMapping ? missingMapping : (mainCategoryTitle ?? taxonomyMatch?.node.title)}
             </h1>
             {isAllProducts && (
               <p className="mt-4 text-sm sm:text-base leading-relaxed text-muted-foreground">
@@ -272,8 +330,38 @@ function ProductsPage() {
           </header>
 
           {showSubcategoriesNav && (
-            <nav aria-label="Lineup" className="mt-8 mb-16 sm:mt-10 border-b border-border pb-8">
-              <ul className="flex items-start justify-start gap-6 sm:gap-10 overflow-x-auto pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden snap-x">
+            <nav aria-label="Lineup" className="mt-4 sm:mt-6 border-b border-border pb-4 sm:pb-8">
+              {/*
+                overflow-x-auto below is required for the horizontal scroll
+                on mobile, but per the CSS overflow spec a non-"visible"
+                overflow-x forces overflow-y to become "auto" too -- there is
+                no way to scroll one axis while leaving the other truly
+                unclipped. That turned this <ul> into a vertical clipping
+                box: it already had pb-4 for bottom breathing room but no
+                top padding, so the active item's ring (ring-2
+                ring-offset-2, ~4px outward) had nowhere to render above the
+                icon and got clipped at the top edge. pt-4 mirrors the
+                existing pb-4 so the ring clears on every side; the nav's
+                top margin above is reduced by the same amount (mt-8 ->
+                mt-4, sm:mt-10 -> sm:mt-6) so the icon row's on-screen
+                position is unchanged -- only the invisible padding buffer
+                around it grew.
+
+                The px / negative-mx pair below breaks the <ul> out to full
+                viewport width and re-applies the SAME padding the parent
+                container already
+                has (px-5/sm:px-8/lg:px-12) directly on the scrolling element
+                itself. Without this, that padding only ever affected the
+                <ul>'s resting position -- the horizontally-scrolled CONTENT
+                had no trailing gutter of its own, so the last item landed
+                flush against the viewport margin with zero breathing room
+                once scrolled into view (looking cut off). Since -mx+px
+                cancel out, the resting position is pixel-identical to
+                before at every breakpoint; this only matters once the row
+                actually needs to scroll, which desktop's max-w-[1600px]
+                layout never does for a normal-length subcategory list.
+              */}
+              <ul className="flex items-start justify-start gap-6 sm:gap-10 overflow-x-auto pt-4 pb-4 px-5 -mx-5 sm:px-8 sm:-mx-8 lg:px-12 lg:-mx-12 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden snap-x">
                 {isAllProducts ? (
                   MAIN_CATEGORIES.map((c) => {
                     const node = TAXONOMY[c as MainCategory];
@@ -301,17 +389,28 @@ function ProductsPage() {
                       </li>
                     )
                   })
-                ) : taxonomyMatch && !taxonomyMatch.parentTitle ? (
-                  Object.values(TAXONOMY[taxonomyMatch.node.title as MainCategory].subcategories).map((sub: any) => {
+                ) : mainCategoryTitle ? (
+                  Object.values(TAXONOMY[mainCategoryTitle].subcategories).map((sub: any) => {
                     if (!sub.handle) return null;
+                    const isActive = sub.handle === activeSubcategoryHandle;
                     return (
-                      <li key={sub.title} className="snap-center shrink-0">
+                      <li
+                        key={sub.title}
+                        ref={isActive ? activeSubcategoryRef : undefined}
+                        className="snap-center shrink-0"
+                      >
                         <button
                           type="button"
                           onClick={() => setCollection(sub.handle)}
-                          className="group flex flex-col items-center gap-3 w-20 sm:w-24 focus:outline-none"
+                          aria-current={isActive ? "page" : undefined}
+                          className="group flex flex-col items-center gap-2 w-20 sm:w-24 focus:outline-none"
                         >
-                          <div className="size-14 sm:size-16 flex items-center justify-center transition-transform duration-300 group-hover:-translate-y-1">
+                          <div
+                            className={cn(
+                              "size-14 sm:size-16 flex items-center justify-center rounded-xl transition-transform duration-300 group-hover:-translate-y-1",
+                              isActive && "ring-2 ring-primary ring-offset-2 ring-offset-background",
+                            )}
+                          >
                             {collectionsLoading ? (
                               <div className="w-full h-full rounded-xl bg-muted animate-pulse" aria-hidden />
                             ) : getCollectionImage(sub.handle || "") ? (
@@ -320,23 +419,51 @@ function ProductsPage() {
                               <div className="w-full h-full rounded-xl bg-muted/50" aria-hidden />
                             )}
                           </div>
-                          <span className="text-[11px] sm:text-xs font-medium text-foreground/80 group-hover:text-foreground text-center leading-tight">
+                          <span
+                            className={cn(
+                              "text-[11px] sm:text-xs text-center leading-tight",
+                              isActive ? "font-semibold text-foreground" : "font-medium text-foreground/80 group-hover:text-foreground",
+                            )}
+                          >
                             {sub.title}
                           </span>
+                          <span
+                            aria-hidden
+                            className={cn("h-0.5 w-6 rounded-full transition-colors", isActive ? "bg-primary" : "bg-transparent")}
+                          />
                         </button>
                       </li>
                     );
                   })
                 ) : null}
+                {/* Trailing spacer, not more container padding: Chromium and
+                    WebKit both drop an overflow container's OWN padding at
+                    the scrolled-to-end edge (Firefox honors it, which is why
+                    the px-5/-mx-5 pair above alone wasn't reliably enough on
+                    the mobile browsers that matter here) -- padding on the
+                    scroll box itself isn't part of its scrollable content.
+                    A real empty flex child IS part of that content, so the
+                    browser scrolls to reveal it every time, guaranteeing the
+                    last real item (e.g. "Printer") always has genuine
+                    breathing room past its right edge. Zero height (no
+                    inner content), so the row's own height is unaffected. */}
+                <li aria-hidden className="w-px shrink-0 sm:w-2" />
               </ul>
             </nav>
           )}
+        </div>
 
-          <div className="mt-6 flex flex-col gap-3 sm:mt-8 sm:flex-row sm:items-center sm:justify-between">
+        {/* Catalogue body: search/sort, filters and the product grid all
+            live on #F5F5F7, full-bleed edge to edge, with the product cards
+            themselves floating on top in white -- see ProductCard.tsx. */}
+        <div className="bg-[#F5F5F7]">
+        <div className="mx-auto w-full max-w-[1600px] px-5 py-10 sm:px-8 sm:py-12 lg:px-12 lg:py-16">
+
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-2">
               <div className="relative min-w-0 flex-1 sm:w-72 sm:flex-none">
                 <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-                <Input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search products" className="pl-9" />
+                <Input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search products" className="pl-9 bg-white" />
               </div>
             </div>
 
@@ -345,8 +472,39 @@ function ProductsPage() {
                 {visible.length} {visible.length === 1 ? "product" : "products"}
               </p>
               <div className="flex items-center gap-2">
+                {filterGroups.length > 0 && (
+                  <Sheet>
+                    <SheetTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="h-9 gap-2 bg-white text-sm font-medium"
+                      >
+                        <SlidersHorizontal className="size-4" aria-hidden />
+                        <span className="hidden sm:inline">Filter</span>
+                      </Button>
+                    </SheetTrigger>
+                    <SheetContent side="right" className="w-full sm:max-w-sm overflow-y-auto">
+                      <SheetHeader className="flex-row items-center justify-between space-y-0">
+                        <SheetTitle>Filter</SheetTitle>
+                      </SheetHeader>
+                      <div className="mt-6">
+                        {hasActiveFilters && (
+                          <button
+                            type="button"
+                            onClick={clearAllFilters}
+                            className="mb-6 text-sm font-medium text-primary hover:underline"
+                          >
+                            Clear all
+                          </button>
+                        )}
+                        <FilterList />
+                      </div>
+                    </SheetContent>
+                  </Sheet>
+                )}
                 <Select value={sort} onValueChange={(value) => setSort(value as ProductSort)}>
-                  <SelectTrigger className="h-9 w-[180px] sm:w-[200px] text-sm">
+                  <SelectTrigger className="h-9 w-[140px] sm:w-[200px] text-sm bg-white">
                     <SelectValue placeholder="Sort by" />
                   </SelectTrigger>
                   <SelectContent>
@@ -359,14 +517,12 @@ function ProductsPage() {
             </div>
           </div>
 
-          <div className="mt-8 sm:mt-10 lg:flex lg:gap-12 xl:gap-16">
-            {filterGroups.length > 0 && (
-              <aside className="hidden lg:block w-64 shrink-0">
-                <FilterList />
-              </aside>
-            )}
-            
-            <div className="flex-1">
+          {/* No permanent sidebar -- filters live in the Filter sheet above.
+              The grid now uses the full catalogue width (see the desktop
+              4-column class below), the same breakpoints (md/lg) already
+              used elsewhere on this page rather than a new one-off value. */}
+          <div className="mt-8 sm:mt-10">
+            <div>
               {missingMapping ? (
                 <div className="py-16 sm:py-20 text-center border rounded-2xl bg-secondary/20">
                   <div className="mx-auto mb-5 flex size-14 items-center justify-center rounded-full bg-secondary text-muted-foreground">
@@ -386,9 +542,9 @@ function ProductsPage() {
                   </div>
                 </div>
               ) : catalogue.length === 0 ? (
-                <div className="grid grid-cols-2 gap-x-5 gap-y-10 sm:gap-x-6 md:grid-cols-3 xl:grid-cols-3">
+                <div className="grid grid-cols-2 gap-x-5 gap-y-10 sm:gap-x-6 md:grid-cols-3 lg:grid-cols-4">
                   {/* Skeletons while loading */}
-                  {[1, 2, 3].map((i) => (
+                  {[1, 2, 3, 4].map((i) => (
                     <div key={i} className="animate-pulse flex flex-col gap-4">
                       <div className="aspect-square bg-secondary rounded-2xl"></div>
                       <div className="h-4 bg-secondary rounded w-3/4"></div>
@@ -396,16 +552,31 @@ function ProductsPage() {
                     </div>
                   ))}
                 </div>
-              ) : visible.length === 0 && (query || Object.keys(validActiveFilters).length > 0) ? (
-                <p className="text-sm text-muted-foreground mt-4 lg:mt-0">
+              ) : visible.length === 0 && query ? (
+                <div>
+                  <p className="text-sm text-muted-foreground">
+                    No products found for "{query}".
+                  </p>
+                  {searchSuggestion && (
+                    <button
+                      type="button"
+                      onClick={() => setQuery(searchSuggestion)}
+                      className="mt-2 text-sm font-medium text-primary hover:underline"
+                    >
+                      Did you mean "{searchSuggestion}"?
+                    </button>
+                  )}
+                </div>
+              ) : visible.length === 0 && Object.keys(validActiveFilters).length > 0 ? (
+                <p className="text-sm text-muted-foreground">
                   No products match your search or filters. Try adjusting them.
                 </p>
               ) : visible.length === 0 ? (
-                <p className="text-sm text-muted-foreground mt-4 lg:mt-0">
+                <p className="text-sm text-muted-foreground">
                   There are currently no products available in this category.
                 </p>
               ) : (
-                <div className="grid grid-cols-2 gap-x-5 gap-y-10 sm:gap-x-6 md:grid-cols-3 xl:grid-cols-3">
+                <div className="grid grid-cols-2 gap-x-5 gap-y-10 sm:gap-x-6 md:grid-cols-3 lg:grid-cols-4">
                   {visible.map((p) => (
                     <ProductCard key={p.slug} product={p} />
                   ))}
@@ -414,6 +585,7 @@ function ProductsPage() {
             </div>
           </div>
 
+        </div>
         </div>
       </main>
       <Footer />

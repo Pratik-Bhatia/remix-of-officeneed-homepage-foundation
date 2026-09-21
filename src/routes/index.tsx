@@ -3,6 +3,7 @@ import { Navbar } from "@/components/officeneed/Navbar";
 import { Hero } from "@/components/officeneed/Hero";
 import { InteractiveGiftShowcase } from "@/components/officeneed/InteractiveGiftShowcase";
 import { Bestsellers } from "@/components/officeneed/Bestsellers";
+import { ShopByCategory } from "@/components/officeneed/ShopByCategory";
 import { ShopTheFeed } from "@/components/officeneed/ShopTheFeed";
 import { Footer } from "@/components/officeneed/Footer";
 
@@ -36,6 +37,7 @@ function Index() {
         <Hero />
         <InteractiveGiftShowcase />
         <Bestsellers />
+        <ShopByCategory />
         <ShopTheFeed />
       </main>
       <Footer />

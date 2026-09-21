@@ -15,6 +15,7 @@ import { Route as AccountRouteImport } from './routes/account'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as BlogRouteImport } from './routes/blog'
 import { Route as CancellationPolicyRouteImport } from './routes/cancellation-policy'
+import { Route as CartRouteImport } from './routes/cart'
 import { Route as ClientsRouteImport } from './routes/clients'
 import { Route as ContactUsRouteImport } from './routes/contact-us'
 import { Route as FaqsRouteImport } from './routes/faqs'
@@ -63,6 +64,11 @@ const BlogRoute = BlogRouteImport.update({
 const CancellationPolicyRoute = CancellationPolicyRouteImport.update({
   id: '/cancellation-policy',
   path: '/cancellation-policy',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CartRoute = CartRouteImport.update({
+  id: '/cart',
+  path: '/cart',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ClientsRoute = ClientsRouteImport.update({
@@ -168,6 +174,7 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/blog': typeof BlogRouteWithChildren
   '/cancellation-policy': typeof CancellationPolicyRoute
+  '/cart': typeof CartRoute
   '/clients': typeof ClientsRoute
   '/contact-us': typeof ContactUsRoute
   '/faqs': typeof FaqsRoute
@@ -194,6 +201,7 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/blog': typeof BlogRouteWithChildren
   '/cancellation-policy': typeof CancellationPolicyRoute
+  '/cart': typeof CartRoute
   '/clients': typeof ClientsRoute
   '/contact-us': typeof ContactUsRoute
   '/faqs': typeof FaqsRoute
@@ -222,6 +230,7 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/blog': typeof BlogRouteWithChildren
   '/cancellation-policy': typeof CancellationPolicyRoute
+  '/cart': typeof CartRoute
   '/clients': typeof ClientsRoute
   '/contact-us': typeof ContactUsRoute
   '/faqs': typeof FaqsRoute
@@ -251,6 +260,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/blog'
     | '/cancellation-policy'
+    | '/cart'
     | '/clients'
     | '/contact-us'
     | '/faqs'
@@ -277,6 +287,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/blog'
     | '/cancellation-policy'
+    | '/cart'
     | '/clients'
     | '/contact-us'
     | '/faqs'
@@ -304,6 +315,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/blog'
     | '/cancellation-policy'
+    | '/cart'
     | '/clients'
     | '/contact-us'
     | '/faqs'
@@ -332,6 +344,7 @@ export interface RootRouteChildren {
   AuthRoute: typeof AuthRoute
   BlogRoute: typeof BlogRouteWithChildren
   CancellationPolicyRoute: typeof CancellationPolicyRoute
+  CartRoute: typeof CartRoute
   ClientsRoute: typeof ClientsRoute
   ContactUsRoute: typeof ContactUsRoute
   FaqsRoute: typeof FaqsRoute
@@ -390,6 +403,13 @@ declare module '@tanstack/react-router' {
       path: '/cancellation-policy'
       fullPath: '/cancellation-policy'
       preLoaderRoute: typeof CancellationPolicyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/cart': {
+      id: '/cart'
+      path: '/cart'
+      fullPath: '/cart'
+      preLoaderRoute: typeof CartRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/clients': {
@@ -562,6 +582,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRoute: AuthRoute,
   BlogRoute: BlogRouteWithChildren,
   CancellationPolicyRoute: CancellationPolicyRoute,
+  CartRoute: CartRoute,
   ClientsRoute: ClientsRoute,
   ContactUsRoute: ContactUsRoute,
   FaqsRoute: FaqsRoute,
