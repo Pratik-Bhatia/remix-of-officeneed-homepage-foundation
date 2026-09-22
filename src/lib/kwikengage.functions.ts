@@ -10,7 +10,7 @@
  */
 import { createServerFn } from "@tanstack/react-start";
 
-const KWIKENGAGE_ENDPOINT = "https://kwikengage.ai";
+const KWIKENGAGE_ENDPOINT = "https://api.kwikengage.ai/send-message/v2";
 const SHOPIFY_API_VERSION = "2025-07";
 const SHOPIFY_STOREFRONT_URL = `https://har1k4-di.myshopify.com/api/${SHOPIFY_API_VERSION}/graphql.json`;
 
