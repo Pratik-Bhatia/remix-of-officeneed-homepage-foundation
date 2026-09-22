@@ -76,12 +76,14 @@ export const sendProductBrowseAbandon = createServerFn({ method: "POST" })
     if (!input?.productHandle || typeof input.productHandle !== "string") {
       throw new Error("Missing product handle.");
     }
+    const phone = input.phone ? String(input.phone).slice(0, 20) : undefined;
+    const customerToken = input.customerToken ? String(input.customerToken).slice(0, 500) : undefined;
     return {
       productHandle: input.productHandle.slice(0, 200),
       productTitle: String(input.productTitle ?? "").slice(0, 200),
       productUrl: String(input.productUrl ?? "").slice(0, 500),
-      phone: input.phone ? String(input.phone).slice(0, 20) : undefined,
-      customerToken: input.customerToken ? String(input.customerToken).slice(0, 500) : undefined,
+      ...(phone ? { phone } : {}),
+      ...(customerToken ? { customerToken } : {}),
     } satisfies AbandonInput;
   })
   .handler(async ({ data }): Promise<AbandonResult> => {
