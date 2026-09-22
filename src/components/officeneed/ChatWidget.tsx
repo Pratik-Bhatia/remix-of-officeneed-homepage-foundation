@@ -23,6 +23,7 @@ import type { Product } from "@/lib/products";
 import { useShopifyCatalogue, shopifyCatalogueQueryOptions } from "@/lib/shopify-overlay";
 import { getDisplayCategoryLabel, getOfficeGptContextCategory } from "@/lib/taxonomy";
 import { submitEnquiry } from "@/lib/enquiries.functions";
+import { rememberContactPhone } from "@/lib/contact-phone";
 
 type Bubble = {
   id: string;
@@ -547,6 +548,9 @@ export function ChatWidget() {
         return;
       }
     }
+
+    // Remember a valid phone number so browse-abandon WhatsApp triggers can reach the visitor.
+    if (step.inputType === "tel") rememberContactPhone(clean);
 
     const next: ChatAnswers = { ...answers, [step.id]: clean };
     setAnswers(next);
