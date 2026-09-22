@@ -9,6 +9,7 @@ import { Footer } from "@/components/officeneed/Footer";
 import { fetchProductByHandle, formatMoney } from "@/lib/shopify";
 import { useCartStore } from "@/stores/cartStore";
 import { RichText } from "@/components/officeneed/RichText";
+import { useProductBrowseAbandon } from "@/hooks/useProductBrowseAbandon";
 
 export const Route = createFileRoute("/shop/$handle")({
   component: ShopProductPage,
@@ -41,6 +42,9 @@ function ShopProductPage() {
     queryKey: ["shopify-product", handle],
     queryFn: () => fetchProductByHandle(handle),
   });
+
+  // WhatsApp browse-abandon trigger (KwikEngage) when the shopper leaves this page.
+  useProductBrowseAbandon({ handle, title: product?.title ?? "" });
 
   if (isPending) {
     return (
