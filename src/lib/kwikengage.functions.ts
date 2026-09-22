@@ -10,7 +10,7 @@
  */
 import { createServerFn } from "@tanstack/react-start";
 
-const KWIKENGAGE_ENDPOINT = "https://kwikengage.ai/api/v1/message/send";
+const KWIKENGAGE_ENDPOINT = "https://kwikengage.ai";
 const SHOPIFY_API_VERSION = "2025-07";
 const SHOPIFY_STOREFRONT_URL = `https://har1k4-di.myshopify.com/api/${SHOPIFY_API_VERSION}/graphql.json`;
 
@@ -99,23 +99,13 @@ export const sendProductBrowseAbandon = createServerFn({ method: "POST" })
     if (!phone) return { ok: true, sent: false, reason: "no_phone" };
 
     const body = {
-      type: "template",
-      channel: "whatsapp",
       to: phone,
+      channel: "whatsapp",
+      type: "template",
       template: {
         name: TEMPLATE_NAME,
         language: { code: TEMPLATE_LANGUAGE },
-        components: [
-          {
-            type: "body",
-            parameters: [
-              { type: "text", text: data.productTitle || "a product" },
-              { type: "text", text: data.productUrl },
-            ],
-          },
-        ],
       },
-      metadata: { event: "product_page_abandoned", product_handle: data.productHandle },
     };
 
     try {
