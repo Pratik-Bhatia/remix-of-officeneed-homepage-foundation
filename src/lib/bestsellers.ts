@@ -1,22 +1,10 @@
+import type { Product } from "./products";
+
 export type BestsellerCategory =
   | "Corporate Gifting"
   | "Office Stationery"
   | "Computer Peripherals"
   | "Fragrance Gifting";
-
-export type BestsellerProduct = {
-  id: string;
-  name: string;
-  category: BestsellerCategory;
-  /** Small uppercase label shown above the product name. */
-  collection: string;
-  image: string;
-  price: string;
-  bestseller: boolean;
-  /** Placeholder — swap for the real Shopify product handle/URL. */
-  shopifyHandle: string;
-  productUrl: string;
-};
 
 export const bestsellerFilters: Array<"All" | BestsellerCategory> = [
   "All",
@@ -26,8 +14,9 @@ export const bestsellerFilters: Array<"All" | BestsellerCategory> = [
   "Fragrance Gifting",
 ];
 
-const img = (id: string) =>
-  `https://images.unsplash.com/${id}?auto=format&fit=crop&w=800&q=75`;
-
-export const bestsellerProducts: BestsellerProduct[] = [];
+// Bestsellers render through the same canonical ProductCard (and its full
+// Product shape) as the /products listing page -- see useShopifyBestsellers
+// in shopify-overlay.ts. This static list is a fallback only, used when
+// Shopify data hasn't loaded yet.
+export const bestsellerProducts: Product[] = [];
 

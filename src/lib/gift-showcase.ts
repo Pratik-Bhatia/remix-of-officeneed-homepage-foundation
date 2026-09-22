@@ -9,7 +9,7 @@
  * (percentages of that hamper's image: x = left, y = top).
  */
 
-import hamperSignature from "@/assets/hamper-signature-classic.jpg";
+import hamperSignature from "@/assets/hamper-signature-6in1-set.webp";
 import hamperOnboarding from "@/assets/hamper-executive-onboarding.jpg";
 import hamperFestive from "@/assets/hamper-festive-luxury.jpg";
 import hamperTech from "@/assets/hamper-tech-desk.jpg";
@@ -38,9 +38,14 @@ export type GiftHamper = {
   id: string;
   title: string;
   description: string;
-  /** Hamper hero image (4:3) */
+  /** Hamper hero image */
   image: string;
   imageAlt: string;
+  /** Image's real pixel dimensions -- drives the showcase's aspect-ratio
+   * wrapper so the full (uncropped) image is shown and hotspot percentages
+   * stay anchored to the actual image content, not a mismatched container. */
+  imageWidth: number;
+  imageHeight: number;
   /** Future Shopify collection handle for the whole hamper */
   shopifyCollectionHandle: string;
   href: string;
@@ -51,14 +56,10 @@ const THUMB = {
   notebook:
     "https://images.unsplash.com/photo-1531346878377-a5be20888e57?auto=format&fit=crop&w=240&q=70",
   pen: "https://images.unsplash.com/photo-1583485088034-697b5bc54ccd?auto=format&fit=crop&w=240&q=70",
-  wallet:
-    "https://images.unsplash.com/photo-1627123424574-724758594e93?auto=format&fit=crop&w=240&q=70",
   bottle:
     "https://images.unsplash.com/photo-1602143407151-7111542de6e8?auto=format&fit=crop&w=240&q=70",
   fragrance:
     "https://images.unsplash.com/photo-1541643600914-78b084683601?auto=format&fit=crop&w=240&q=70",
-  mouse:
-    "https://images.unsplash.com/photo-1527864550417-7fd91fc51a46?auto=format&fit=crop&w=240&q=70",
   candle:
     "https://images.unsplash.com/photo-1602874801006-e26c4c5b5e8a?auto=format&fit=crop&w=240&q=70",
   earbuds:
@@ -91,81 +92,102 @@ export const giftHampers: GiftHamper[] = [
     description: "Our best-selling everyday corporate gift set.",
     image: hamperSignature,
     imageAlt:
-      "OfficeNeed signature corporate gift hamper: an ivory gift box with black ribbon surrounded by a notebook, metal pen, leather card holder, insulated bottle, fragrance and a wireless mouse.",
+      "OfficeNeed 6-in-1 executive gift set: an open terracotta gift box containing a keychain, pen, leather card holder, pendrive and an insulated bottle, beside a tan leather diary and the individual gift items laid out in front of the box.",
+    imageWidth: 1536,
+    imageHeight: 1024,
     shopifyCollectionHandle: "signature-hamper",
     href: "/products?category=Corporate+Gifting",
+    // Every entry below is an UNMAPPED placeholder, deliberately: this hamper
+    // image was just swapped to a real photo of the 6-in-1 set's individual
+    // components, and the caller asked for the hotspot structure/positioning
+    // now, with the actual Shopify product-per-item mapping to follow
+    // separately. shopifyProductHandle uses an obviously-fake "pending-
+    // mapping-*" value (not a realistic-looking guessed handle) so it can
+    // never coincidentally match a real catalogue product via
+    // resolveHamperProduct/useShopifyCatalogue and silently show wrong data
+    // -- it will only start resolving once each handle is swapped for the
+    // real one. price/availability/href/image are likewise left as honest
+    // "not yet known" placeholders rather than invented specifics.
     products: [
       {
-        productId: "placeholder-notebook",
-        shopifyProductHandle: "executive-premium-notebook",
-        productName: "Executive Premium Notebook",
-        category: "Stationery",
-        description: "Hardbound corporate notebook with premium soft-touch finish.",
+        // Outside the box, laid out separately toward the lower-left of the
+        // full image.
+        productId: "signature-6in1-keychain",
+        shopifyProductHandle: "pending-mapping-signature-keychain",
+        productName: "Keychain",
+        category: "Accessories",
+        description: "Individual item from the 6-in-1 set — Shopify product mapping pending.",
         price: PRICE,
-        availability: "In stock",
-        image: THUMB.notebook,
+        availability: "Availability pending",
+        image: hamperSignature,
         href: "/products?category=Corporate+Gifting",
-        position: { x: 13, y: 52 },
+        position: { x: 12, y: 79 },
       },
       {
-        productId: "placeholder-pen",
-        shopifyProductHandle: "brushed-metal-signature-pen",
-        productName: "Brushed Metal Signature Pen",
-        category: "Stationery",
-        description: "Weighted metal ballpoint, laser-engravable for brand marking.",
-        price: PRICE,
-        availability: "In stock",
-        image: THUMB.pen,
-        href: "/products?category=Corporate+Gifting",
-        position: { x: 21, y: 71 },
-      },
-      {
-        productId: "placeholder-wallet",
-        shopifyProductHandle: "leather-card-holder-wallet",
-        productName: "Leather Card Holder Wallet",
-        category: "Leather Goods",
-        description: "Full-grain leather bifold with debossed logo option.",
-        price: PRICE,
-        availability: "Made to order",
-        image: THUMB.wallet,
-        href: "/products?category=Corporate+Gifting",
-        position: { x: 24, y: 86 },
-      },
-      {
-        productId: "placeholder-bottle",
-        shopifyProductHandle: "insulated-steel-bottle",
-        productName: "Insulated Steel Bottle",
-        category: "Drinkware",
-        description: "Double-walled matte tumbler, 24-hour temperature retention.",
-        price: PRICE,
-        availability: "In stock",
-        image: THUMB.bottle,
-        href: "/products?category=Corporate+Gifting",
-        position: { x: 80, y: 38 },
-      },
-      {
-        productId: "placeholder-fragrance",
-        shopifyProductHandle: "signature-eau-de-parfum",
-        productName: "Signature Eau de Parfum",
-        category: "Fragrance",
-        description: "Eastern-western blend in a faceted glass flacon.",
-        price: PRICE,
-        availability: "Limited stock",
-        image: THUMB.fragrance,
-        href: "/products?category=Corporate+Gifting",
-        position: { x: 91, y: 56 },
-      },
-      {
-        productId: "placeholder-mouse",
-        shopifyProductHandle: "wireless-precision-mouse",
-        productName: "Wireless Precision Mouse",
+        // Inside the box, lower-center of the tray (a silver key-shaped USB).
+        productId: "signature-6in1-pendrive",
+        shopifyProductHandle: "pending-mapping-signature-pendrive",
+        productName: "Pendrive",
         category: "Hardware",
-        description: "Silent-click wireless mouse for executive desk setups.",
+        description: "Individual item from the 6-in-1 set — Shopify product mapping pending.",
         price: PRICE,
-        availability: "In stock",
-        image: THUMB.mouse,
+        availability: "Availability pending",
+        image: hamperSignature,
         href: "/products?category=Corporate+Gifting",
-        position: { x: 76, y: 84 },
+        position: { x: 37, y: 57 },
+      },
+      {
+        // Inside the box, center of the tray (brown rectangular card holder).
+        productId: "signature-6in1-card-holder",
+        shopifyProductHandle: "pending-mapping-signature-card-holder",
+        productName: "Card Holder",
+        category: "Leather Goods",
+        description: "Individual item from the 6-in-1 set — Shopify product mapping pending.",
+        price: PRICE,
+        availability: "Availability pending",
+        image: hamperSignature,
+        href: "/products?category=Corporate+Gifting",
+        position: { x: 40, y: 39 },
+      },
+      {
+        // Inside the box, left side of the tray (black-and-silver pen).
+        productId: "signature-6in1-pen",
+        shopifyProductHandle: "pending-mapping-signature-pen",
+        productName: "Pen",
+        category: "Stationery",
+        description: "Individual item from the 6-in-1 set — Shopify product mapping pending.",
+        price: PRICE,
+        availability: "Availability pending",
+        image: hamperSignature,
+        href: "/products?category=Corporate+Gifting",
+        position: { x: 25, y: 42 },
+      },
+      {
+        // Inside the box, right side of the tray (large brown bottle).
+        productId: "signature-6in1-bottle",
+        shopifyProductHandle: "pending-mapping-signature-bottle",
+        productName: "Bottle",
+        category: "Drinkware",
+        description: "Individual item from the 6-in-1 set — Shopify product mapping pending.",
+        price: PRICE,
+        availability: "Availability pending",
+        image: hamperSignature,
+        href: "/products?category=Corporate+Gifting",
+        position: { x: 59, y: 35 },
+      },
+      {
+        // Only appears once (the standing notebook to the right of the box),
+        // so its hotspot goes there rather than inside the box.
+        productId: "signature-6in1-diary",
+        shopifyProductHandle: "pending-mapping-signature-diary",
+        productName: "Diary",
+        category: "Stationery",
+        description: "Individual item from the 6-in-1 set — Shopify product mapping pending.",
+        price: PRICE,
+        availability: "Availability pending",
+        image: hamperSignature,
+        href: "/products?category=Corporate+Gifting",
+        position: { x: 83, y: 50 },
       },
     ],
   },
@@ -176,6 +198,8 @@ export const giftHampers: GiftHamper[] = [
     image: hamperOnboarding,
     imageAlt:
       "Executive onboarding gift kit: an ivory gift box with a black notebook, gold-trim pen and dark chocolate bar, beside a scented candle, leather passport holder, matte black bottle and wireless earbuds.",
+    imageWidth: 1600,
+    imageHeight: 1200,
     shopifyCollectionHandle: "executive-onboarding-kit",
     href: "/products?category=Corporate+Gifting",
     products: [
@@ -272,6 +296,8 @@ export const giftHampers: GiftHamper[] = [
     image: hamperFestive,
     imageAlt:
       "Festive luxury gift hamper: a woven tray with green tea canister, sandalwood candle and diffuser, beside a crystal perfume flacon, brass lotus tea light holder, assorted chocolates and a satin pouch of dry fruits.",
+    imageWidth: 1600,
+    imageHeight: 1200,
     shopifyCollectionHandle: "festive-luxury-hamper",
     href: "/products?category=Corporate+Gifting",
     products: [
@@ -368,6 +394,8 @@ export const giftHampers: GiftHamper[] = [
     image: hamperTech,
     imageAlt:
       "Tech and desk essentials gift set: a matte black power bank, wireless charging pad, over-ear headphones, braided USB-C cable and a mechanical keyboard on a warm off-white surface.",
+    imageWidth: 1600,
+    imageHeight: 1200,
     shopifyCollectionHandle: "tech-desk-essentials",
     href: "/products?category=Corporate+Gifting",
     products: [

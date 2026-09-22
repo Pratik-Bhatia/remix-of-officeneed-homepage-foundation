@@ -47,7 +47,7 @@ export type Product = {
   availability?: string;
   /** First image is the primary image */
   images: string[];
-  badge?: "New" | "Featured";
+  badge?: "New" | "Featured" | "Bestseller";
   /** Sort weight for "Featured" ordering — lower shows first */
   featuredRank?: number;
   /** Newest-first ordering key (ISO date) */

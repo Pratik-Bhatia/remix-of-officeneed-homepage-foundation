@@ -1,13 +1,111 @@
 import { Link } from "@tanstack/react-router";
 import { TAXONOMY } from "@/lib/taxonomy";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import {
   giftHampers,
   type GiftHamper,
   type GiftShowcaseProduct,
 } from "@/lib/gift-showcase";
 import { cn } from "@/lib/utils";
+import { products } from "@/lib/products";
+import { useShopifyCatalogue } from "@/lib/shopify-overlay";
+
+/**
+ * Resolves a hotspot's live Shopify data by matching shopifyProductHandle
+ * against the already-loaded site catalogue (same cached query every other
+ * product card on the site uses -- no extra fetch here). Placeholder
+ * hotspots (whose handle has no real match yet) fall through untouched;
+ * only real, existing products -- like the H935 gift set -- get overlaid
+ * with their real name/price/image/availability and the real PDP link.
+ */
+function resolveHamperProduct(
+  product: GiftShowcaseProduct,
+  catalogue: ReturnType<typeof useShopifyCatalogue>,
+): GiftShowcaseProduct {
+  const live = catalogue.find((p) => p.slug === product.shopifyProductHandle);
+  if (!live) return product;
+  return {
+    ...product,
+    productName: live.name,
+    price: live.price ?? product.price,
+    availability: live.availability ?? product.availability,
+    image: live.images[0] ?? product.image,
+    href: `/products/${live.slug}`,
+  };
+}
+
+// Floating popup's own footprint (matches its fixed w-36 layout in
+// ProductDetailCard, plus a conservative estimate of its content height --
+// image + name + button + padding). Used only for collision math below, not
+// for layout, so a few px of slack either way is harmless.
+const FLOATING_CARD_WIDTH = 144;
+const FLOATING_CARD_HEIGHT = 236;
+const FLOATING_CARD_GAP = 12;
+const FLOATING_CARD_MARGIN = 6;
+
+/**
+ * Picks a left/top (in px, relative to the image container) for the
+ * floating popup that keeps it fully inside that container: right of the
+ * hotspot when there's room, else left; below when there's room, else
+ * above; whichever side has more room when neither fully fits; then a hard
+ * clamp so no combination of hotspot position + container size can push any
+ * part of the popup past the container's edges (the image's own
+ * overflow-hidden would otherwise clip it).
+ */
+function getFloatingCardPosition(
+  position: { x: number; y: number },
+  containerWidth: number,
+  containerHeight: number,
+) {
+  if (!containerWidth || !containerHeight) {
+    // Not measured yet (first paint) -- fall back to the hotspot's own
+    // percentage position; the very next layout pass replaces this.
+    return { left: `${position.x}%`, top: `${position.y}%` };
+  }
+
+  const hotspotX = (position.x / 100) * containerWidth;
+  const hotspotY = (position.y / 100) * containerHeight;
+
+  const spaceRight = containerWidth - hotspotX;
+  const spaceLeft = hotspotX;
+  let left: number;
+  if (spaceRight >= FLOATING_CARD_WIDTH + FLOATING_CARD_GAP) {
+    left = hotspotX + FLOATING_CARD_GAP;
+  } else if (spaceLeft >= FLOATING_CARD_WIDTH + FLOATING_CARD_GAP) {
+    left = hotspotX - FLOATING_CARD_GAP - FLOATING_CARD_WIDTH;
+  } else {
+    left =
+      spaceRight > spaceLeft
+        ? hotspotX + FLOATING_CARD_GAP
+        : hotspotX - FLOATING_CARD_GAP - FLOATING_CARD_WIDTH;
+  }
+
+  const spaceBelow = containerHeight - hotspotY;
+  const spaceAbove = hotspotY;
+  let top: number;
+  if (spaceBelow >= FLOATING_CARD_HEIGHT + FLOATING_CARD_GAP) {
+    top = hotspotY + FLOATING_CARD_GAP;
+  } else if (spaceAbove >= FLOATING_CARD_HEIGHT + FLOATING_CARD_GAP) {
+    top = hotspotY - FLOATING_CARD_GAP - FLOATING_CARD_HEIGHT;
+  } else {
+    top =
+      spaceBelow > spaceAbove
+        ? hotspotY + FLOATING_CARD_GAP
+        : hotspotY - FLOATING_CARD_GAP - FLOATING_CARD_HEIGHT;
+  }
+
+  left = Math.min(
+    Math.max(left, FLOATING_CARD_MARGIN),
+    Math.max(FLOATING_CARD_MARGIN, containerWidth - FLOATING_CARD_WIDTH - FLOATING_CARD_MARGIN),
+  );
+  top = Math.min(
+    Math.max(top, FLOATING_CARD_MARGIN),
+    Math.max(FLOATING_CARD_MARGIN, containerHeight - FLOATING_CARD_HEIGHT - FLOATING_CARD_MARGIN),
+  );
+
+  return { left: `${left}px`, top: `${top}px` };
+}
 
 function SectionHeader() {
   return (
@@ -71,75 +169,47 @@ function ProductHotspot({
   );
 }
 
+// Quick-preview only: image, name, CTA. No category/description/price/
+// availability -- this popup's one job is "what is it, go look at it", not a
+// second product summary (that's what the PDP it links to is for). One
+// design for both desktop and mobile now -- both anchor to the hotspot
+// inside the same image coordinate system (see getFloatingCardPosition),
+// so there's no separate mobile "sheet" variant to keep in sync anymore.
 function ProductDetailCard({
   product,
-  variant,
   className,
   style,
-  onClose,
 }: {
   product: GiftShowcaseProduct;
-  variant: "floating" | "sheet";
   className?: string;
   style?: React.CSSProperties;
-  onClose?: () => void;
 }) {
   return (
     <div
       style={style}
       className={cn(
-        "animate-rise pointer-events-auto border border-border bg-background p-4 shadow-[0_18px_40px_-30px_rgb(0_0_0_/_0.45)]",
-        variant === "floating" ? "w-64 rounded-xl" : "w-full rounded-2xl",
+        "animate-rise pointer-events-auto w-36 rounded-2xl border border-border/60 bg-white p-2.5 shadow-[0_12px_28px_-14px_rgb(0_0_0_/_0.3)]",
         className,
       )}
     >
-      {variant === "sheet" && onClose && (
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close product details"
-          className="absolute right-6 top-6 grid size-8 place-items-center rounded-full border border-border bg-background"
-        >
-          <X className="size-4" aria-hidden="true" />
-        </button>
-      )}
-      <div className="flex gap-3">
-        <img
-          src={product.image}
-          alt=""
-          width={64}
-          height={64}
-          loading="lazy"
-          decoding="async"
-          className="size-16 shrink-0 rounded-lg border border-border object-cover"
-        />
-        <div className="min-w-0 pr-6">
-          {product.category && (
-            <p className="text-[0.65rem] uppercase tracking-[0.14em] text-muted-foreground">
-              {product.category}
-            </p>
-          )}
-          <p className="mt-0.5 font-display text-sm font-semibold leading-snug">
-            {product.productName}
-          </p>
-          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-            {product.description}
-          </p>
-        </div>
-      </div>
-
-      <div className="mt-3 flex items-center justify-between gap-3 border-t border-border pt-3">
-        <div className="min-w-0">
-          <p className="whitespace-nowrap text-sm font-medium">{product.price}</p>
-          <p className="text-xs text-muted-foreground">{product.availability}</p>
-        </div>
-        <a
-          href={product.href}
-          className="inline-flex min-h-9 shrink-0 items-center whitespace-nowrap rounded-full bg-primary px-4 text-xs font-medium text-primary-foreground transition-opacity duration-200 hover:opacity-90"
-        >
-          View Product →
-        </a>
-      </div>
+      <img
+        src={product.image}
+        alt=""
+        width={128}
+        height={128}
+        loading="lazy"
+        decoding="async"
+        className="aspect-square w-full rounded-lg object-cover"
+      />
+      <p className="mt-2 line-clamp-2 text-xs font-medium leading-snug text-foreground">
+        {product.productName}
+      </p>
+      <a
+        href={product.href}
+        className="mt-2 flex min-h-7 items-center justify-center whitespace-nowrap rounded-full bg-foreground px-3 text-[0.7rem] font-medium text-background transition-opacity duration-200 hover:opacity-90"
+      >
+        View Product →
+      </a>
     </div>
   );
 }
@@ -159,24 +229,54 @@ function HamperCard({
   const currentId = activeProductId ?? hoverId;
   const current = hamper.products.find((p) => p.productId === currentId) ?? null;
 
+  // Live pixel size of the image container -- purely for the popup's
+  // collision math below (WHERE on the image to anchor it, and how much
+  // room is actually available around that point). This never touches
+  // layout/geometry: nothing here sets the container's or article's size.
+  const imageContainerRef = useRef<HTMLDivElement | null>(null);
+  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
+
+  useEffect(() => {
+    const el = imageContainerRef.current;
+    if (!el) return;
+    const update = () => setContainerSize({ width: el.clientWidth, height: el.clientHeight });
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   return (
     <article
       className={cn(
         "group relative shrink-0 snap-center transition-opacity duration-500",
-        "w-[86vw] sm:w-[70vw] lg:w-[58vw] xl:w-[54rem]",
+        "max-w-[86vw] sm:max-w-[70vw] lg:max-w-[58vw] xl:max-w-[54rem]",
         !active && "lg:opacity-70 lg:hover:opacity-100",
       )}
     >
-      <div className="relative overflow-hidden rounded-[1.75rem] bg-secondary">
+      {/* Sizing lives on the <img> itself, using the SAME viewport-unit caps
+          as before (42vh/86vw etc, not percentages) -- a plain replaced
+          element with intrinsic width/height + max-width/max-height +
+          width:height:auto always shrinks on whichever axis binds while
+          exactly preserving its own ratio; there's no parent-relative
+          percentage involved anywhere, so there's no "definite ancestor
+          size" precondition to get wrong. The wrapper below then has
+          nothing of its own to size -- w-fit makes it shrink-wrap to
+          whatever the img renders at, so wrapper === image, exactly, with
+          zero internal empty space on any breakpoint. */}
+      <div
+        ref={imageContainerRef}
+        className="relative mx-auto w-fit overflow-hidden rounded-[1.75rem] bg-secondary"
+      >
         <img
           src={hamper.image}
           alt={hamper.imageAlt}
-          width={1600}
-          height={1200}
+          width={hamper.imageWidth}
+          height={hamper.imageHeight}
           loading="lazy"
           decoding="async"
           sizes="(min-width: 1024px) 58vw, 86vw"
-          className="h-[60vh] sm:h-[55vh] lg:h-[48vh] w-full object-cover transition-transform duration-700 ease-out"
+          className="block h-auto w-auto max-h-[42vh] max-w-[86vw] object-contain transition-transform duration-700 ease-out sm:max-h-[40vh] sm:max-w-[70vw] lg:max-h-[38vh] lg:max-w-[58vw] xl:max-w-[54rem]"
         />
 
         {hamper.products.map((product) => (
@@ -196,22 +296,19 @@ function HamperCard({
           />
         ))}
 
-        {/* Desktop: card floats beside the active hotspot */}
+        {/* Popup floats beside the active hotspot -- same on desktop and
+            mobile, always positioned against this same image box, never
+            position:fixed and never outside it (see getFloatingCardPosition). */}
         {current && (
-          <div className="pointer-events-none absolute inset-0 z-30 hidden md:block" aria-live="polite">
+          <div className="pointer-events-none absolute inset-0 z-30" aria-live="polite">
             <ProductDetailCard
               product={current}
-              variant="floating"
               className="absolute"
-              style={{
-                left: `${Math.min(Math.max(current.position.x, 14), 86)}%`,
-                top: `${current.position.y}%`,
-                transform: `translate(${current.position.x > 50 ? "-100%" : "0"}, ${
-                  current.position.y > 55 ? "-100%" : "0"
-                }) translate(${current.position.x > 50 ? "-18px" : "18px"}, ${
-                  current.position.y > 55 ? "-18px" : "18px"
-                })`,
-              }}
+              style={getFloatingCardPosition(
+                current.position,
+                containerSize.width,
+                containerSize.height,
+              )}
             />
           </div>
         )}
@@ -243,6 +340,19 @@ function HamperCarousel() {
   const [activeIndex, setActiveIndex] = useState(0);
   const [pinned, setPinned] = useState<{ hamperId: string; productId: string } | null>(
     null,
+  );
+
+  // Same cached catalogue query every ProductCard on the site already uses
+  // -- reused here, not refetched, to resolve any hotspot whose
+  // shopifyProductHandle matches a real product.
+  const catalogue = useShopifyCatalogue(products);
+  const resolvedHampers = useMemo(
+    () =>
+      giftHampers.map((hamper) => ({
+        ...hamper,
+        products: hamper.products.map((p) => resolveHamperProduct(p, catalogue)),
+      })),
+    [catalogue],
   );
 
   const scrollBy = useCallback((dir: 1 | -1) => {
@@ -287,13 +397,6 @@ function HamperCarousel() {
     };
   }, [pinned]);
 
-  const pinnedProduct =
-    (pinned &&
-      giftHampers
-        .find((h) => h.id === pinned.hamperId)
-        ?.products.find((p) => p.productId === pinned.productId)) ||
-    null;
-
   return (
     <div ref={sectionRef} className="relative">
       <div className="flex items-end justify-between gap-6">
@@ -307,7 +410,7 @@ function HamperCarousel() {
         onScroll={onScroll}
         className="-mx-5 mt-6 flex snap-x snap-mandatory gap-6 overflow-x-auto px-5 pb-4 sm:-mx-8 sm:mt-8 sm:gap-8 sm:px-8 lg:-mx-12 lg:px-12 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
-        {giftHampers.map((hamper, i) => (
+        {resolvedHampers.map((hamper, i) => (
           <HamperCard
             key={hamper.id}
             hamper={hamper}
@@ -358,19 +461,6 @@ function HamperCarousel() {
           Hover or tap a marker to explore the products.
         </p>
       </div>
-
-      {/* Mobile: bottom sheet for the pinned product */}
-      {pinnedProduct && (
-        <div className="fixed inset-x-0 bottom-0 z-40 px-4 pb-4 md:hidden" aria-live="polite">
-          <div className="relative">
-            <ProductDetailCard
-              product={pinnedProduct}
-              variant="sheet"
-              onClose={() => setPinned(null)}
-            />
-          </div>
-        </div>
-      )}
     </div>
   );
 }

@@ -10,7 +10,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { fetchProducts, fetchAllProducts, fetchCollections, formatMoney, type ShopifyProductNode, type ShopifyCollectionNode } from "@/lib/shopify";
 import type { Product } from "@/lib/products";
-import type { BestsellerProduct } from "@/lib/bestsellers";
 import { MAIN_CATEGORIES, productBelongsToCategory, type MainCategory } from "@/lib/taxonomy";
 import { deriveFilterAttributes } from "@/lib/filters";
 import { buildProductSpecifications, hasStructuredSchema } from "@/lib/product-details-schema";
@@ -99,23 +98,6 @@ export function mergeProduct(product: Product, node?: ShopifyProductNode): Produ
             variants.length > 1 ? variants.map((v) => v.title) : product.variants ?? [],
         }
       : {}),
-  };
-}
-
-/** Merge live Shopify data onto a static bestseller card. */
-export function mergeBestseller(
-  item: BestsellerProduct,
-  node?: ShopifyProductNode,
-): BestsellerProduct {
-  if (!node) return item;
-  const images = nodeImages(node);
-  const price = nodePrice(node);
-  return {
-    ...item,
-    name: node.title?.trim() || item.name,
-    ...(images[0] ? { image: images[0] } : {}),
-    ...(price ? { price } : {}),
-    shopifyHandle: node.handle,
   };
 }
 
@@ -383,8 +365,17 @@ export function useShopifyCatalogue(staticProducts: Product[]) {
   return [...live, ...fallback];
 }
 
-/** Live bestsellers from Shopify (tagged "Best Selling"), static as fallback. */
-export function useShopifyBestsellers(staticItems: BestsellerProduct[]) {
+/**
+ * Live bestsellers from Shopify (tagged "Best Selling"), static as fallback.
+ *
+ * Returns full Product objects -- the same shape shopifyNodeToProduct
+ * builds for the /products listing page -- rather than a separate, lossier
+ * shape. Bestsellers.tsx renders these with the exact same canonical
+ * ProductCard, so behavior (including hover-to-next-image, which needs the
+ * full images[] array this used to trim down to just images[0]) stays
+ * identical between the two.
+ */
+export function useShopifyBestsellers(staticItems: Product[] = []): Product[] {
   const { data } = useQuery({
     queryKey: ["shopify", "bestsellers"],
     queryFn: async () => {
@@ -398,36 +389,13 @@ export function useShopifyBestsellers(staticItems: BestsellerProduct[]) {
   const nodes = data ?? [];
   if (nodes.length === 0) return staticItems;
 
-  const live = nodes.map((node): BestsellerProduct => {
-    const p = shopifyNodeToProduct(node);
-    const category: BestsellerProduct["category"] =
-      p.category === "Office Stationery"
-        ? "Office Stationery"
-        : p.category === "Computer Peripherals"
-          ? "Computer Peripherals"
-        : p.category === "Printing & Branding" || p.category === "Officeneed Exclusive"
-          ? "Corporate Gifting"
-            : p.category;
-    return {
-    id: node.id,
-      name: p.name,
-      category,
-      collection: node.vendor || p.subcategories[0] || category,
-      image: p.images[0]!,
-      price: p.price ?? "Price on enquiry",
-      bestseller: true,
-      shopifyHandle: node.handle,
-      productUrl: `/products/${node.handle}`,
-    };
-  });
+  const live = nodes.map((node) => ({ ...shopifyNodeToProduct(node), badge: "Bestseller" as const }));
 
   // Keep the static/demo bestsellers that have no live Shopify equivalent.
   const index = buildShopifyIndex(nodes);
-  const liveHandles = new Set(live.map((item) => item.shopifyHandle));
+  const liveSlugs = new Set(live.map((p) => p.slug));
   const fallback = staticItems.filter(
-    (item) =>
-      !liveHandles.has(item.shopifyHandle) &&
-      !findShopifyMatch(index, item.shopifyHandle, item.name),
+    (item) => !liveSlugs.has(item.slug) && !findShopifyMatch(index, item.slug, item.name),
   );
 
   return [...live, ...fallback];

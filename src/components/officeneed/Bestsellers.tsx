@@ -1,44 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
-import {
-  bestsellerFilters,
-  bestsellerProducts,
-  type BestsellerProduct,
-} from "@/lib/bestsellers";
+import { bestsellerFilters, bestsellerProducts, type BestsellerCategory } from "@/lib/bestsellers";
 import { useShopifyBestsellers } from "@/lib/shopify-overlay";
+import { ProductCard } from "@/components/officeneed/ProductCard";
+import type { Product } from "@/lib/products";
 
-function ProductCard({ product }: { product: BestsellerProduct }) {
-  return (
-    <a
-      href={product.productUrl}
-      data-shopify-handle={product.shopifyHandle}
-      className="group block w-[74vw] shrink-0 snap-start sm:w-[46vw] md:w-[34vw] lg:w-[calc((100%-4.5rem)/4)]"
-    >
-      <div className="relative aspect-square w-full overflow-hidden rounded-2xl bg-secondary">
-        <img
-          src={product.image}
-          alt={product.name}
-          loading="lazy"
-          decoding="async"
-          className="h-full w-full object-contain p-6 transition-transform duration-700 ease-out group-hover:scale-[1.04] sm:p-8"
-        />
-        {product.bestseller ? (
-          <span className="absolute left-3 top-3 rounded-full bg-primary px-2.5 py-1 text-[0.62rem] font-semibold uppercase tracking-[0.12em] text-primary-foreground">
-            Bestseller
-          </span>
-        ) : null}
-      </div>
-
-      <div className="mt-4 space-y-1.5">
-        <p className="text-eyebrow text-muted-foreground">{product.collection}</p>
-        <h3 className="text-sm font-medium leading-snug text-foreground transition-opacity duration-300 group-hover:opacity-70 sm:text-base">
-          {product.name}
-        </h3>
-        <p className="text-xs text-foreground/80 tabular-nums">{product.price}</p>
-      </div>
-    </a>
-  );
+// Product.category has 2 values ("Printing & Branding", "Officeneed
+// Exclusive") the bestsellers filter row has no dedicated pill for -- bucket
+// those under "Corporate Gifting", same as before this migrated onto the
+// canonical Product type. This is presentation-only (which filter pill a
+// product answers to), so it lives here rather than in the data layer.
+function toFilterCategory(category: Product["category"]): BestsellerCategory {
+  if (category === "Office Stationery" || category === "Computer Peripherals" || category === "Fragrance Gifting") {
+    return category;
+  }
+  return "Corporate Gifting";
 }
 
 export function Bestsellers() {
@@ -50,7 +27,7 @@ export function Bestsellers() {
   const catalogue = useShopifyBestsellers(bestsellerProducts);
 
   const products = useMemo(
-    () => (active === "All" ? catalogue : catalogue.filter((p) => p.category === active)).slice(0, 12),
+    () => (active === "All" ? catalogue : catalogue.filter((p) => toFilterCategory(p.category) === active)).slice(0, 12),
     [active, catalogue],
   );
 
@@ -85,7 +62,11 @@ export function Bestsellers() {
     <section
       id="bestsellers"
       aria-labelledby="bestsellers-heading"
-      className="w-full bg-background py-14 sm:py-16 lg:py-20"
+      // #F5F5F7, not the secondary/muted token: verified it resolves to
+      // #F2F2F2 (a few units darker, no hue), not the requested value --
+      // using the literal hex also keeps this in sync with the identical
+      // #F5F5F7 catalogue background already used on the /products page.
+      className="w-full bg-[#F5F5F7] py-14 sm:py-16 lg:py-20"
     >
       <div className="mx-auto w-full max-w-[1600px]">
         <div className="pl-[30px] pr-5 sm:pl-[42px] sm:pr-8 lg:pl-[58px] lg:pr-12">
@@ -149,7 +130,12 @@ export function Bestsellers() {
             className="mt-8 flex snap-x snap-mandatory gap-6 overflow-x-auto scroll-smooth pb-2 [scrollbar-width:none] sm:mt-10 [&::-webkit-scrollbar]:hidden"
           >
             {products.map((p) => (
-              <ProductCard key={p.id} product={p} />
+              <ProductCard
+                key={p.slug}
+                product={p}
+                showEyebrow
+                className="w-[74vw] shrink-0 snap-start sm:w-[46vw] md:w-[34vw] lg:w-[calc((100%-4.5rem)/4)]"
+              />
             ))}
             <div aria-hidden className="w-1 shrink-0 sm:w-2" />
           </div>

@@ -9,7 +9,27 @@ import { cn } from "@/lib/utils";
 import { productBelongsToCategory } from "@/lib/taxonomy";
 import { useNormalizedImageScale } from "@/lib/image-content-scale";
 
-export function ProductCard({ product }: { product: Product }) {
+export function ProductCard({
+  product,
+  className,
+  showEyebrow = false,
+  imageWellClassName,
+}: {
+  product: Product;
+  /** Extra classes merged onto the outer card wrapper. Lets a caller like
+   * Bestsellers size the card for a horizontal carousel instead of the
+   * /products grid's own sizing, without a second card implementation. */
+  className?: string;
+  /** Shows a small uppercase label (brand/vendor, falling back to
+   * subcategory, then category) above the title. Off by default so the
+   * /products grid is unchanged; Bestsellers turns it on for its
+   * collection/brand label. */
+  showEyebrow?: boolean;
+  /** Overrides the image well's background (defaults to white, the
+   * /products grid treatment). Bestsellers passes its own #F5F5F7 "cutout"
+   * treatment to match that section's card design. */
+  imageWellClassName?: string;
+}) {
   const { savedHandles, toggleSave } = useSaves();
   const [busy, setBusy] = useState(false);
   const isSignedIn = typeof window !== "undefined" && Boolean(getCustomerToken());
@@ -77,7 +97,7 @@ export function ProductCard({ product }: { product: Product }) {
   };
 
   return (
-    <div className="relative h-full">
+    <div className={cn("relative h-full", className)}>
       <Link
         to="/products/$slug"
         params={{ slug: product.slug }}
@@ -85,7 +105,7 @@ export function ProductCard({ product }: { product: Product }) {
         className="group flex h-full flex-col rounded-2xl bg-white p-3 sm:p-4 shadow-[0_2px_12px_rgba(0,0,0,0.05)] transition-shadow duration-300 hover:shadow-[0_4px_20px_rgba(0,0,0,0.08)] outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-background"
       >
         <div
-          className="relative aspect-square w-full overflow-hidden rounded-xl bg-white"
+          className={cn("relative aspect-square w-full overflow-hidden rounded-xl", imageWellClassName ?? "bg-white")}
           onPointerEnter={handlePointerEnter}
           onPointerLeave={handlePointerLeave}
         >
@@ -129,6 +149,11 @@ export function ProductCard({ product }: { product: Product }) {
         </div>
 
         <div className="mt-4 flex flex-1 flex-col gap-2 px-1 pb-1">
+          {showEyebrow && (
+            <p className="text-eyebrow text-muted-foreground">
+              {product.vendor || product.subcategories[0] || product.category}
+            </p>
+          )}
           {/* min-h reserves 2 lines' worth of space on mobile even for a
               short 1-line title, so the price sits at the same height
               across every card in a row instead of drifting up/down with
