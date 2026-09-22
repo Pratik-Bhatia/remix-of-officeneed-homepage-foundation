@@ -17,6 +17,7 @@ import { mergeProduct, shopifyNodeToProduct } from "@/lib/shopify-overlay";
 import { useCartStore } from "@/stores/cartStore";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { useProductBrowseAbandon } from "@/hooks/useProductBrowseAbandon";
 
 const BASE = "https://officeneed-premier-launch.lovable.app";
 
@@ -129,6 +130,9 @@ function ProductDetail() {
   const [showStickyBar, setShowStickyBar] = useState(false);
   const [reviews, setReviews] = useState<Review[]>([]);
   const slug = Route.useParams().slug;
+
+  // WhatsApp browse-abandon trigger (KwikEngage) when the shopper leaves this page.
+  useProductBrowseAbandon({ handle: slug, title: product.name });
 
   useEffect(() => {
     async function fetchReviews() {
