@@ -59,32 +59,11 @@ function sniffImageFormat(bytes: Buffer): "PNG" | "JPEG" | "WEBP" | null {
 export const ALLOWED_UPLOAD_TYPES = ALLOWED_TYPES;
 
 /**
- * Client used to write chat uploads. Prefers the service-role key and falls
- * back to the publishable key (the bucket allows anon inserts).
+ * Client used to write uploads. Storage writes are server-only: public
+ * (anon) upload policies were removed, so this must use the service role.
  */
 export function getUploadClient(): SupabaseClient | null {
-  const admin = getAdminClient();
-  if (admin) return admin;
-
-  const url = process.env["SUPABASE_URL"] ?? process.env["VITE_SUPABASE_URL"];
-  const key =
-    process.env["SUPABASE_PUBLISHABLE_KEY"] ??
-    process.env["VITE_SUPABASE_PUBLISHABLE_KEY"] ??
-    process.env["SUPABASE_ANON_KEY"];
-  if (!url || !key) return null;
-  return createClient(url, key, {
-    auth: { persistSession: false, autoRefreshToken: false },
-    global: {
-      fetch: (input, init) => {
-        const headers = new Headers(init?.headers);
-        if (key.startsWith("sb_") && headers.get("Authorization") === `Bearer ${key}`) {
-          headers.delete("Authorization");
-        }
-        headers.set("apikey", key);
-        return fetch(input, { ...init, headers });
-      },
-    },
-  });
+  return getAdminClient();
 }
 
 export function getAdminClient(): SupabaseClient | null {
