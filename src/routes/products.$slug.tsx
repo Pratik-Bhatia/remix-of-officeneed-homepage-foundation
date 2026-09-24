@@ -19,9 +19,19 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useProductBrowseAbandon } from "@/hooks/useProductBrowseAbandon";
 
-const BASE = "https://officeneed-premier-launch.lovable.app";
+const BASE = "https://storeofficeneedversion3.lovable.app";
+
+/** Numeric Shopify id from a gid ("gid://shopify/ProductVariant/123" -> "123"). */
+const numericId = (gid: string) => gid.split("/").pop() ?? gid;
+function findVariant<T extends { id: string }>(variants: T[], param?: string): T | undefined {
+  if (!param) return undefined;
+  const target = numericId(String(param));
+  return variants.find((v) => numericId(v.id) === target);
+}
 
 export const Route = createFileRoute("/products/$slug")({
+  validateSearch: (search: Record<string, unknown>): { variant?: string } =>
+    search.variant != null && String(search.variant) !== "" ? { variant: String(search.variant) } : {},
   loader: async ({ params }) => {
     const staticProduct = getProductBySlug(params.slug);
 
@@ -60,21 +70,47 @@ export const Route = createFileRoute("/products/$slug")({
       };
     }
     const p = loaderData.product;
-    const title = `${p.name} — OfficeNeed`;
-    const url = `${BASE}/products/${params.slug}`;
+    const variantParam = (match?.search as { variant?: string } | undefined)?.variant;
+    const shareVariant = findVariant(
+      (loaderData.node?.variants?.edges ?? []).map((e: { node: ShopifyVariantNode }) => e.node),
+      variantParam,
+    );
+    const variantLabel =
+      shareVariant && shareVariant.title && shareVariant.title.toLowerCase() !== "default title"
+        ? shareVariant.title
+        : null;
+    const title = variantLabel ? `${p.name} – ${variantLabel} — OfficeNeed` : `${p.name} — OfficeNeed`;
+    const description = variantLabel && shareVariant
+      ? `${p.name} (${variantLabel}) — ${formatMoney(shareVariant.price.amount, shareVariant.price.currencyCode)}. ${p.summary}`.slice(0, 300)
+      : p.summary;
+    const canonical = `${BASE}/products/${params.slug}`;
+    const url = shareVariant ? `${canonical}?variant=${numericId(shareVariant.id)}` : canonical;
+    const rawImage = shareVariant?.image?.url ?? p.images[0]!;
+    let shareImage = rawImage;
+    try {
+      const u = new URL(rawImage);
+      if (u.hostname.includes("shopify")) {
+        u.searchParams.set("width", "1200");
+        u.searchParams.set("height", "630");
+        u.searchParams.set("crop", "center");
+        shareImage = u.toString();
+      }
+    } catch {
+      /* relative/static image: use as-is */
+    }
     return {
       meta: [
         { title },
-        { name: "description", content: p.summary },
+        { name: "description", content: description },
         { property: "og:title", content: title },
-        { property: "og:description", content: p.summary },
+        { property: "og:description", content: description },
         { property: "og:type", content: "product" },
         { property: "og:url", content: url },
-        { property: "og:image", content: p.images[0]! },
+        { property: "og:image", content: shareImage },
         { name: "twitter:card", content: "summary_large_image" },
-        { name: "twitter:image", content: p.images[0]! },
+        { name: "twitter:image", content: shareImage },
       ],
-      links: [{ rel: "canonical", href: url }],
+      links: [{ rel: "canonical", href: canonical }],
       scripts: [
         {
           type: "application/ld+json",
@@ -228,21 +264,41 @@ function ProductDetail() {
     [variants],
   );
 
+  const search = Route.useSearch();
+  const navigate = Route.useNavigate();
+  const linkedVariant = findVariant(variants, search.variant);
+  const initialVariant = linkedVariant ?? defaultVariant;
+
   const [selectedVariantId, setSelectedVariantId] = useState<string | null>(
-    defaultVariant?.id ?? null,
+    initialVariant?.id ?? null,
   );
   const selectedVariant =
-    variants.find((v) => v.id === selectedVariantId) ?? defaultVariant;
+    variants.find((v) => v.id === selectedVariantId) ?? initialVariant;
 
   const [activeImage, setActiveImage] = useState(() => {
-    const i = indexForUrl(defaultVariant?.image?.url);
+    const i = indexForUrl(initialVariant?.image?.url);
     return i >= 0 ? i : 0;
   });
+
+  // Follow back/forward or a shared link changing ?variant= on the same page.
+  useEffect(() => {
+    if (linkedVariant && linkedVariant.id !== selectedVariantId) {
+      setSelectedVariantId(linkedVariant.id);
+      const i = indexForUrl(linkedVariant.image?.url);
+      if (i >= 0) setActiveImage(i);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linkedVariant?.id]);
 
   const selectVariant = (variant: ShopifyVariantNode) => {
     setSelectedVariantId(variant.id);
     const i = indexForUrl(variant.image?.url);
     if (i >= 0) setActiveImage(i);
+    void navigate({
+      search: (prev) => ({ ...prev, variant: numericId(variant.id) }),
+      replace: true,
+      resetScroll: false,
+    });
   };
 
   /** Images belonging to a specific variant (used to highlight the gallery). */
@@ -293,6 +349,10 @@ function ProductDetail() {
 
     const variantToUse = selectedVariant;
     if (!variantToUse) return;
+    if (!variantToUse.availableForSale) {
+      toast.error("Sorry, this option is out of stock.");
+      return;
+    }
     
     if (isItemInCart) {
       // If already in cart, button just opens drawer since quantity auto-syncs
