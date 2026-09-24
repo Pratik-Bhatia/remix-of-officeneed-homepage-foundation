@@ -114,10 +114,10 @@ function CartPage() {
                   </div>
                   <button
                     onClick={handleCheckout}
-                    disabled={isLoading || isSyncing}
+                    disabled={isLoading || isSyncing || preparing}
                     className="flex w-full items-center justify-center gap-2 rounded-full bg-foreground py-3.5 text-[15px] font-medium text-background transition-colors hover:bg-foreground/90 disabled:opacity-50"
                   >
-                    {isLoading || isSyncing ? <Loader2 className="size-4 animate-spin" /> : "Checkout"}
+                    {isLoading || isSyncing || preparing ? <Loader2 className="size-4 animate-spin" /> : "Checkout"}
                   </button>
                 </div>
 
