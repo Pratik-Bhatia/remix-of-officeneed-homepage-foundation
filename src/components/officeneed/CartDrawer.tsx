@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "@tanstack/react-router";
-import { ShoppingBag, X } from "lucide-react";
+import { Loader2, ShoppingBag, X } from "lucide-react";
 import { useCartStore } from "@/stores/cartStore";
 import { cn } from "@/lib/utils";
+import { formatMoney } from "@/lib/shopify";
 import { lockScroll, unlockScroll } from "@/lib/scroll-lock";
 import { CartLineItem } from "@/components/officeneed/CartLineItem";
 import { CartProfileLinks } from "@/components/officeneed/CartProfileLinks";
@@ -15,6 +16,11 @@ export function CartDrawer({ triggerClassName }: { triggerClassName?: string }) 
   const updateQuantity = useCartStore((s) => s.updateQuantity);
   const removeItem = useCartStore((s) => s.removeItem);
   const syncCart = useCartStore((s) => s.syncCart);
+  const prepareCheckout = useCartStore((s) => s.prepareCheckout);
+  const cost = useCartStore((s) => s.cost);
+  const isLoading = useCartStore((s) => s.isLoading);
+  const isSyncing = useCartStore((s) => s.isSyncing);
+  const [preparing, setPreparing] = useState(false);
 
   const [mounted, setMounted] = useState(false);
 
@@ -23,6 +29,30 @@ export function CartDrawer({ triggerClassName }: { triggerClassName?: string }) 
   }, []);
 
   const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
+  const itemSubtotal = items.reduce(
+    (sum, item) => sum + parseFloat(item.price.amount) * item.quantity,
+    0,
+  );
+  const currency = cost.subtotal?.currencyCode ?? items[0]?.price.currencyCode ?? "INR";
+  const discountedSubtotal = cost.subtotal ? parseFloat(cost.subtotal.amount) : itemSubtotal;
+  const discount = Math.max(0, itemSubtotal - discountedSubtotal);
+  const finalTotal = cost.total ? parseFloat(cost.total.amount) : discountedSubtotal;
+
+  const handleCheckout = async () => {
+    const win = window.open("", "_blank");
+    setPreparing(true);
+    try {
+      const checkoutUrl = await prepareCheckout();
+      if (!checkoutUrl) {
+        win?.close();
+        return;
+      }
+      if (win) win.location.href = checkoutUrl;
+      else window.open(checkoutUrl, "_blank");
+    } finally {
+      setPreparing(false);
+    }
+  };
 
   useEffect(() => {
     if (isOpen) {
@@ -153,6 +183,34 @@ export function CartDrawer({ triggerClassName }: { triggerClassName?: string }) 
 
                   <div className="mt-6">
                     <DiscountCodeInput />
+                  </div>
+
+                  <div className="mt-6 rounded-2xl border border-border p-6 space-y-5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[15px] font-medium text-foreground">Subtotal</span>
+                      <span className="text-[17px] font-medium tabular-nums text-foreground">
+                        {formatMoney(itemSubtotal, currency)}
+                      </span>
+                    </div>
+                    {discount > 0.009 ? (
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Discount</span>
+                        <span className="tabular-nums text-foreground">−{formatMoney(discount, currency)}</span>
+                      </div>
+                    ) : null}
+                    <div className="flex items-center justify-between border-t border-border pt-5">
+                      <span className="text-[15px] font-medium text-foreground">Total</span>
+                      <span className="text-[17px] font-medium tabular-nums text-foreground">
+                        {formatMoney(finalTotal, currency)}
+                      </span>
+                    </div>
+                    <button
+                      onClick={handleCheckout}
+                      disabled={isLoading || isSyncing || preparing}
+                      className="flex w-full items-center justify-center gap-2 rounded-full bg-foreground py-3.5 text-[15px] font-medium text-background transition-colors hover:bg-foreground/90 disabled:opacity-50"
+                    >
+                      {isLoading || isSyncing || preparing ? <Loader2 className="size-4 animate-spin" /> : "Checkout"}
+                    </button>
                   </div>
 
                   <div className="mt-6 border-t border-border pt-6">
