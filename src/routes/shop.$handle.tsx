@@ -12,6 +12,8 @@ import { RichText } from "@/components/officeneed/RichText";
 import { useProductBrowseAbandon } from "@/hooks/useProductBrowseAbandon";
 
 export const Route = createFileRoute("/shop/$handle")({
+  validateSearch: (search: Record<string, unknown>): { variant?: string } =>
+    search.variant != null && String(search.variant) !== "" ? { variant: String(search.variant) } : {},
   component: ShopProductPage,
   head: () => ({
     meta: [
@@ -36,7 +38,14 @@ function ShopProductPage() {
   const { handle } = Route.useParams();
   const addItem = useCartStore((s) => s.addItem);
   const isLoading = useCartStore((s) => s.isLoading);
-  const [variantId, setVariantId] = useState<string | null>(null);
+  const search = Route.useSearch();
+  const navigate = Route.useNavigate();
+  const setVariantId = (id: string) =>
+    void navigate({
+      search: (prev) => ({ ...prev, variant: id.split("/").pop() }),
+      replace: true,
+      resetScroll: false,
+    });
 
   const { data: product, isPending, error } = useQuery({
     queryKey: ["shopify-product", handle],
@@ -73,7 +82,7 @@ function ShopProductPage() {
 
   const variants = product.variants.edges.map((e) => e.node);
   const selected =
-    variants.find((v) => v.id === variantId) ??
+    (search.variant ? variants.find((v) => v.id.split("/").pop() === search.variant) : undefined) ??
     variants.find((v) => v.availableForSale) ??
     variants[0];
 
@@ -97,6 +106,10 @@ function ShopProductPage() {
 
   const handleAdd = async () => {
     if (!selected) return;
+    if (!selected.availableForSale) {
+      toast.error("Sorry, this option is out of stock.");
+      return;
+    }
     await addItem({
       product: { node: product },
       variantId: selected.id,
@@ -105,7 +118,9 @@ function ShopProductPage() {
       quantity: 1,
       selectedOptions: selected.selectedOptions,
     });
-    toast.success("Added to cart", { description: product.title });
+    if (useCartStore.getState().items.some((i) => i.variantId === selected.id)) {
+      toast.success("Added to cart", { description: product.title });
+    }
   };
 
   return (
