@@ -18,6 +18,8 @@ export function useCartSync() {
     const syncAccount = async () => {
       const token = getCustomerToken();
       if (!token) {
+        // Signed out on this device: the bag stays saved on the account.
+        if (lastToken) useCartStore.getState().clearCart();
         lastToken = null;
         return false;
       }
