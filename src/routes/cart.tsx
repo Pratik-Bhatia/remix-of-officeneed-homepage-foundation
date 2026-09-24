@@ -7,6 +7,7 @@ import { useCartStore } from "@/stores/cartStore";
 import { formatMoney } from "@/lib/shopify";
 import { CartLineItem } from "@/components/officeneed/CartLineItem";
 import { CartProfileLinks } from "@/components/officeneed/CartProfileLinks";
+import { DiscountCodeInput } from "@/components/officeneed/DiscountCodeInput";
 
 export const Route = createFileRoute("/cart")({
   head: () => ({
@@ -35,11 +36,15 @@ function CartPage() {
   const prepareCheckout = useCartStore((s) => s.prepareCheckout);
   const [preparing, setPreparing] = useState(false);
 
+  const cost = useCartStore((s) => s.cost);
   const totalPrice = items.reduce(
     (sum, item) => sum + parseFloat(item.price.amount) * item.quantity,
     0,
   );
-  const currency = items[0]?.price.currencyCode ?? "INR";
+  const currency = cost.subtotal?.currencyCode ?? items[0]?.price.currencyCode ?? "INR";
+  // Shopify's discounted subtotal is authoritative once available.
+  const subtotal = cost.subtotal ? parseFloat(cost.subtotal.amount) : totalPrice;
+  const discount = Math.max(0, totalPrice - subtotal);
 
   const handleCheckout = async () => {
     // Open the tab synchronously so popup blockers allow it, then point it
@@ -106,12 +111,19 @@ function CartPage() {
 
               <div className="w-full shrink-0 lg:w-80">
                 <div className="rounded-2xl border border-border p-6 space-y-5">
+                  <DiscountCodeInput />
                   <div className="flex items-center justify-between">
                     <span className="text-[15px] font-medium text-foreground">Subtotal</span>
                     <span className="text-[17px] font-medium tabular-nums text-foreground">
-                      {formatMoney(totalPrice, currency)}
+                      {formatMoney(subtotal, currency)}
                     </span>
                   </div>
+                  {discount > 0.009 ? (
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Discount</span>
+                      <span className="tabular-nums text-foreground">−{formatMoney(discount, currency)}</span>
+                    </div>
+                  ) : null}
                   <button
                     onClick={handleCheckout}
                     disabled={isLoading || isSyncing || preparing}

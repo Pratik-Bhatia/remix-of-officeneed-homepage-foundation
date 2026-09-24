@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { lockScroll, unlockScroll } from "@/lib/scroll-lock";
 import { CartLineItem } from "@/components/officeneed/CartLineItem";
 import { CartProfileLinks } from "@/components/officeneed/CartProfileLinks";
+import { DiscountCodeInput } from "@/components/officeneed/DiscountCodeInput";
 
 export function CartDrawer({ triggerClassName }: { triggerClassName?: string }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -148,6 +149,10 @@ export function CartDrawer({ triggerClassName }: { triggerClassName?: string }) 
                         onRemove={() => removeItem(item.variantId)}
                       />
                     ))}
+                  </div>
+
+                  <div className="mt-6">
+                    <DiscountCodeInput />
                   </div>
 
                   <div className="mt-6 border-t border-border pt-6">
