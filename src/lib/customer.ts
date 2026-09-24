@@ -81,6 +81,17 @@ function setCustomerToken(value: { accessToken: string; expiresAt: string } | nu
   window.dispatchEvent(new Event(TOKEN_EVENT));
 }
 
+/** Clear a stale Shopify token and ask the shopper to sign in again. */
+function handleExpiredSession() {
+  if (typeof window === "undefined") return;
+  if (!window.localStorage.getItem(TOKEN_KEY)) return;
+  setCustomerToken(null);
+  void import("sonner").then(({ toast }) =>
+    toast.error("Your session expired. Please sign in again."),
+  );
+  window.dispatchEvent(new CustomEvent("open-auth-modal"));
+}
+
 /* --------------------------------- queries -------------------------------- */
 
 const CUSTOMER_QUERY = `
@@ -291,14 +302,19 @@ export function useCustomer() {
     try {
       const data = await fetchCustomer(current);
       if (!data) {
-        setCustomerToken(null);
+        // Shopify returns customer: null for an expired/revoked token.
+        handleExpiredSession();
         setCustomer(null);
         setStatus("out");
         return;
       }
       setCustomer(data);
       setStatus("in");
-    } catch {
+    } catch (error) {
+      const message = error instanceof Error ? error.message.toLowerCase() : "";
+      if (/access token|unidentified|invalid|expired|unauthori/.test(message)) {
+        handleExpiredSession();
+      }
       setCustomer(null);
       setStatus("out");
     }
