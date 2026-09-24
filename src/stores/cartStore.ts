@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { storefrontApiRequest, type ShopifyProduct } from "@/lib/shopify";
 import { getCustomerToken } from "@/lib/customer";
 import { appendAttribution, getAttribution } from "@/lib/attribution";
+import { getCustomerCart, saveCustomerCart } from "@/lib/customer-cart.functions";
 
 export interface CartItem {
   lineId: string | null;
@@ -110,6 +111,91 @@ const CART_ATTRIBUTES_UPDATE_MUTATION = `
     }
   }
 `;
+
+/** Full cart including product details, used to rebuild a bag on another device. */
+const ADOPT_CART_QUERY = `
+  query adoptCart($id: ID!) {
+    cart(id: $id) {
+      id
+      checkoutUrl
+      totalQuantity
+      discountCodes { code applicable }
+      cost {
+        subtotalAmount { amount currencyCode }
+        totalAmount { amount currencyCode }
+      }
+      lines(first: 100) {
+        edges {
+          node {
+            id
+            quantity
+            merchandise {
+              ... on ProductVariant {
+                id
+                title
+                price { amount currencyCode }
+                selectedOptions { name value }
+                image { url altText }
+                product {
+                  id
+                  title
+                  handle
+                  description
+                  productType
+                  vendor
+                  priceRange { minVariantPrice { amount currencyCode } }
+                  images(first: 1) { edges { node { url altText } } }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+`;
+
+function itemsFromRemote(cart: any): CartItem[] {
+  return (cart?.lines?.edges ?? [])
+    .map((e: any) => e?.node)
+    .filter((n: any) => n?.merchandise?.id && n.merchandise.product)
+    .map((n: any): CartItem => {
+      const m = n.merchandise;
+      const p = m.product;
+      const images = p.images?.edges?.length
+        ? p.images
+        : { edges: m.image ? [{ node: m.image }] : [] };
+      return {
+        lineId: n.id,
+        variantId: m.id,
+        variantTitle: m.title,
+        price: m.price,
+        quantity: n.quantity,
+        selectedOptions: m.selectedOptions ?? [],
+        product: {
+          node: {
+            ...p,
+            images,
+            variants: {
+              edges: [
+                {
+                  node: {
+                    id: m.id,
+                    title: m.title,
+                    price: m.price,
+                    availableForSale: true,
+                    selectedOptions: m.selectedOptions ?? [],
+                  },
+                },
+              ],
+            },
+            options: [],
+          },
+        } as ShopifyProduct,
+      };
+    });
+}
+
 
 /** Build buyerIdentity from the signed-in Shopify customer, if any. */
 function currentBuyerIdentity(): { customerAccessToken: string; countryCode: string } | null {
@@ -237,6 +323,8 @@ interface CartStore {
   removeItem: (variantId: string) => Promise<void>;
   clearCart: () => void;
   syncCart: () => Promise<void>;
+  /** On sign-in: load the account's saved bag (merging local items) or save this bag to the account. */
+  syncCustomerCart: (token: string) => Promise<void>;
   getCheckoutUrl: () => string | null;
   applyDiscountCode: (code: string) => Promise<{ ok: boolean; message: string }>;
   removeDiscountCode: (code: string) => Promise<void>;
@@ -317,6 +405,11 @@ export const useCartStore = create<CartStore>()(
                 discountCodes: cart.discountCodes ?? [],
                 cost: extractCost(cart),
               });
+              if (buyerIdentity) {
+                saveCustomerCart({
+                  data: { token: buyerIdentity.customerAccessToken, cartId: cart.id },
+                }).catch(() => {});
+              }
             } else if (existing) {
               if (!existing.lineId) return;
               const newQty = existing.quantity + item.quantity;
@@ -537,6 +630,64 @@ export const useCartStore = create<CartStore>()(
          * Full reconciliation with Shopify: lineIds, quantities, discounts,
          * totals. Drops lines whose product was deleted or unpublished.
          */
+        syncCustomerCart: async (token) => {
+          set({ isSyncing: true });
+          try {
+            let remoteId: string | null = null;
+            try {
+              remoteId = (await getCustomerCart({ data: { token } })).cartId;
+            } catch (error) {
+              console.error("Couldn't look up saved bag:", error);
+              return;
+            }
+            const local = get();
+            if (remoteId && remoteId !== local.cartId) {
+              const data = await storefrontApiRequest(ADOPT_CART_QUERY, { id: remoteId });
+              let remote = data?.data?.cart;
+              const remoteHasItems = !!remote && extractLines(remote).valid.length > 0;
+              if (remote && remoteHasItems) {
+                // Merge anything added on this device before signing in.
+                const remoteVariants = new Set(
+                  extractLines(remote).valid.map((l) => l.merchandise.id),
+                );
+                const extra = local.items
+                  .filter((i) => !remoteVariants.has(i.variantId))
+                  .map((i) => ({ quantity: i.quantity, merchandiseId: i.variantId }));
+                if (extra.length) {
+                  await storefrontApiRequest(CART_LINES_ADD_MUTATION, { cartId: remoteId, lines: extra });
+                  const again = await storefrontApiRequest(ADOPT_CART_QUERY, { id: remoteId });
+                  remote = again?.data?.cart ?? remote;
+                }
+                storefrontApiRequest(CART_BUYER_IDENTITY_UPDATE_MUTATION, {
+                  cartId: remoteId,
+                  buyerIdentity: { customerAccessToken: token, countryCode: "IN" },
+                }).catch(() => {});
+                set({
+                  cartId: remote.id,
+                  checkoutUrl: formatCheckoutUrl(remote.checkoutUrl),
+                  items: itemsFromRemote(remote),
+                  discountCodes: remote.discountCodes ?? [],
+                  cost: extractCost(remote),
+                });
+                return;
+              }
+            }
+            // No usable saved bag: this device's bag becomes the account's bag.
+            const { cartId } = get();
+            if (cartId && cartId !== remoteId) {
+              saveCustomerCart({ data: { token, cartId } }).catch(() => {});
+              storefrontApiRequest(CART_BUYER_IDENTITY_UPDATE_MUTATION, {
+                cartId,
+                buyerIdentity: { customerAccessToken: token, countryCode: "IN" },
+              }).catch(() => {});
+            }
+          } catch (error) {
+            console.error("Failed to sync account bag:", error);
+          } finally {
+            set({ isSyncing: false });
+          }
+        },
+
         syncCart: async () => {
           const { cartId, isSyncing, clearCart } = get();
           if (!cartId || isSyncing) return;
