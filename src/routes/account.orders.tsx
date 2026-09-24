@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { useCustomerContext } from "@/lib/customer-context";
@@ -25,8 +26,23 @@ function statusLabel(order: CustomerOrder) {
   return { label: "Processing", className: "border-border bg-secondary text-muted-foreground" };
 }
 
+function pretty(v: string | null) {
+  if (!v) return null;
+  return v.toLowerCase().replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
+}
+
+function Row({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
+  return (
+    <div className="flex justify-between gap-4">
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className={`tabular-nums ${strong ? "font-medium text-foreground" : "text-foreground/90"}`}>{value}</dd>
+    </div>
+  );
+}
+
 function OrdersPage() {
   const { customer } = useCustomerContext();
+  const [openId, setOpenId] = useState<string | null>(null);
   const orders = customer?.orders ?? [];
 
   return (
@@ -75,14 +91,41 @@ function OrdersPage() {
                   <p className="text-sm text-muted-foreground">
                     Order total <span className="ml-1 font-medium tabular-nums text-foreground">{order.total}</span>
                   </p>
-                  {order.statusUrl ? (
-                    <Button asChild variant="outline" className="rounded-full px-5">
-                      <a href={order.statusUrl} target="_blank" rel="noopener noreferrer">
-                        Track Order
-                      </a>
-                    </Button>
-                  ) : null}
+                  <Button
+                    variant="outline"
+                    className="rounded-full px-5"
+                    onClick={() => setOpenId(openId === order.id ? null : order.id)}
+                    aria-expanded={openId === order.id}
+                  >
+                    {openId === order.id ? "Hide details" : "View details"}
+                  </Button>
                 </div>
+
+                {openId === order.id ? (
+                  <div className="mt-4 grid gap-6 border-t border-border pt-4 text-sm sm:grid-cols-2">
+                    <div>
+                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Summary</p>
+                      <dl className="mt-2 space-y-1">
+                        {order.subtotal ? <Row label="Subtotal" value={order.subtotal} /> : null}
+                        {order.shipping ? <Row label="Shipping" value={order.shipping} /> : null}
+                        {order.tax ? <Row label="Tax" value={order.tax} /> : null}
+                        <Row label="Total" value={order.total} strong />
+                        <Row label="Payment" value={pretty(order.financialStatus) ?? "—"} />
+                        <Row label="Fulfilment" value={pretty(order.fulfillmentStatus) ?? "Unfulfilled"} />
+                      </dl>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Delivery address</p>
+                      {order.shippingAddress.length ? (
+                        <address className="mt-2 not-italic leading-6 text-foreground/90">
+                          {order.shippingAddress.map((l, i) => <div key={i}>{l}</div>)}
+                        </address>
+                      ) : (
+                        <p className="mt-2 text-muted-foreground">No delivery address on this order.</p>
+                      )}
+                    </div>
+                  </div>
+                ) : null}
               </article>
             );
           })}
