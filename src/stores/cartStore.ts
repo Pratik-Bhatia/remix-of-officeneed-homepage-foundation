@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { storefrontApiRequest, type ShopifyProduct } from "@/lib/shopify";
+import { getCustomerToken } from "@/lib/customer";
 
 export interface CartItem {
   lineId: string | null;
@@ -85,6 +86,21 @@ const CART_LINES_REMOVE_MUTATION = `
     }
   }
 `;
+
+const CART_BUYER_IDENTITY_UPDATE_MUTATION = `
+  mutation cartBuyerIdentityUpdate($cartId: ID!, $buyerIdentity: CartBuyerIdentityInput!) {
+    cartBuyerIdentityUpdate(cartId: $cartId, buyerIdentity: $buyerIdentity) {
+      cart { id checkoutUrl }
+      userErrors { field message }
+    }
+  }
+`;
+
+/** Build buyerIdentity from the signed-in Shopify customer, if any. */
+function currentBuyerIdentity(): { customerAccessToken: string; countryCode: string } | null {
+  const token = getCustomerToken();
+  return token ? { customerAccessToken: token, countryCode: "IN" } : null;
+}
 
 function formatCheckoutUrl(checkoutUrl: string): string {
   try {
