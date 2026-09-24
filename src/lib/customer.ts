@@ -40,6 +40,10 @@ export interface CustomerOrder {
   fulfillmentStatus: string | null;
   statusUrl: string | null;
   total: string;
+  subtotal: string | null;
+  shipping: string | null;
+  tax: string | null;
+  shippingAddress: string[];
   lines: CustomerOrderLine[];
 }
 
@@ -81,6 +85,17 @@ function setCustomerToken(value: { accessToken: string; expiresAt: string } | nu
   window.dispatchEvent(new Event(TOKEN_EVENT));
 }
 
+/** Clear a stale Shopify token and ask the shopper to sign in again. */
+function handleExpiredSession() {
+  if (typeof window === "undefined") return;
+  if (!window.localStorage.getItem(TOKEN_KEY)) return;
+  setCustomerToken(null);
+  void import("sonner").then(({ toast }) =>
+    toast.error("Your session expired. Please sign in again."),
+  );
+  window.dispatchEvent(new CustomEvent("open-auth-modal"));
+}
+
 /* --------------------------------- queries -------------------------------- */
 
 const CUSTOMER_QUERY = `
@@ -103,6 +118,10 @@ const CUSTOMER_QUERY = `
             fulfillmentStatus
             statusUrl
             currentTotalPrice { amount currencyCode }
+            currentSubtotalPrice { amount currencyCode }
+            totalShippingPrice { amount currencyCode }
+            currentTotalTax { amount currencyCode }
+            shippingAddress { firstName lastName address1 address2 city province zip country }
             lineItems(first: 25) {
               edges {
                 node {
@@ -119,6 +138,9 @@ const CUSTOMER_QUERY = `
     }
   }
 `;
+
+type Money = { amount: string; currencyCode: string };
+const money = (m?: Money | null) => (m ? formatMoney(m.amount, m.currencyCode) : null);
 
 type RawCustomer = {
   customer: null | {
@@ -139,6 +161,10 @@ type RawCustomer = {
           fulfillmentStatus: string | null;
           statusUrl: string | null;
           currentTotalPrice: { amount: string; currencyCode: string };
+          currentSubtotalPrice?: Money | null;
+          totalShippingPrice?: Money | null;
+          currentTotalTax?: Money | null;
+          shippingAddress?: CustomerAddress | null;
           lineItems: {
             edges: Array<{
               node: {
@@ -176,7 +202,19 @@ export async function fetchCustomer(token: string): Promise<Customer | null> {
       fulfillmentStatus: node.fulfillmentStatus,
       statusUrl: node.statusUrl,
       total: formatMoney(node.currentTotalPrice.amount, node.currentTotalPrice.currencyCode),
-      lines: node.lineItems.edges.map(({ node: line }) => ({
+      subtotal: money(node.currentSubtotalPrice),
+      shipping: money(node.totalShippingPrice),
+      tax: money(node.currentTotalTax),
+      shippingAddress: node.shippingAddress
+        ? [
+            [node.shippingAddress.firstName, node.shippingAddress.lastName].filter(Boolean).join(" "),
+            node.shippingAddress.address1 ?? "",
+            node.shippingAddress.address2 ?? "",
+            [node.shippingAddress.city, node.shippingAddress.province, node.shippingAddress.zip].filter(Boolean).join(", "),
+            node.shippingAddress.country ?? "",
+          ].filter(Boolean)
+        : [],
+      lines: node.lineItems.edges.filter((e) => e?.node).map(({ node: line }) => ({
         title: line.title,
         quantity: line.quantity,
         imageUrl: line.variant?.image?.url ?? null,
@@ -291,14 +329,19 @@ export function useCustomer() {
     try {
       const data = await fetchCustomer(current);
       if (!data) {
-        setCustomerToken(null);
+        // Shopify returns customer: null for an expired/revoked token.
+        handleExpiredSession();
         setCustomer(null);
         setStatus("out");
         return;
       }
       setCustomer(data);
       setStatus("in");
-    } catch {
+    } catch (error) {
+      const message = error instanceof Error ? error.message.toLowerCase() : "";
+      if (/access token|unidentified|invalid|expired|unauthori/.test(message)) {
+        handleExpiredSession();
+      }
       setCustomer(null);
       setStatus("out");
     }

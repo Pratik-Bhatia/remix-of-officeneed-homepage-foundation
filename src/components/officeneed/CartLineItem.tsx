@@ -19,7 +19,7 @@ export function CartLineItem({
   onDecrease: () => void;
   onRemove: () => void;
 }) {
-  const image = item.product.node.images?.edges?.[0]?.node;
+  const image = item.product?.node?.images?.edges?.[0]?.node;
 
   return (
     <div className="flex gap-5 border-b border-border/50 pb-5 last:border-0 last:pb-0">
@@ -27,7 +27,7 @@ export function CartLineItem({
         {image ? (
           <img
             src={image.url}
-            alt={image.altText ?? item.product.node.title}
+            alt={image.altText ?? (item.product?.node?.title ?? "Product")}
             className="size-full object-cover mix-blend-multiply"
           />
         ) : (
@@ -35,7 +35,7 @@ export function CartLineItem({
         )}
       </div>
       <div className="min-w-0 flex-1 flex flex-col justify-center">
-        <h4 className="text-[14px] md:text-[15px] font-medium text-foreground line-clamp-2">{item.product.node.title}</h4>
+        <h4 className="text-[14px] md:text-[15px] font-medium text-foreground line-clamp-2">{(item.product?.node?.title ?? "Product")}</h4>
         {item.selectedOptions.length > 0 ? (
           <p className="text-[11px] text-muted-foreground mt-0.5">
             {item.selectedOptions.map((o) => o.value).join(" | ")}
