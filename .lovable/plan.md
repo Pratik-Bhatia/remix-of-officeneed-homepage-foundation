@@ -6,6 +6,10 @@
 3. **Discount codes in the bag** – a "Discount code" box in both the bag drawer and the full bag page. Valid codes show the saving and new subtotal; invalid ones show "This code isn't valid". Codes can be removed. The code carries through to Shopify checkout.
 4. **Shareable variant links** – product pages accept `?variant=123456789`. Opening such a link pre-selects that option, its price and its photo. Picking a different option updates the link so it can be shared.
 5. **Account stays on our site** – orders and addresses already load inside our account pages. The one outbound link ("order status", which points to Shopify) will be replaced with an in-site order detail view; no account links will send shoppers to myshopify.com account pages.
+6. **Removed products in the bag** – if a product in someone's bag is deleted or set to draft in Shopify, the bag won't break. The item is taken out and the shopper sees "A product in your bag is no longer available."
+7. **Expired sign-in** – if a shopper's Shopify sign-in has expired, they're signed out automatically and asked to sign in again, instead of seeing a broken account page.
+8. **Variant previews when shared** – the page title, description and preview image follow the chosen option, so a link shared on WhatsApp or social media shows that exact option.
+9. **Marketing tracking carried to checkout** – UTM tags and referrer from the shopper's visit are kept and added to the Shopify checkout link, so campaign tracking isn't lost.
 
 ## Technical details
 - `cartStore.ts`: request `quantityAvailable`/`availableForSale` on lines, `cost` and `discountCodes { code applicable }`, `discountAllocations`. Parse `userErrors` and `warnings` (e.g. `MERCHANDISE_NOT_ENOUGH_STOCK`, `MERCHANDISE_OUT_OF_STOCK`); add a `lastError` + surface via sonner `toast.error` (top-center Toaster already mounted). Revert optimistic quantity to Shopify-reconciled value on failure. Block add when `availableForSale === false` on product page/card.
