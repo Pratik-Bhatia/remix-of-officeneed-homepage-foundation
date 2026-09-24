@@ -166,6 +166,8 @@ interface CartStore {
   clearCart: () => void;
   syncCart: () => Promise<void>;
   getCheckoutUrl: () => string | null;
+  /** Attach the signed-in customer to the cart, then return a fresh checkout URL. */
+  prepareCheckout: () => Promise<string | null>;
 }
 
 export const useCartStore = create<CartStore>()(
@@ -185,8 +187,12 @@ export const useCartStore = create<CartStore>()(
 
           if (!cartId) {
             // ── Create brand-new Shopify cart ─────────────────────────────
+            const buyerIdentity = currentBuyerIdentity();
             const data = await storefrontApiRequest(CART_CREATE_MUTATION, {
-              input: { lines: [{ quantity: item.quantity, merchandiseId: item.variantId }] },
+              input: {
+                lines: [{ quantity: item.quantity, merchandiseId: item.variantId }],
+                ...(buyerIdentity ? { buyerIdentity } : {}),
+              },
             });
             const errors: UserError[] = data?.data?.cartCreate?.userErrors ?? [];
             if (errors.length > 0) { console.error("Cart creation failed:", errors); return; }
