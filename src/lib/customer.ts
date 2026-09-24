@@ -61,21 +61,32 @@ export interface Customer {
 
 /* ---------------------------------- token --------------------------------- */
 
-export function getCustomerToken(): string | null {
+interface StoredToken {
+  accessToken: string;
+  expiresAt?: string;
+}
+
+/** Read the stored token without side effects (does not clear expired tokens). */
+function readStoredToken(): StoredToken | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = window.localStorage.getItem(TOKEN_KEY);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as { accessToken: string; expiresAt: string };
+    const parsed = JSON.parse(raw) as StoredToken;
     if (!parsed.accessToken) return null;
-    if (parsed.expiresAt && new Date(parsed.expiresAt).getTime() < Date.now()) {
-      window.localStorage.removeItem(TOKEN_KEY);
-      return null;
-    }
-    return parsed.accessToken;
+    return parsed;
   } catch {
     return null;
   }
+}
+
+export function getCustomerToken(): string | null {
+  const stored = readStoredToken();
+  if (!stored) return null;
+  if (stored.expiresAt && new Date(stored.expiresAt).getTime() < Date.now()) {
+    return null;
+  }
+  return stored.accessToken;
 }
 
 function setCustomerToken(value: { accessToken: string; expiresAt: string } | null) {
@@ -85,10 +96,9 @@ function setCustomerToken(value: { accessToken: string; expiresAt: string } | nu
   window.dispatchEvent(new Event(TOKEN_EVENT));
 }
 
-/** Clear a stale Shopify token and ask the shopper to sign in again. */
-function handleExpiredSession() {
+/** Clear a stale Shopify token and explicitly tell the shopper why. */
+function notifyExpiredSession() {
   if (typeof window === "undefined") return;
-  if (!window.localStorage.getItem(TOKEN_KEY)) return;
   setCustomerToken(null);
   void import("sonner").then(({ toast }) =>
     toast.error("Your session expired. Please sign in again."),
@@ -319,9 +329,16 @@ export function useCustomer() {
   const [status, setStatus] = useState<"checking" | "in" | "out">("checking");
 
   const load = useCallback(async () => {
-    const current = getCustomerToken();
+    const stored = readStoredToken();
+    const expired =
+      !!stored?.expiresAt && new Date(stored.expiresAt).getTime() < Date.now();
+    const current = stored && !expired ? stored.accessToken : null;
     setToken(current);
+
     if (!current) {
+      // A token that was present but past its expiry should explain the logout,
+      // not look like the shopper was never signed in.
+      if (stored && expired) notifyExpiredSession();
       setCustomer(null);
       setStatus("out");
       return;
@@ -330,7 +347,7 @@ export function useCustomer() {
       const data = await fetchCustomer(current);
       if (!data) {
         // Shopify returns customer: null for an expired/revoked token.
-        handleExpiredSession();
+        notifyExpiredSession();
         setCustomer(null);
         setStatus("out");
         return;
@@ -340,7 +357,7 @@ export function useCustomer() {
     } catch (error) {
       const message = error instanceof Error ? error.message.toLowerCase() : "";
       if (/access token|unidentified|invalid|expired|unauthori/.test(message)) {
-        handleExpiredSession();
+        notifyExpiredSession();
       }
       setCustomer(null);
       setStatus("out");
