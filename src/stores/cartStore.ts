@@ -170,14 +170,14 @@ function friendlyMessage(code: string | null | undefined, message: string): stri
 
 /** Show toasts for user errors / warnings. Returns true if blocking errors occurred. */
 function reportProblems(errors: UserError[], warnings: CartWarning[] = []): boolean {
-  if (errors.length > 0) {
+  const err = errors[0];
+  if (err) {
     console.error("Shopify cart error:", errors);
-    toast.error(friendlyMessage(errors[0].code, errors[0].message));
+    toast.error(friendlyMessage(err.code, err.message));
     return true;
   }
-  if (warnings.length > 0) {
-    toast.warning(friendlyMessage(warnings[0].code, warnings[0].message));
-  }
+  const warn = warnings[0];
+  if (warn) toast.warning(friendlyMessage(warn.code, warn.message));
   return false;
 }
 
