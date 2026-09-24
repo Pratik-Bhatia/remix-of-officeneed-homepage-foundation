@@ -31,7 +31,7 @@ function findVariant<T extends { id: string }>(variants: T[], param?: string): T
 
 export const Route = createFileRoute("/products/$slug")({
   validateSearch: (search: Record<string, unknown>): { variant?: string } =>
-    search.variant != null && String(search.variant) !== "" ? { variant: String(search.variant) } : {},
+    search["variant"] != null && String(search["variant"]) !== "" ? { variant: String(search["variant"]) } : {},
   loader: async ({ params }) => {
     const staticProduct = getProductBySlug(params.slug);
 

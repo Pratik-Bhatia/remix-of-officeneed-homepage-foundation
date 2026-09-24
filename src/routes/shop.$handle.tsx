@@ -12,7 +12,7 @@ import { useProductBrowseAbandon } from "@/hooks/useProductBrowseAbandon";
 
 export const Route = createFileRoute("/shop/$handle")({
   validateSearch: (search: Record<string, unknown>): { variant?: string } =>
-    search.variant != null && String(search.variant) !== "" ? { variant: String(search.variant) } : {},
+    search["variant"] != null && String(search["variant"]) !== "" ? { variant: String(search["variant"]) } : {},
   component: ShopProductPage,
   head: () => ({
     meta: [
@@ -41,7 +41,7 @@ function ShopProductPage() {
   const navigate = Route.useNavigate();
   const setVariantId = (id: string) =>
     void navigate({
-      search: (prev) => ({ ...prev, variant: id.split("/").pop() }),
+      search: (prev) => ({ ...prev, variant: id.split("/").pop() ?? id }),
       replace: true,
       resetScroll: false,
     });
