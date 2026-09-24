@@ -316,6 +316,33 @@ export const useCartStore = create<CartStore>()(
       clearCart: () => set({ items: [], cartId: null, checkoutUrl: null }),
       getCheckoutUrl: () => get().checkoutUrl,
 
+      prepareCheckout: async () => {
+        const { cartId, checkoutUrl, clearCart } = get();
+        if (!cartId) return checkoutUrl;
+        const buyerIdentity = currentBuyerIdentity();
+        if (!buyerIdentity) return checkoutUrl;
+        try {
+          const data = await storefrontApiRequest(CART_BUYER_IDENTITY_UPDATE_MUTATION, {
+            cartId,
+            buyerIdentity,
+          });
+          const errors: UserError[] = data?.data?.cartBuyerIdentityUpdate?.userErrors ?? [];
+          if (isCartNotFoundError(errors)) { clearCart(); return null; }
+          if (errors.length > 0) {
+            console.error("Buyer identity update failed:", errors);
+            return checkoutUrl;
+          }
+          const url = data?.data?.cartBuyerIdentityUpdate?.cart?.checkoutUrl;
+          if (!url) return checkoutUrl;
+          const formatted = formatCheckoutUrl(url);
+          set({ checkoutUrl: formatted });
+          return formatted;
+        } catch (error) {
+          console.error("Failed to attach customer to cart:", error);
+          return checkoutUrl;
+        }
+      },
+
       /**
        * Full reconciliation: fetch actual Shopify cart data and update local
        * lineIds + quantities. Called when the cart drawer opens.

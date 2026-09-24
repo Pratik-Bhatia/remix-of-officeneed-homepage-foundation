@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ShoppingBag, Loader2 } from "lucide-react";
 import { Navbar } from "@/components/officeneed/Navbar";
@@ -31,7 +32,8 @@ function CartPage() {
   const isSyncing = useCartStore((s) => s.isSyncing);
   const updateQuantity = useCartStore((s) => s.updateQuantity);
   const removeItem = useCartStore((s) => s.removeItem);
-  const getCheckoutUrl = useCartStore((s) => s.getCheckoutUrl);
+  const prepareCheckout = useCartStore((s) => s.prepareCheckout);
+  const [preparing, setPreparing] = useState(false);
 
   const totalPrice = items.reduce(
     (sum, item) => sum + parseFloat(item.price.amount) * item.quantity,
@@ -39,9 +41,19 @@ function CartPage() {
   );
   const currency = items[0]?.price.currencyCode ?? "INR";
 
-  const handleCheckout = () => {
-    const checkoutUrl = getCheckoutUrl();
-    if (checkoutUrl) window.open(checkoutUrl, "_blank");
+  const handleCheckout = async () => {
+    // Open the tab synchronously so popup blockers allow it, then point it
+    // at the checkout URL once the signed-in customer is attached.
+    const win = window.open("", "_blank");
+    setPreparing(true);
+    try {
+      const checkoutUrl = await prepareCheckout();
+      if (!checkoutUrl) { win?.close(); return; }
+      if (win) win.location.href = checkoutUrl;
+      else window.open(checkoutUrl, "_blank");
+    } finally {
+      setPreparing(false);
+    }
   };
 
   return (
