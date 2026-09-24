@@ -63,7 +63,7 @@ export const Route = createFileRoute("/products/$slug")({
 
     return { product, node, related };
   },
-  head: ({ params, loaderData }) => {
+  head: ({ params, loaderData, match }) => {
     if (!loaderData) {
       return {
         meta: [{ title: "Product unavailable — OfficeNeed" }, { name: "robots", content: "noindex" }],
