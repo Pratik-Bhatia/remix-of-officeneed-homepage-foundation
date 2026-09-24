@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { storefrontApiRequest, type ShopifyProduct } from "@/lib/shopify";
+import { getCustomerToken } from "@/lib/customer";
 
 export interface CartItem {
   lineId: string | null;
@@ -86,6 +87,21 @@ const CART_LINES_REMOVE_MUTATION = `
   }
 `;
 
+const CART_BUYER_IDENTITY_UPDATE_MUTATION = `
+  mutation cartBuyerIdentityUpdate($cartId: ID!, $buyerIdentity: CartBuyerIdentityInput!) {
+    cartBuyerIdentityUpdate(cartId: $cartId, buyerIdentity: $buyerIdentity) {
+      cart { id checkoutUrl }
+      userErrors { field message }
+    }
+  }
+`;
+
+/** Build buyerIdentity from the signed-in Shopify customer, if any. */
+function currentBuyerIdentity(): { customerAccessToken: string; countryCode: string } | null {
+  const token = getCustomerToken();
+  return token ? { customerAccessToken: token, countryCode: "IN" } : null;
+}
+
 function formatCheckoutUrl(checkoutUrl: string): string {
   try {
     const url = new URL(checkoutUrl);
@@ -150,6 +166,8 @@ interface CartStore {
   clearCart: () => void;
   syncCart: () => Promise<void>;
   getCheckoutUrl: () => string | null;
+  /** Attach the signed-in customer to the cart, then return a fresh checkout URL. */
+  prepareCheckout: () => Promise<string | null>;
 }
 
 export const useCartStore = create<CartStore>()(
@@ -169,8 +187,12 @@ export const useCartStore = create<CartStore>()(
 
           if (!cartId) {
             // ── Create brand-new Shopify cart ─────────────────────────────
+            const buyerIdentity = currentBuyerIdentity();
             const data = await storefrontApiRequest(CART_CREATE_MUTATION, {
-              input: { lines: [{ quantity: item.quantity, merchandiseId: item.variantId }] },
+              input: {
+                lines: [{ quantity: item.quantity, merchandiseId: item.variantId }],
+                ...(buyerIdentity ? { buyerIdentity } : {}),
+              },
             });
             const errors: UserError[] = data?.data?.cartCreate?.userErrors ?? [];
             if (errors.length > 0) { console.error("Cart creation failed:", errors); return; }
@@ -293,6 +315,33 @@ export const useCartStore = create<CartStore>()(
 
       clearCart: () => set({ items: [], cartId: null, checkoutUrl: null }),
       getCheckoutUrl: () => get().checkoutUrl,
+
+      prepareCheckout: async () => {
+        const { cartId, checkoutUrl, clearCart } = get();
+        if (!cartId) return checkoutUrl;
+        const buyerIdentity = currentBuyerIdentity();
+        if (!buyerIdentity) return checkoutUrl;
+        try {
+          const data = await storefrontApiRequest(CART_BUYER_IDENTITY_UPDATE_MUTATION, {
+            cartId,
+            buyerIdentity,
+          });
+          const errors: UserError[] = data?.data?.cartBuyerIdentityUpdate?.userErrors ?? [];
+          if (isCartNotFoundError(errors)) { clearCart(); return null; }
+          if (errors.length > 0) {
+            console.error("Buyer identity update failed:", errors);
+            return checkoutUrl;
+          }
+          const url = data?.data?.cartBuyerIdentityUpdate?.cart?.checkoutUrl;
+          if (!url) return checkoutUrl;
+          const formatted = formatCheckoutUrl(url);
+          set({ checkoutUrl: formatted });
+          return formatted;
+        } catch (error) {
+          console.error("Failed to attach customer to cart:", error);
+          return checkoutUrl;
+        }
+      },
 
       /**
        * Full reconciliation: fetch actual Shopify cart data and update local
