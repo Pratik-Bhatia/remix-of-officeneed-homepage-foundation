@@ -348,16 +348,20 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
   //  - "fraction": the product image's measured box, scaled by this
   //    product's own normalized (0-1) printable-area fractions.
   //  - "mm": a FIXED physical size converted to pixels via the image's live
-  //    measured width and the area's referenceWidthMm anchor, so the exact
-  //    same mm size stays physically consistent at any preview size instead
-  //    of stretching/shrinking with whatever fraction the photo happens to
-  //    show.
+  //    measured width/height and the area's own referenceWidthMm/
+  //    referenceHeightMm anchors -- calibrated INDEPENDENTLY per axis (see
+  //    MmPrintableArea's own comment for why: a photo's visible body isn't
+  //    guaranteed to share the printable area's own mm aspect ratio, so one
+  //    shared scale can't get both dimensions right when it doesn't). Still
+  //    a single computed rect below, feeding both the dotted outline and
+  //    the drag constraint -- only the calibration is per-axis, not the box.
   const printableAreaPx =
     printableArea.unit === "mm"
       ? (() => {
-          const pxPerMm = productImageBox.width / printableArea.referenceWidthMm;
-          const width = printableArea.widthMm * pxPerMm;
-          const height = printableArea.heightMm * pxPerMm;
+          const pxPerMmW = productImageBox.width / printableArea.referenceWidthMm;
+          const pxPerMmH = productImageBox.height / printableArea.referenceHeightMm;
+          const width = printableArea.widthMm * pxPerMmW;
+          const height = printableArea.heightMm * pxPerMmH;
           const centerLeft = productImageBox.left + printableArea.centerX * productImageBox.width;
           const centerTop = productImageBox.top + printableArea.centerY * productImageBox.height;
           return { left: centerLeft - width / 2, top: centerTop - height / 2, width, height };
@@ -403,6 +407,17 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [refNumber, setRefNumber] = useState("");
+  /**
+   * The customization snapshot (product image + logo, exactly as
+   * positioned/sized/rotated/flipped) captured at the moment the user
+   * leaves the "customize" step. Captured HERE -- not inside submitQuote --
+   * because previewContainerRef only exists while `step === "customize"`
+   * is rendered; by the time the user reaches the "quote" step's own submit
+   * button, that DOM has already unmounted and the ref is null. Storing the
+   * result in state is what lets it survive the step change.
+   */
+  const [customizationSnapshot, setCustomizationSnapshot] = useState("");
+  const [isCapturingSnapshot, setIsCapturingSnapshot] = useState(false);
 
   const quantityNum = parseInt(formData.quantity, 10) || 1;
   const isUvAvailable = quantityNum >= 25;
@@ -743,23 +758,66 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
     setFlipV(false);
   };
 
+  /**
+   * Screenshots the exact rendered customization -- product image, logo at
+   * its actual dragged position/size/rotation/flip, current printing-method
+   * visual treatment -- excluding every editing-only element (drag handles,
+   * selection box, dotted printable boundary, the "Drag logo to position
+   * it" tooltip): all four are already marked with the shared "no-capture"
+   * class that `ignoreElements` strips out, so this reuses the exact same
+   * rendered composition the customer saw rather than reconstructing it
+   * from x/y/scale/rotation numbers. Deselecting first and waiting a tick
+   * lets that (and any other pending render, e.g. a logo swap still
+   * in-flight) commit before the snapshot is taken.
+   */
+  const captureCustomizationSnapshot = async (): Promise<string> => {
+    if (!previewContainerRef.current) return "";
+    setIsSelected(false);
+    await new Promise((r) => setTimeout(r, 100));
+    try {
+      const canvas = await html2canvas(previewContainerRef.current, {
+        useCORS: true,
+        scale: 1,
+        backgroundColor: "#F9FAFB",
+        ignoreElements: (element) => element.classList.contains("no-capture"),
+      });
+      return canvas.toDataURL("image/png");
+    } catch {
+      return "";
+    }
+  };
+
+  /**
+   * Fires when the user leaves the "customize" step. The snapshot MUST be
+   * captured here, not inside submitQuote: previewContainerRef only exists
+   * while `step === "customize"` is rendered (see the JSX below), so by the
+   * time the user reaches the quote form's own submit button that DOM has
+   * already unmounted and the ref is null -- capturing there would silently
+   * send an empty preview. Also refuses to proceed while a just-uploaded
+   * logo's laser/UV variants are still processing, so the snapshot can
+   * never show the "Processing Logo..." spinner instead of the real logo.
+   */
+  const handleProceedToQuote = async () => {
+    if (logo && isProcessingLaser) {
+      toast.info("Please wait a moment for your logo to finish processing.");
+      return;
+    }
+    setIsCapturingSnapshot(true);
+    try {
+      const snapshot = await captureCustomizationSnapshot();
+      setCustomizationSnapshot(snapshot);
+      setStep("quote");
+    } finally {
+      setIsCapturingSnapshot(false);
+    }
+  };
+
   const submitQuote = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     setErrorMsg(null);
-    setIsSelected(false); 
     try {
-      let previewBase64 = "";
-      if (previewContainerRef.current) {
-        await new Promise(r => setTimeout(r, 100)); 
-        const canvas = await html2canvas(previewContainerRef.current, {
-          useCORS: true,
-          scale: 1, 
-          backgroundColor: "#F9FAFB",
-          ignoreElements: (element) => element.classList.contains("no-capture")
-        });
-        previewBase64 = canvas.toDataURL("image/png");
-      }
+      const previewBase64 = customizationSnapshot;
       const result = await submitCorporateQuote({
         data: {
           fullName: formData.fullName,
@@ -1279,12 +1337,20 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
                   </div>
                 </div>
 
-                <Button 
-                  className="w-full text-base h-14 font-semibold shadow-sm" 
+                <Button
+                  className="w-full text-base h-14 font-semibold shadow-sm"
                   size="lg"
-                  onClick={() => setStep("quote")}
+                  onClick={handleProceedToQuote}
+                  disabled={isCapturingSnapshot}
                 >
-                  Request a Quote
+                  {isCapturingSnapshot ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Preparing...
+                    </>
+                  ) : (
+                    "Request a Quote"
+                  )}
                 </Button>
                 
                 <p className="text-[11px] text-center text-muted-foreground mt-4 leading-relaxed max-w-[300px] mx-auto">

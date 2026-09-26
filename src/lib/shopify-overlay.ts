@@ -10,7 +10,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { fetchProducts, fetchAllProducts, fetchCollections, formatMoney, type ShopifyProductNode, type ShopifyCollectionNode } from "@/lib/shopify";
 import type { Product } from "@/lib/products";
-import { MAIN_CATEGORIES, productBelongsToCategory, type MainCategory } from "@/lib/taxonomy";
+import { MAIN_CATEGORIES, productBelongsToCategory, resolveSubcategoryFromHandles, type MainCategory } from "@/lib/taxonomy";
 import { deriveFilterAttributes } from "@/lib/filters";
 import { buildProductSpecifications, hasStructuredSchema } from "@/lib/product-details-schema";
 import { getDevFallbackMetafieldValue } from "@/lib/product-details-dev-fallback";
@@ -145,6 +145,19 @@ const RULES: Rule[] = [
   { category: "Office Stationery", sub: "Pen", match: /\bpen\b|pencil|marker|highlighter|sketch pen|refill|ball ?point/ },
 ];
 
+/**
+ * LAST-RESORT fallback classifier, used only for a product whose real
+ * Shopify collection membership doesn't resolve to any known MainCategory
+ * at all (see `resolveMainCategory`/`shopifyNodeToProduct` below) -- e.g. a
+ * product not yet added to any recognized collection in Shopify. Keyword
+ * matching against title/tags/description is inherently unreliable and
+ * known to cross-contaminate categories (an "Ink Bottle" title matching the
+ * "bottle" keyword rule below, an "Adhesive" product with no matching
+ * keyword silently hitting the default Corporate Gifting/Gift Sets return
+ * at the bottom) -- it must never be allowed to override an explicit,
+ * real Shopify classification. Do NOT use this for eligibility/display;
+ * that's what `resolveMainCategory` + `resolveSubcategoryFromHandles` are for.
+ */
 function classify(node: ShopifyProductNode): { category: Product["category"]; sub: string } {
   // First, respect Shopify tags if they exactly match a known subcategory
   if (node.tags && node.tags.length > 0) {
@@ -285,10 +298,21 @@ function metafieldLookup(node: ShopifyProductNode): (namespace: string, key: str
 }
 
 export function shopifyNodeToProduct(node: ShopifyProductNode): Product {
-  const { category, sub } = classify(node);
   const images = nodeImages(node);
   const collectionHandles = node.collections?.edges.map(e => e.node.handle) ?? [];
   const mainCategory = resolveMainCategory(collectionHandles);
+
+  // Shopify collection membership is the SOURCE OF TRUTH (same as the
+  // products listing page already uses -- see products.index.tsx's
+  // categoryScoped). A valid, explicit Shopify classification must never be
+  // overwritten by the keyword-based `classify()` fallback, which only runs
+  // when this product isn't in any collection this site recognizes as
+  // belonging to a MainCategory at all.
+  const fallback = mainCategory ? null : classify(node);
+  const category: Product["category"] = mainCategory ?? fallback!.category;
+  const sub = mainCategory
+    ? resolveSubcategoryFromHandles(collectionHandles, mainCategory)
+    : fallback!.sub;
 
   const description = (node.description ?? "").trim();
   const summary = description

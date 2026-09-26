@@ -40,10 +40,26 @@ export interface FractionPrintableArea {
  * happens to be framed/cropped (e.g. Drinkware's engraving area is always
  * 70x140mm on the physical product, whether the bottle fills 30% or 45% of
  * its photo). Still fully product-image-relative and responsive: converted
- * to on-screen pixels via `referenceWidthMm` (the physical width, in mm,
- * that the full rendered product image represents), which is re-derived
- * from the image's live measured pixel width on every resize -- so the
- * mm size stays physically correct at any preview size.
+ * to on-screen pixels via `referenceWidthMm`/`referenceHeightMm` (the
+ * physical width/height, in mm, that the full rendered product image
+ * represents on each axis), each re-derived from the image's live measured
+ * pixel width/height on every resize -- so the mm size stays physically
+ * correct at any preview size.
+ *
+ * Width and height are calibrated INDEPENDENTLY (two separate reference
+ * values, not one shared scale) deliberately: a real product photo's
+ * visible body isn't guaranteed to have the same aspect ratio as the
+ * printable area's own mm spec (a bottle's photographed body can easily be
+ * proportionally narrower/taller than the area's 70:140 (1:2) ratio calls
+ * for). Deriving both dimensions from one shared px-per-mm scale forces a
+ * choice between an accurate width and an accurate height -- it cannot
+ * give you both when the photo and the spec don't share a ratio. Measuring
+ * each axis directly against the actual photo (see the Drinkware config
+ * below for exactly how) avoids that compromise. This still produces
+ * exactly ONE box: both values feed the same single `printableAreaPx`
+ * computation in ProductCustomizer.tsx, which is what both the dotted
+ * outline and the Framer Motion drag constraint read from -- there is
+ * still only one source of truth, it's just calibrated per-axis.
  */
 export interface MmPrintableArea {
   unit: "mm";
@@ -55,10 +71,12 @@ export interface MmPrintableArea {
   centerX: number;
   centerY: number;
   /** The physical width (mm) the FULL rendered product image represents --
-   * the mm-to-pixel conversion anchor. An estimate calibrated from the
-   * product photo's composition; nudge if it doesn't match the real
-   * product's physical dimensions. */
+   * the mm-to-pixel conversion anchor for the WIDTH axis specifically.
+   * Calibrated from the product photo's actual composition; nudge if it
+   * doesn't match the real product's physical dimensions. */
   referenceWidthMm: number;
+  /** Same idea as `referenceWidthMm`, but for the HEIGHT axis. */
+  referenceHeightMm: number;
 }
 
 export type PrintableArea = FractionPrintableArea | MmPrintableArea;
@@ -98,23 +116,52 @@ export const PRODUCT_PRINTABLE_AREAS: Record<ProductBrandingKey, PrintableArea> 
     // so a fraction-based area here would be wrong the moment two bottle
     // photos frame the bottle at different sizes. See MmPrintableArea.
     //
-    // centerX/centerY (0.485, 0.475) are carried over from this area's
-    // previous fraction-based center, measured against an actual
-    // single-bottle photo: the cylindrical body between the neck collar and
-    // base curve, clear of the cap and any strap/loop hardware.
+    // Measured directly from an actual rendered customizer screenshot of
+    // this bottle (not the raw product photo file, and not an indirect
+    // cross-reference from an unrelated config -- both of those were tried
+    // and both under-covered the body, most recently 264mm/single-scale,
+    // which still stopped well short of the base). In that screenshot, the
+    // image's own object-contain content box measured 538x807px, within
+    // which the bottle's usable body -- just below the black neck ring to
+    // just above the black base ring -- spanned x:180px (~33.5% of image
+    // width) and y:530px (~65.7% of image height), centered at roughly
+    // (50.4%, 54.2%) of the image.
     //
-    // referenceWidthMm (242mm) is derived from this category's EXISTING
-    // branding-limits.ts config (previewAreaWidthMm=80 / the old width
-    // fraction=0.33) rather than invented fresh -- but it's still an
-    // ESTIMATE of the full photo frame's physical width, not a measured
-    // fact. If the rendered 70x140mm box doesn't match the bottle's real
-    // engraving area, this is the one number to correct.
+    // Those two fractions (33.5% width, 65.7% height) are NOT in a 1:2
+    // ratio -- this bottle's photographed body is proportionally narrower/
+    // taller than a 70:140mm box. That's exactly why a single shared
+    // px-per-mm scale (tried twice) could never get both axes right: fit
+    // the width and the height falls short (previous attempt); fit the
+    // height and the width overshoots the visible body by a comparable
+    // margin. Calibrating each axis to its own measured fraction (see
+    // MmPrintableArea's referenceWidthMm/referenceHeightMm) avoids that
+    // trade-off entirely -- each dimension is independently accurate:
+    //   referenceWidthMm  = 70  / 0.335 ~= 209mm
+    //   referenceHeightMm = 140 / 0.657 ~= 213mm (SUPERSEDED, see below)
+    //
+    // That still rendered visibly short on re-test against a live screenshot
+    // (a different bottle variant photo -- white cap + hanging strap, not
+    // the black-cap one the numbers above were measured against). Rather
+    // than re-measure that new photo's exact pixel proportions from scratch
+    // (its precise framing wasn't independently re-verifiable from a static
+    // screenshot with confidence beyond ~10-15%), the top edge was confirmed
+    // correct (sits right at the neck-ring/body transition) and the height
+    // was scaled up ~25% from there, extending the box further down while
+    // holding the top edge fixed -- growing only downward, not symmetrically
+    // (which would have pushed the top back up into the neck).
+    //   new height fraction = 0.657 * 1.25 ~= 0.821  ->  referenceHeightMm = 140 / 0.821 ~= 170mm
+    //   centerY recomputed to keep the TOP edge (old centerY - old height/2)
+    //   fixed while the box grows only downward: ~0.62
+    // If this still doesn't reach the base on the actual product, the
+    // direction to keep adjusting is: lower referenceHeightMm further (grows
+    // the box) and raise centerY correspondingly (keeps the top anchored).
     unit: "mm",
     widthMm: 70,
     heightMm: 140,
-    centerX: 0.485,
-    centerY: 0.475,
-    referenceWidthMm: 242,
+    centerX: 0.50,
+    centerY: 0.62,
+    referenceWidthMm: 209,
+    referenceHeightMm: 170,
   },
 
   // -- Future products -------------------------------------------------------

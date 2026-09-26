@@ -227,3 +227,33 @@ export function getDisplayCategoryLabel(
   }
   return resolveLiveTitle(collections, node);
 }
+
+/**
+ * The most specific known subcategory's STABLE title for a product within
+ * `category`, derived from its real Shopify collection handles (prefers a
+ * subcategory match over the bare main-category handle). Falls back to the
+ * category's own stable title when none of the product's handles match a
+ * known subcategory (e.g. it was added only to the main collection, or only
+ * to a brand-new subcategory collection not yet registered in TAXONOMY --
+ * same as any other new subcategory, that one new entry is what teaches the
+ * site to recognize it specifically).
+ *
+ * Unlike `getDisplayCategoryLabel` (which live-resolves a Shopify-side
+ * rename for on-screen display), this returns the STABLE `.title` -- this is
+ * used as a classification key (`product.category`/`product.subcategories`,
+ * matched against `makeBrandingKey`/`getPrintableArea`/filter rules), which
+ * must stay stable across a Shopify-side rename, exactly like
+ * `productBelongsToCategory` above.
+ */
+export function resolveSubcategoryFromHandles(
+  collectionHandles: string[] | undefined,
+  category: MainCategory,
+): string {
+  const node = TAXONOMY[category];
+  for (const handle of collectionHandles ?? []) {
+    for (const sub of Object.values(node.subcategories)) {
+      if (sub.handle === handle) return sub.title;
+    }
+  }
+  return node.title;
+}
