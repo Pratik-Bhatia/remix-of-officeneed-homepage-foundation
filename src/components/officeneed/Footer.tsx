@@ -10,7 +10,8 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { footerShopTargets } from "@/lib/navigation";
+import { footerShopTargets, getLiveNavLabel } from "@/lib/navigation";
+import { useShopifyCollections } from "@/lib/shopify-overlay";
 import { toast } from "sonner";
 import logoInverse from "@/assets/officeneed-logo-inverse.png";
 import visaAsset from "@/assets/payment-visa.png";
@@ -195,6 +196,11 @@ function MobileBenefitsCarousel() {
 
 
 export function Footer() {
+  // Same cached collections query used sitewide -- resolves any shopLinks
+  // entry that matches a real taxonomy title (e.g. "Corporate Gifting") to
+  // its current Shopify collection name; entries that aren't a taxonomy
+  // title (e.g. "Shop All") pass through unchanged.
+  const { collections } = useShopifyCollections();
   return (
     <footer>
       {/* Benefits strip */}
@@ -250,7 +256,7 @@ export function Footer() {
                       search={footerShopTargets[label] ?? {}}
                       className="text-xs text-background/80 transition-colors hover:text-background sm:text-sm"
                     >
-                      {label}
+                      {getLiveNavLabel(collections, label)}
                     </Link>
                   </li>
                 ))}

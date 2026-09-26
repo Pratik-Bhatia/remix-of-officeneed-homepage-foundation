@@ -39,6 +39,7 @@ export const TAXONOMY: Record<MainCategory, CategoryNode> = {
       "Metal Pen": { title: "Metal Pen", id: null, handle: "metal-pen" },
       "Keychains": { title: "Keychains", id: null, handle: "keychains" },
       "Mobile Stand": { title: "Mobile Stand", id: null, handle: "mobile-stand" },
+      "Electronics": { title: "Electronics", id: "gid://shopify/Collection/316637937757", handle: "electronics" },
     }
   },
   "Fragrance Gifting": {
@@ -60,7 +61,12 @@ export const TAXONOMY: Record<MainCategory, CategoryNode> = {
       "Files and Folders": { title: "Files and Folders", id: null, handle: "files-and-folders" },
       "Printing Papers": { title: "Printing Papers", id: null, handle: "printing-papers" },
       "Staplers and Punching": { title: "Staplers and Punching", id: null, handle: "staplers-and-punching" },
-      "Pen": { title: "Pen", id: null, handle: "pen" }
+      "Pen": { title: "Pen", id: null, handle: "pen" },
+      "Calculator": { title: "Calculator", id: null, handle: "calculator" },
+      "Tape": { title: "Tape", id: null, handle: "tape" },
+      "Sticky Notes": { title: "Sticky Notes", id: null, handle: "sticky-notes" },
+      "Pins & Clips": { title: "Pins & Clips", id: null, handle: "pins-clips" },
+      "Adhesive": { title: "Adhesive", id: null, handle: "adhesive" }
     }
   },
   "Computer Peripherals": {
@@ -78,6 +84,49 @@ export const TAXONOMY: Record<MainCategory, CategoryNode> = {
 };
 
 export const MAIN_CATEGORIES = Object.keys(TAXONOMY) as MainCategory[];
+
+/**
+ * Live display title for a taxonomy node (main category OR subcategory),
+ * resolved by its stable `handle` against the site's already-fetched live
+ * Shopify collections list (see `useShopifyCollections` in
+ * shopify-overlay.ts -- the SAME cached query every page that needs
+ * collection data already uses, not a second fetch).
+ *
+ * This is the ONLY place a Shopify-sourced category/subcategory name should
+ * be read for DISPLAY. `node.title` above is the stable fallback (shown
+ * only before the live fetch resolves, or if the collection is ever
+ * deleted in Shopify) -- it is deliberately NEVER used directly for display
+ * anywhere else in the app, and this function must NEVER be used for
+ * matching/classification (that stays handle-based, via
+ * `productBelongsToCategory`/`getCategoryHandles`, or the static `.title`
+ * string used as a stable enum-like key against `product.category` /
+ * `product.subcategories` -- renaming a collection in Shopify must not
+ * change how existing products are classified).
+ */
+export function resolveLiveTitle(
+  collections: Array<{ handle: string; title: string }>,
+  node: Pick<CollectionMapping, "handle" | "title">,
+): string {
+  if (!node.handle) return node.title;
+  const live = collections.find((c) => c.handle === node.handle);
+  return live?.title ?? node.title;
+}
+
+/**
+ * True when `handle` still exists in the live Shopify collections list --
+ * false only once the fetch has actually completed and the handle is
+ * genuinely gone (a category/subcategory deleted in Shopify), so a
+ * still-loading fetch never causes a flash of hidden content.
+ */
+export function isLiveCollection(
+  collections: Array<{ handle: string }>,
+  handle: string | null,
+  isLoading: boolean,
+): boolean {
+  if (!handle) return false;
+  if (isLoading && collections.length === 0) return true;
+  return collections.some((c) => c.handle === handle);
+}
 
 export function getCategoryByHandle(handle: string): { parentTitle?: string; node: CollectionMapping } | null {
   for (const main of Object.values(TAXONOMY)) {
@@ -168,12 +217,13 @@ export function productBelongsToCategory(
 export function getDisplayCategoryLabel(
   collectionHandles: string[] | undefined,
   category: MainCategory,
+  collections: Array<{ handle: string; title: string }> = [],
 ): string {
   const node = TAXONOMY[category];
   for (const handle of collectionHandles ?? []) {
     for (const sub of Object.values(node.subcategories)) {
-      if (sub.handle === handle) return sub.title;
+      if (sub.handle === handle) return resolveLiveTitle(collections, sub);
     }
   }
-  return node.title;
+  return resolveLiveTitle(collections, node);
 }

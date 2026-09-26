@@ -13,7 +13,8 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { getProductBySlug, getRelatedProducts } from "@/lib/products";
 import { fetchProductByHandle, fetchRelatedProducts, formatMoney, type ShopifyVariantNode } from "@/lib/shopify";
-import { mergeProduct, shopifyNodeToProduct } from "@/lib/shopify-overlay";
+import { mergeProduct, shopifyNodeToProduct, useShopifyCollections } from "@/lib/shopify-overlay";
+import { TAXONOMY, resolveLiveTitle } from "@/lib/taxonomy";
 import { useCartStore } from "@/stores/cartStore";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -159,6 +160,7 @@ function ProductNotFound() {
 
 function ProductDetail() {
   const { product, node, related } = Route.useLoaderData();
+  const { collections } = useShopifyCollections();
   const [quantity, setQuantity] = useState<number>(product.minimumOrderQuantity || 1);
   const [customizerOpen, setCustomizerOpen] = useState(false);
   const [zoomOpen, setZoomOpen] = useState(false);
@@ -508,7 +510,12 @@ function ProductDetail() {
 
             {/* Information */}
             <div className="w-full min-w-0 max-w-full overflow-wrap-break-word">
-              <p className="text-eyebrow text-muted-foreground">{product.category}</p>
+              <p className="text-eyebrow text-muted-foreground">
+                {(() => {
+                  const categoryNode = (TAXONOMY as Record<string, { handle: string | null; title: string }>)[product.category];
+                  return categoryNode ? resolveLiveTitle(collections, categoryNode) : product.category;
+                })()}
+              </p>
               <h1 className="mt-2 text-3xl md:text-4xl lg:text-[40px] font-semibold tracking-tight text-foreground leading-[1.1] text-balance">{product.name}</h1>
               <ProductRatingSummary reviews={reviews} />
               

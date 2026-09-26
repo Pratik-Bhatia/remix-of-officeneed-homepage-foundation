@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { ArrowRight } from "lucide-react";
-import { primaryNavCategories, navCategoryTarget } from "@/lib/navigation";
+import { primaryNavCategories, navCategoryTarget, getLiveNavLabel } from "@/lib/navigation";
 import { useShopifyCollections } from "@/lib/shopify-overlay";
 
 /**
@@ -34,6 +34,7 @@ export function ShopByCategory() {
           {primaryNavCategories.map((cat) => {
             const target = navCategoryTarget(cat.id);
             const image = getImage(target.collection);
+            const label = getLiveNavLabel(collections, cat.label);
 
             return (
               <Link
@@ -48,7 +49,7 @@ export function ShopByCategory() {
                   ) : image ? (
                     <img
                       src={image}
-                      alt={cat.label}
+                      alt={label}
                       loading="lazy"
                       decoding="async"
                       className="h-full w-full object-contain p-8 transition-transform duration-500 ease-out group-hover:scale-[1.04] sm:p-10"
@@ -60,7 +61,7 @@ export function ShopByCategory() {
 
                 <div className="mt-4 flex items-center justify-between gap-2">
                   <h3 className="text-base font-display font-semibold tracking-tight text-foreground sm:text-lg">
-                    {cat.label}
+                    {label}
                   </h3>
                   <span className="inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground transition-colors duration-300 group-hover:text-foreground sm:text-sm">
                     Explore

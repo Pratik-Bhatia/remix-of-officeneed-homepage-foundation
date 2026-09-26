@@ -111,6 +111,23 @@ const RULES: Rule[] = [
   { category: "Officeneed Exclusive", sub: "Featured Exclusives", match: /featured exclusive/ },
   { category: "Officeneed Exclusive", sub: "New Exclusives", match: /new exclusive/ },
   { category: "Fragrance Gifting", sub: "Perfume Gift Sets", match: /perfume gift set|fragrance gift set|perfume set/ },
+  // Must come after the more specific "Perfume Gift Sets" rule above (so a
+  // perfume gift set still correctly lands under Fragrance Gifting, not
+  // here) but before EVERY single-item keyword rule below (bottle, pen,
+  // pendrive, diary, cable, etc.): a multi-item gift-set product's title
+  // routinely also contains one of those words (e.g. "...Gift Set with
+  // 16GB Pendrive" contains "Pendrive", which would otherwise match
+  // Computer Peripherals -> Storage Devices below and win first, since
+  // classify() returns on the FIRST matching rule). This rule's `sub`
+  // ("Gift Sets") also makes classify()'s own tag-priority check above
+  // (which only matches a tag against a KNOWN rule.sub) actually reachable
+  // for the "gift sets" tag real gift-set products carry in Shopify --
+  // previously nothing in RULES declared that sub, so the tag check could
+  // never match it and every gift set fell through to here anyway. Scoped
+  // to "gift set(s)"/"hamper"/"bundle" specifically (not just "gift") so a
+  // single item that's merely gift-*wrapped* or gift-*themed* isn't swept
+  // in -- mirrors the same pattern ProductCustomizer.tsx's isGiftSet uses.
+  { category: "Corporate Gifting", sub: "Gift Sets", match: /gift\s*sets?|hamper|bundle/ },
   { category: "Fragrance Gifting", sub: "Middle Eastern Perfume", match: /attar|oud|arab|middle east/ },
   { category: "Fragrance Gifting", sub: "European Perfume", match: /perfum|fragranc|eau de|deodor|cologne/ },
   { category: "Computer Peripherals", sub: "Computer Accessories", match: /mouse|keyboard|printer|toner|cartridge|bluetooth|speaker|headphone|earph|headset|jbl|webcam|monitor|laptop|dock/ },

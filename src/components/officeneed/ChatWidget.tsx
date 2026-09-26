@@ -20,7 +20,7 @@ import {
 } from "@/lib/chat-flow";
 import { products as staticProducts } from "@/lib/products";
 import type { Product } from "@/lib/products";
-import { useShopifyCatalogue, shopifyCatalogueQueryOptions } from "@/lib/shopify-overlay";
+import { useShopifyCatalogue, useShopifyCollections, shopifyCatalogueQueryOptions } from "@/lib/shopify-overlay";
 import { getDisplayCategoryLabel, getOfficeGptContextCategory } from "@/lib/taxonomy";
 import { submitEnquiry } from "@/lib/enquiries.functions";
 import { rememberContactPhone } from "@/lib/contact-phone";
@@ -72,6 +72,7 @@ export function ChatWidget() {
   const [open, setOpen] = useState(false);
   const [phase, setPhase] = useState<"qualification" | "refinement" | "enquiry" | "done" | "fragrance">("qualification");
   const catalogue = useShopifyCatalogue(staticProducts);
+  const { collections } = useShopifyCollections();
   // Same query key as useShopifyCatalogue() above -- react-query dedupes
   // this to the shared cached request, no extra network call -- read here
   // only to know whether the catalogue is still loading or failed, so we
@@ -174,7 +175,7 @@ export function ChatWidget() {
    */
   const wantedMainCategory = purposeToMainCategory[answers.purpose ?? ""];
   const displayCategory = (p: Product) =>
-    wantedMainCategory ? getDisplayCategoryLabel(p.collectionHandles, wantedMainCategory) : p.category;
+    wantedMainCategory ? getDisplayCategoryLabel(p.collectionHandles, wantedMainCategory, collections) : p.category;
 
   // Scroll lock for mobile fullscreen
   useEffect(() => {

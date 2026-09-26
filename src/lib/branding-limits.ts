@@ -82,6 +82,27 @@ export const PRODUCT_BRANDING_LIMITS: Record<ProductBrandingKey, ProductBranding
   // },
 };
 
+/**
+ * Gift Sets deliberately have NO entry above -- their multi-item photo has
+ * no single print-area width a `maxLogoSizeMm` could meaningfully describe,
+ * so their maximum stays fully unconstrained (logoScale up to 100), exactly
+ * as before. They still get a physical MINIMUM floor so a logo can't be
+ * shrunk to illegibility, using this file's existing mm<->scale% machinery
+ * (`computeMinEffectiveScale`'s optional `minSizeMm` param) rather than a
+ * second, pixel-based system.
+ */
+export const GIFT_SET_MIN_LOGO_SIZE_MM = 10;
+
+/**
+ * Conversion anchor for the Gift Set minimum: the physical width (mm) the
+ * customiser's preview PANEL (not just the product photo -- logoScale% is
+ * relative to the panel, same basis as every other product here) is taken
+ * to represent. An estimate based on a typical multi-item gift-set photo's
+ * framing, not a measured fact -- if 10mm doesn't look physically right on
+ * screen, this is the number to adjust.
+ */
+export const GIFT_SET_REFERENCE_WIDTH_MM = 400;
+
 // ---------------------------------------------------------------------------
 // Lookup helpers
 // ---------------------------------------------------------------------------
@@ -159,19 +180,22 @@ export const MIN_LOGO_SIZE_MM = 1;
  * Mirror of `computeEffectiveMaxScale` for the lower bound.
  *
  * Returns the minimum `logoScale%` that keeps the longest dimension of the
- * logo at exactly `MIN_LOGO_SIZE_MM`.
+ * logo at exactly `minSizeMm` (defaults to the global `MIN_LOGO_SIZE_MM`;
+ * callers with their own physical floor -- e.g. Gift Sets' 10mm minimum --
+ * pass it explicitly instead of duplicating this aspect-ratio math).
  *
  *   Wide / square (aspect >= 1):  width is the longest side.
- *       minScale = mmToLogoScale(MIN_LOGO_SIZE_MM, previewAreaWidthMm)
+ *       minScale = mmToLogoScale(minSizeMm, previewAreaWidthMm)
  *
  *   Tall (aspect < 1):  height is the longest side.
- *       minScale = mmToLogoScale(MIN_LOGO_SIZE_MM, previewAreaWidthMm) * aspect
+ *       minScale = mmToLogoScale(minSizeMm, previewAreaWidthMm) * aspect
  */
 export function computeMinEffectiveScale(
   limits: BrandingLimits,
   logoAspect: number,
+  minSizeMm: number = MIN_LOGO_SIZE_MM,
 ): number {
-  const minScaleForWidth = mmToLogoScale(MIN_LOGO_SIZE_MM, limits.previewAreaWidthMm);
+  const minScaleForWidth = mmToLogoScale(minSizeMm, limits.previewAreaWidthMm);
   if (logoAspect >= 1) {
     return minScaleForWidth;
   }

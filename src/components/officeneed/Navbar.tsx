@@ -3,7 +3,8 @@ import { lockScroll, unlockScroll } from "@/lib/scroll-lock";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Menu, MessageSquare, Search, User, X, ChevronDown } from "lucide-react";
 import logoUrl from "@/assets/officeneed-logo.png";
-import { primaryNavCategories as navCategories, navItemTarget, navCategoryTarget } from "@/lib/navigation";
+import { primaryNavCategories as navCategories, navItemTarget, navCategoryTarget, getLiveNavLabel } from "@/lib/navigation";
+import { useShopifyCollections } from "@/lib/shopify-overlay";
 import { CartDrawer } from "@/components/officeneed/CartDrawer";
 import { cn } from "@/lib/utils";
 import { SearchModal } from "./SearchModal";
@@ -66,6 +67,10 @@ export function Navbar() {
   
   const { status } = useCustomer();
   const navigate = useNavigate();
+  // Live Shopify collection titles for nav labels -- same cached query
+  // every other page that needs collection data already uses (React
+  // Query dedupes by queryKey, so this doesn't add a network request).
+  const { collections } = useShopifyCollections();
 
   useEffect(() => {
     const handleOpenAuth = () => setAuthOpen(true);
@@ -155,7 +160,7 @@ export function Navbar() {
                     cat.featured && "font-semibold text-foreground",
                   )}
                 >
-                  <span className="whitespace-nowrap">{cat.label}</span>
+                  <span className="whitespace-nowrap">{getLiveNavLabel(collections, cat.label)}</span>
                 </Link>
               </li>
             ))}
@@ -192,7 +197,7 @@ export function Navbar() {
             <div className="mx-auto grid w-full max-w-[1600px] grid-cols-[minmax(0,1fr)_2fr] gap-12 px-12 py-8">
 
               <div>
-                <p className="text-eyebrow text-muted-foreground">{active.label}</p>
+                <p className="text-eyebrow text-muted-foreground">{getLiveNavLabel(collections, active.label)}</p>
                 <p className="mt-3 max-w-xs text-sm leading-relaxed text-muted-foreground">
                   {active.blurb}
                 </p>
@@ -206,8 +211,8 @@ export function Navbar() {
                       onClick={() => setOpenId(null)}
                       className="group flex items-center justify-between rounded-md py-2.5 text-[0.875rem] text-foreground/80 transition-colors duration-200 hover:text-foreground"
                     >
-                      <span>{item}</span>
-                      
+                      <span>{getLiveNavLabel(collections, item)}</span>
+
                     </Link>
                   </li>
                 ))}
@@ -263,7 +268,7 @@ export function Navbar() {
                         cat.featured && "font-semibold",
                       )}
                     >
-                      {cat.label}
+                      {getLiveNavLabel(collections, cat.label)}
                     </span>
                     <ChevronDown
                       className={cn(
@@ -283,7 +288,7 @@ export function Navbar() {
                             onClick={() => setMobileOpen(false)}
                             className="flex min-h-12 items-center text-[0.875rem] text-muted-foreground transition-colors hover:text-foreground"
                           >
-                            {item}
+                            {getLiveNavLabel(collections, item)}
                           </Link>
                         </li>
                       ))}

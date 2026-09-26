@@ -25,7 +25,7 @@ import {
 } from "@/lib/products";
 import type { ProductSort } from "@/lib/products";
 import { useShopifyCatalogue, useShopifyCollections } from "@/lib/shopify-overlay";
-import { getCategoryByHandle, TAXONOMY, MAIN_CATEGORIES, type MainCategory } from "@/lib/taxonomy";
+import { getCategoryByHandle, TAXONOMY, MAIN_CATEGORIES, resolveLiveTitle, isLiveCollection, type MainCategory } from "@/lib/taxonomy";
 
 const TITLE = "Products — OfficeNeed";
 const DESCRIPTION =
@@ -320,7 +320,15 @@ function ProductsPage() {
         <div className="mx-auto w-full max-w-[1600px] px-5 pt-10 sm:px-8 sm:pt-12 lg:px-12 lg:pt-16">
           <header className="max-w-2xl mb-10">
             <h1 className="text-4xl sm:text-5xl font-display font-medium leading-tight tracking-tight text-foreground">
-              {isAllProducts ? "All Products" : missingMapping ? missingMapping : (mainCategoryTitle ?? taxonomyMatch?.node.title)}
+              {isAllProducts
+                ? "All Products"
+                : missingMapping
+                  ? missingMapping
+                  : mainCategoryTitle
+                    ? resolveLiveTitle(collections, TAXONOMY[mainCategoryTitle])
+                    : taxonomyMatch
+                      ? resolveLiveTitle(collections, taxonomyMatch.node)
+                      : null}
             </h1>
             {isAllProducts && (
               <p className="mt-4 text-sm sm:text-base leading-relaxed text-muted-foreground">
@@ -366,6 +374,8 @@ function ProductsPage() {
                   MAIN_CATEGORIES.map((c) => {
                     const node = TAXONOMY[c as MainCategory];
                     if (!node.handle) return null;
+                    if (!isLiveCollection(collections, node.handle, collectionsLoading)) return null;
+                    const liveTitle = resolveLiveTitle(collections, node);
                     return (
                       <li key={c} className="snap-center shrink-0">
                         <button
@@ -377,13 +387,13 @@ function ProductsPage() {
                             {collectionsLoading ? (
                               <div className="w-full h-full rounded-xl bg-muted animate-pulse" aria-hidden />
                             ) : getCollectionImage(node.handle || "") ? (
-                              <img src={getCollectionImage(node.handle || "")!} alt={c} className="w-full h-full object-contain mix-blend-multiply dark:mix-blend-normal" />
+                              <img src={getCollectionImage(node.handle || "")!} alt={liveTitle} className="w-full h-full object-contain mix-blend-multiply dark:mix-blend-normal" />
                             ) : (
                               <div className="w-full h-full rounded-xl bg-muted/50" aria-hidden />
                             )}
                           </div>
                           <span className="text-[11px] sm:text-xs font-medium text-foreground/80 group-hover:text-foreground text-center leading-tight">
-                            {c}
+                            {liveTitle}
                           </span>
                         </button>
                       </li>
@@ -392,10 +402,12 @@ function ProductsPage() {
                 ) : mainCategoryTitle ? (
                   Object.values(TAXONOMY[mainCategoryTitle].subcategories).map((sub: any) => {
                     if (!sub.handle) return null;
+                    if (!isLiveCollection(collections, sub.handle, collectionsLoading)) return null;
                     const isActive = sub.handle === activeSubcategoryHandle;
+                    const liveTitle = resolveLiveTitle(collections, sub);
                     return (
                       <li
-                        key={sub.title}
+                        key={sub.handle}
                         ref={isActive ? activeSubcategoryRef : undefined}
                         className="snap-center shrink-0"
                       >
@@ -414,7 +426,7 @@ function ProductsPage() {
                             {collectionsLoading ? (
                               <div className="w-full h-full rounded-xl bg-muted animate-pulse" aria-hidden />
                             ) : getCollectionImage(sub.handle || "") ? (
-                              <img src={getCollectionImage(sub.handle || "")!} alt={sub.title} className="w-full h-full object-contain mix-blend-multiply dark:mix-blend-normal" />
+                              <img src={getCollectionImage(sub.handle || "")!} alt={liveTitle} className="w-full h-full object-contain mix-blend-multiply dark:mix-blend-normal" />
                             ) : (
                               <div className="w-full h-full rounded-xl bg-muted/50" aria-hidden />
                             )}
@@ -425,7 +437,7 @@ function ProductsPage() {
                               isActive ? "font-semibold text-foreground" : "font-medium text-foreground/80 group-hover:text-foreground",
                             )}
                           >
-                            {sub.title}
+                            {liveTitle}
                           </span>
                           <span
                             aria-hidden

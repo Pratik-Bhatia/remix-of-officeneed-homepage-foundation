@@ -6,8 +6,19 @@ import type { Product } from "@/lib/products";
 import { getCustomerToken } from "@/lib/customer";
 import { useSaves } from "@/lib/saves";
 import { cn } from "@/lib/utils";
-import { productBelongsToCategory } from "@/lib/taxonomy";
+import { productBelongsToCategory, getCategoryByTitle, resolveLiveTitle } from "@/lib/taxonomy";
 import { useNormalizedImageScale } from "@/lib/image-content-scale";
+import { useShopifyCollections } from "@/lib/shopify-overlay";
+
+/** Resolves a stable classify()-derived category/subcategory string (e.g.
+ * "Pen") to its current Shopify collection title (e.g. "Pen and Pencil"),
+ * falling back to the raw string unchanged if it isn't a known taxonomy
+ * label. */
+function eyebrowLabel(collections: Array<{ handle: string; title: string }>, label: string): string {
+  const match = getCategoryByTitle(label);
+  if (!match) return label;
+  return resolveLiveTitle(collections, match.node);
+}
 
 export function ProductCard({
   product,
@@ -32,6 +43,12 @@ export function ProductCard({
 }) {
   const { savedHandles, toggleSave } = useSaves();
   const [busy, setBusy] = useState(false);
+  // Same cached collections query every other category surface uses (React
+  // Query dedupes by key, so N cards on a grid cost one request, not N) --
+  // resolves the eyebrow's subcategory/category label to its CURRENT
+  // Shopify collection title instead of the stable classify()-derived
+  // string, which only ever serves as a lookup key here.
+  const { collections } = useShopifyCollections();
   const isSignedIn = typeof window !== "undefined" && Boolean(getCustomerToken());
   const isSaved = savedHandles.includes(product.slug);
 
@@ -151,7 +168,7 @@ export function ProductCard({
         <div className="mt-4 flex flex-1 flex-col gap-2 px-1 pb-1">
           {showEyebrow && (
             <p className="text-eyebrow text-muted-foreground">
-              {product.vendor || product.subcategories[0] || product.category}
+              {product.vendor || eyebrowLabel(collections, product.subcategories[0] ?? product.category)}
             </p>
           )}
           {/* min-h reserves 2 lines' worth of space on mobile even for a

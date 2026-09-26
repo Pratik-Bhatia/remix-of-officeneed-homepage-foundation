@@ -1,6 +1,6 @@
 import { toast } from "sonner";
 import { processLogoServer } from "@/lib/image-processing.functions";
-﻿import { useState, useRef, useEffect } from "react";
+﻿import { useState, useRef, useEffect, useCallback } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,7 +10,8 @@ import { Upload, X, Check, Loader2, RotateCw, Move, Pencil, AlertCircle, FlipHor
 import { motion } from "motion/react";
 import html2canvas from "html2canvas";
 import { submitCorporateQuote } from "@/lib/corporate-quotes.functions";
-import { getBrandingLimits, computeEffectiveMaxScale, computeMinEffectiveScale, scaleToPhysicalMm, widthMmToScale, heightMmToScale, MIN_LOGO_SIZE_MM, type PrintingMethod } from "@/lib/branding-limits";
+import { getBrandingLimits, computeEffectiveMaxScale, computeMinEffectiveScale, scaleToPhysicalMm, widthMmToScale, heightMmToScale, MIN_LOGO_SIZE_MM, GIFT_SET_MIN_LOGO_SIZE_MM, GIFT_SET_REFERENCE_WIDTH_MM, type PrintingMethod } from "@/lib/branding-limits";
+import { getPrintableArea } from "@/lib/printable-area";
 
 interface ProductCustomizerProps {
   product: any;
@@ -211,10 +212,184 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
   
   const constraintsRef = useRef<HTMLDivElement>(null);
   const previewContainerRef = useRef<HTMLDivElement>(null);
+  const productImageRef = useRef<HTMLImageElement>(null);
   const [isSelected, setIsSelected] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
-  const [logoPos, setLogoPos] = useState({ x: 0, y: 0 }); 
-  
+  const [logoPos, setLogoPos] = useState({ x: 0, y: 0 });
+
+  // ---------------------------------------------------------------------------
+  // Product image bounds -> printable area
+  //
+  // The <img> below is rendered with `object-contain` inside a box that is
+  // usually a DIFFERENT aspect ratio than the photo itself, so the visible
+  // product photo is letterboxed inside that box -- its actual on-screen
+  // rect is smaller than (and offset within) the element's own DOM box.
+  // `productImageBox` is that real, measured, letterboxed rect (in px,
+  // relative to `previewContainerRef`, which is the positioned ancestor
+  // shared by the dotted printable-area box and the draggable logo). Every
+  // product/variant image, at every size, gets its own freshly-measured box
+  // here -- nothing about it is hardcoded per product.
+  const [productImageBox, setProductImageBox] = useState({ left: 0, top: 0, width: 0, height: 0 });
+  // The raw box object-contain fits the photo within (== previewContainerRef's
+  // own content-box size, since the <img> sits at inset-0 w-full h-full
+  // matching it exactly). Unlike productImageBox, this is NOT letterbox-
+  // trimmed -- it's the full coordinate space the draggable logo's own
+  // absolute positioning resolves against, needed for Drinkware's clip
+  // boundary (see logoClipPath below) to express its clip-path relative to
+  // that same space without disturbing it.
+  const [containerBox, setContainerBox] = useState({ width: 0, height: 0 });
+  const naturalSizeRef = useRef<{ w: number; h: number } | null>(null);
+
+  const recomputeProductImageBox = useCallback(() => {
+    const img = productImageRef.current;
+    const natural = naturalSizeRef.current;
+    if (!img || !natural || !natural.w || !natural.h) return;
+    // clientWidth/clientHeight are the element's own content-box size (the
+    // box object-contain fits the photo within) -- independent of the
+    // photo's own natural dimensions.
+    const boxW = img.clientWidth;
+    const boxH = img.clientHeight;
+    if (!boxW || !boxH) return;
+    setContainerBox({ width: boxW, height: boxH });
+    const naturalRatio = natural.w / natural.h;
+    const boxRatio = boxW / boxH;
+    let renderW: number;
+    let renderH: number;
+    if (boxRatio > naturalRatio) {
+      // Box is relatively wider than the photo -- height is the binding
+      // dimension, empty space (if any) falls on the left/right.
+      renderH = boxH;
+      renderW = boxH * naturalRatio;
+    } else {
+      renderW = boxW;
+      renderH = boxW / naturalRatio;
+    }
+    // img sits at inset-0 within previewContainerRef, so the img's own
+    // content-box origin IS previewContainerRef's origin -- offsetLeft/Top
+    // here are purely the letterbox gap introduced by object-contain.
+    setProductImageBox({
+      left: (boxW - renderW) / 2,
+      top: (boxH - renderH) / 2,
+      width: renderW,
+      height: renderH,
+    });
+  }, []);
+
+  const handleProductImageLoad = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
+    const img = e.currentTarget;
+    naturalSizeRef.current = { w: img.naturalWidth, h: img.naturalHeight };
+    recomputeProductImageBox();
+  }, [recomputeProductImageBox]);
+
+  // Re-measure whenever the panel itself resizes (window resize, modal
+  // resize, responsive breakpoint changes, sidebar collapsing, etc.) --
+  // not just on window "resize", which wouldn't catch a layout-only change.
+  useEffect(() => {
+    const container = previewContainerRef.current;
+    if (!container) return;
+    const observer = new ResizeObserver(() => recomputeProductImageBox());
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [recomputeProductImageBox]);
+
+  // A different product/variant image is a NEW photo with its own natural
+  // dimensions -- the previous measurement is no longer valid for it, so
+  // drop it immediately rather than showing a stale printable area for one
+  // frame. <img onLoad> (fired for the new src) then supplies the real one.
+  useEffect(() => {
+    naturalSizeRef.current = null;
+    setProductImageBox({ left: 0, top: 0, width: 0, height: 0 });
+  }, [previewImage]);
+
+  // Gift sets / hampers are a multi-item photo with no single coherent
+  // "printable surface" a rectangle can honestly represent -- rather than
+  // keep hand-fitting per-product rectangles to whichever item happens to
+  // be photographed, gift sets skip the printable-area system entirely and
+  // just constrain the logo to the rendered product image itself. Never
+  // detected from the image's dimensions -- from the product's own real
+  // Shopify data instead.
+  //
+  // NOT just `product.subcategories`: every gift-set product in the store
+  // IS tagged "gift sets" in Shopify (verified directly against live data),
+  // but shopify-overlay.ts's classify() only honours that tag when NO
+  // product-type regex matches first -- a set titled e.g. "...Diary,
+  // Bottle & Pen Gift Set" hits the "Drinkware & Utensils" title-keyword
+  // rule before it ever reaches the tag check, so `subcategories` alone
+  // silently misses real gift sets whose title also happens to mention a
+  // single-item keyword. Checking the raw tags (and the title itself, both
+  // of which are reliably "gift set(s)" on every gift-set product actually
+  // in this catalogue) catches those that the derived subcategory field
+  // does not; subcategories is still checked too for any product that
+  // falls through classify() to its own "Gift Sets" default. This is a
+  // detection-side workaround for that classify() gap, not a fix to it --
+  // classify() itself is shared by category pages/filters/breadcrumbs
+  // sitewide and is out of scope here.
+  const GIFT_SET_PATTERN = /gift\s*sets?|hamper|bundle/i;
+  const isGiftSet =
+    (product.tags ?? []).some((t: string) => GIFT_SET_PATTERN.test(t)) ||
+    (product.subcategories ?? []).some((s: string) => GIFT_SET_PATTERN.test(s)) ||
+    GIFT_SET_PATTERN.test(product.name ?? "");
+
+  // Drinkware's branding area is a FIXED PHYSICAL size (70x140mm), not a
+  // fraction of the photo -- checked (and given priority) only when the
+  // product is NOT a gift set, since the same classify() gap that misfiles
+  // gift sets under a single-item subcategory can also make a "Diary,
+  // Bottle & Pen Gift Set" match "drinkware" here; isGiftSet already
+  // catches those correctly via tags, so it must win first. Checks both
+  // subcategories and raw tags for the same reliability reasons as isGiftSet.
+  const isDrinkware =
+    !isGiftSet &&
+    ((product.subcategories ?? []).some((s: string) => s.toLowerCase().includes("drinkware")) ||
+      (product.tags ?? []).some((t: string) => t.toLowerCase().includes("drinkware")));
+
+  const printableArea = getPrintableArea(product.category, product.subcategories?.[0] ?? "", product.slug);
+
+  // The actual on-screen printable-area rect. Two unit systems:
+  //  - "fraction": the product image's measured box, scaled by this
+  //    product's own normalized (0-1) printable-area fractions.
+  //  - "mm": a FIXED physical size converted to pixels via the image's live
+  //    measured width and the area's referenceWidthMm anchor, so the exact
+  //    same mm size stays physically consistent at any preview size instead
+  //    of stretching/shrinking with whatever fraction the photo happens to
+  //    show.
+  const printableAreaPx =
+    printableArea.unit === "mm"
+      ? (() => {
+          const pxPerMm = productImageBox.width / printableArea.referenceWidthMm;
+          const width = printableArea.widthMm * pxPerMm;
+          const height = printableArea.heightMm * pxPerMm;
+          const centerLeft = productImageBox.left + printableArea.centerX * productImageBox.width;
+          const centerTop = productImageBox.top + printableArea.centerY * productImageBox.height;
+          return { left: centerLeft - width / 2, top: centerTop - height / 2, width, height };
+        })()
+      : {
+          left: productImageBox.left + printableArea.x * productImageBox.width,
+          top: productImageBox.top + printableArea.y * productImageBox.height,
+          width: printableArea.width * productImageBox.width,
+          height: printableArea.height * productImageBox.height,
+        };
+
+  // Single source of truth for BOTH the dotted outline's CSS position and
+  // the drag boundary (constraintsRef measures its own rendered rect,
+  // which this directly controls): the product-specific printable area for
+  // an individual product, or the full measured image bounds for a gift
+  // set -- never a mix of the two, and never independently computed.
+  const activeBoundaryPx = isGiftSet ? productImageBox : printableAreaPx;
+
+  // Drinkware only: a CSS clip-path (expressed in the SAME coordinate space
+  // the logo's own absolute positioning already uses -- previewContainerRef,
+  // i.e. containerBox -- so this clips the visual result without moving or
+  // resizing anything or altering that coordinate space) that hard-cuts any
+  // part of the logo extending past the 70x140mm boundary, regardless of
+  // whether the overflow came from dragging (already prevented by
+  // dragConstraints), resizing, or rotating (neither of which has its own
+  // boundary check) -- so "never visible outside the area" holds for every
+  // interaction, not just drag.
+  const logoClipPath =
+    isDrinkware && containerBox.width && containerBox.height
+      ? `inset(${activeBoundaryPx.top}px ${containerBox.width - activeBoundaryPx.left - activeBoundaryPx.width}px ${containerBox.height - activeBoundaryPx.top - activeBoundaryPx.height}px ${activeBoundaryPx.left}px)`
+      : undefined;
+
   const [formData, setFormData] = useState({
     fullName: "",
     company: "",
@@ -261,13 +436,24 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
     : 100;
 
   /**
-   * Lower bound for `logoScale`: the longest dimension must be >= 1 mm.
-   * Falls back to a legacy 15% floor for unconstrained products so the logo
-   * cannot be shrunk to invisibility by accident.
+   * Lower bound for `logoScale`: the longest dimension must be >= 1 mm for
+   * a branding-limited product (Drinkware), or >= GIFT_SET_MIN_LOGO_SIZE_MM
+   * (10mm) for a Gift Set -- which has no `brandingLimits` entry (its
+   * maximum stays deliberately unconstrained, unchanged), but still gets a
+   * physical floor via the SAME mm<->scale% conversion machinery, just with
+   * its own reference width and minimum passed in explicitly. Anything else
+   * unconfigured falls back to the legacy 15% floor so the logo cannot be
+   * shrunk to invisibility by accident.
    */
-  const minEffectiveScale = brandingLimits
-    ? computeMinEffectiveScale(brandingLimits, logoAspect)
-    : 15;
+  const minEffectiveScale = isGiftSet
+    ? computeMinEffectiveScale(
+        { maxLogoSizeMm: Infinity, previewAreaWidthMm: GIFT_SET_REFERENCE_WIDTH_MM },
+        logoAspect,
+        GIFT_SET_MIN_LOGO_SIZE_MM,
+      )
+    : brandingLimits
+      ? computeMinEffectiveScale(brandingLimits, logoAspect)
+      : 15;
 
 
   const initialPinchRef = useRef<{ dist: number; angle: number; initialScale: number; initialRot: number } | null>(null);
@@ -712,23 +898,59 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
                 className="relative w-full h-full max-h-full flex flex-col items-center justify-center bg-[#F9FAFB]"
                 onClick={handleCanvasClick}
               >
-                <img 
-                  src={previewImage} 
-                  alt="Product preview" 
+                <img
+                  ref={productImageRef}
+                  src={previewImage}
+                  alt="Product preview"
                   crossOrigin="anonymous"
-                  className="absolute inset-0 w-full h-full object-contain pointer-events-none drop-shadow-sm p-4 lg:p-8"
+                  onLoad={handleProductImageLoad}
+                  className="absolute inset-0 w-full h-full object-contain pointer-events-none drop-shadow-sm"
                 />
-                
-                <div 
+
+                {/* Drag boundary: position/size come entirely from
+                    activeBoundaryPx (this product's printable area, or the
+                    full image bounds for a gift set -- see isGiftSet
+                    above), never a fixed percentage of the panel. It moves/
+                    resizes with it on every recompute (resize, variant
+                    change, load). constraintsRef is measured directly by
+                    Framer Motion's `dragConstraints` below, so the drag
+                    boundary is always exactly this same rect -- for a gift
+                    set the border classes are always transparent (no
+                    dotted rectangle ever drawn), but the div itself still
+                    exists so the drag still has a real boundary to measure. */}
+                <div
                   ref={constraintsRef}
-                  className={`absolute inset-0 m-auto w-[55%] h-[65%] transition-all duration-300 pointer-events-none rounded-xl no-capture
-                    ${isDragging ? "border-2 border-dashed border-primary/40 bg-primary/5" : "border-2 border-dashed border-transparent"}
+                  className={`absolute transition-all duration-300 pointer-events-none rounded-xl no-capture
+                    ${!isGiftSet && isDragging ? "border-2 border-dashed border-primary/40 bg-primary/5" : "border-2 border-dashed border-transparent"}
                   `}
+                  style={{
+                    left: activeBoundaryPx.left,
+                    top: activeBoundaryPx.top,
+                    width: activeBoundaryPx.width,
+                    height: activeBoundaryPx.height,
+                  }}
                 />
                 
                 {logo && (
-                  <motion.div 
-                    drag 
+                  // This wrapper is inset-0 -- exactly congruent with
+                  // previewContainerRef's own content box -- so it changes
+                  // NOTHING about the motion.div's positioning coordinate
+                  // system (its `absolute` still resolves to the identical
+                  // pixel position as a direct previewContainerRef child
+                  // would). Its only job is the Drinkware clip-path: a
+                  // CSS-level clip that hard-cuts anything rendered outside
+                  // the 70x140mm boundary regardless of HOW it got there
+                  // (drag, resize, rotate), applied here rather than on
+                  // constraintsRef so it never affects the drag-boundary
+                  // measurement Framer Motion reads. `undefined` (every
+                  // non-Drinkware product) means no clip-path at all --
+                  // purely a pass-through wrapper, no visual change.
+                  <div
+                    className="absolute inset-0 pointer-events-none"
+                    style={logoClipPath ? { clipPath: logoClipPath } : undefined}
+                  >
+                  <motion.div
+                    drag
                     dragConstraints={constraintsRef}
                     dragElastic={0.05}
                     dragMomentum={false}
@@ -748,13 +970,13 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
                     onTouchMove={handleTouchMove}
                     onTouchEnd={handleTouchEnd}
                     onTouchCancel={handleTouchEnd}
-                    className={`absolute z-10 flex items-center justify-center cursor-move touch-none transition-shadow`}
+                    className={`pointer-events-auto absolute z-10 flex items-center justify-center cursor-move touch-none transition-shadow`}
                     style={{
                       width: `${logoScale[0]}%`,
                       maxWidth: "100%",
                       rotate: logoRotation[0] ?? 0,
                       mixBlendMode: activeMixBlend,
-                      touchAction: "none", 
+                      touchAction: "none",
                       opacity: 0.95,
                       x: logoPos.x,
                       y: logoPos.y,
@@ -783,8 +1005,9 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
                       </div>
                     )}
                   </motion.div>
+                  </div>
                 )}
-                
+
                 {logo && isSelected && !isDragging && (
                   <div className="no-capture absolute bottom-8 bg-background/90 backdrop-blur-sm border border-border shadow-sm text-xs font-medium px-4 py-2 rounded-full pointer-events-none animate-in fade-in slide-in-from-bottom-2">
                     <span className="hidden sm:inline">Drag logo to position it</span><span className="sm:hidden">Pinch to resize • Drag to position</span>

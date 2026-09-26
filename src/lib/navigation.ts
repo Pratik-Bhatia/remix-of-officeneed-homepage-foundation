@@ -1,4 +1,4 @@
-import { TAXONOMY, MainCategory, CollectionMapping } from './taxonomy';
+import { TAXONOMY, MainCategory, CollectionMapping, getCategoryByTitle, resolveLiveTitle } from './taxonomy';
 import type { ProductSort } from './products';
 
 export type NavCategory = {
@@ -30,6 +30,7 @@ export const navCategories: NavCategory[] = [
       "Metal Pen",
       "Keychains",
       "Mobile Stand",
+      "Electronics",
     ],
   },
   {
@@ -47,7 +48,7 @@ export const navCategories: NavCategory[] = [
     id: "office-stationery",
     label: "Office Stationery",
     blurb: "Everyday essentials, specified once and replenished on schedule.",
-    items: ["Files and Folders", "Printing Papers", "Staplers and Punching", "Pen"],
+    items: ["Files and Folders", "Printing Papers", "Staplers and Punching", "Pen", "Calculator", "Tape", "Sticky Notes", "Pins & Clips", "Adhesive"],
   },
   {
     id: "hardware-supplies",
@@ -100,6 +101,24 @@ export function navItemTarget(categoryId: string, item: string): ProductsLinkTar
   }
   
   return { collection: handle };
+}
+
+/**
+ * Live display text for a nav label/item string (e.g. `cat.label` or one of
+ * `cat.items`) -- these strings double as the STABLE lookup keys into
+ * `TAXONOMY` (via `getHandle`/`navItemTarget` above, unchanged) and are
+ * never edited themselves; this resolves the CURRENT Shopify collection
+ * title for whatever they point to, for rendering only. Falls back to the
+ * raw string unchanged if it doesn't resolve to a taxonomy node (shouldn't
+ * happen for real nav entries, but never crashes on it).
+ */
+export function getLiveNavLabel(
+  collections: Array<{ handle: string; title: string }>,
+  rawLabel: string,
+): string {
+  const match = getCategoryByTitle(rawLabel);
+  if (!match) return rawLabel;
+  return resolveLiveTitle(collections, match.node);
 }
 
 export const footerShopTargets: Record<string, ProductsLinkTarget> = {

@@ -5,18 +5,9 @@ import { Search, X, ArrowRight } from "lucide-react";
 import { products } from "@/lib/products";
 import { cn } from "@/lib/utils";
 
-import { primaryNavCategories, navCategoryTarget } from "@/lib/navigation";
+import { primaryNavCategories, navCategoryTarget, getLiveNavLabel } from "@/lib/navigation";
 
-const quickLinks = [
-  { label: "All Products", to: "/products", search: {} },
-  ...primaryNavCategories.map((cat) => ({
-    label: cat.label,
-    to: "/products",
-    search: navCategoryTarget(cat.id),
-  })),
-];
-
-import { useShopifyCatalogue, shopifyCatalogueQueryOptions } from "@/lib/shopify-overlay";
+import { useShopifyCatalogue, useShopifyCollections, shopifyCatalogueQueryOptions } from "@/lib/shopify-overlay";
 import { useQuery } from "@tanstack/react-query";
 import { searchProducts, getSearchSuggestion } from "@/lib/search";
 
@@ -26,6 +17,19 @@ export function SearchModal({ open, onOpenChange }: { open: boolean; onOpenChang
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const catalogue = useShopifyCatalogue(products);
+  const { collections } = useShopifyCollections();
+
+  // Built here (not at module scope) so each entry's label can resolve the
+  // live Shopify collection title -- same cached query every other nav
+  // surface already uses.
+  const quickLinks = [
+    { label: "All Products", to: "/products" as const, search: {} },
+    ...primaryNavCategories.map((cat) => ({
+      label: getLiveNavLabel(collections, cat.label),
+      to: "/products" as const,
+      search: navCategoryTarget(cat.id),
+    })),
+  ];
 
   // Relevance scoring (tokenizing + fuzzy fallback) is more work than the
   // old plain substring filter, so live-typing suggestions are debounced --
@@ -74,7 +78,11 @@ export function SearchModal({ open, onOpenChange }: { open: boolean; onOpenChang
   const matchingCategories = normalizedQuery
     ? primaryNavCategories.filter(cat =>
         cat.label.toLowerCase().includes(normalizedQuery) ||
-        cat.items.some(i => i.toLowerCase().includes(normalizedQuery))
+        getLiveNavLabel(collections, cat.label).toLowerCase().includes(normalizedQuery) ||
+        cat.items.some(i =>
+          i.toLowerCase().includes(normalizedQuery) ||
+          getLiveNavLabel(collections, i).toLowerCase().includes(normalizedQuery),
+        )
       ).slice(0, 2)
     : [];
 
@@ -132,8 +140,8 @@ export function SearchModal({ open, onOpenChange }: { open: boolean; onOpenChang
               <div className="animate-in fade-in duration-500">
                 <h3 className="text-[11px] font-medium text-muted-foreground mb-3 px-2">Quick Links</h3>
                 <ul className="space-y-0.5">
-                  {quickLinks.map(link => (
-                    <li key={link.label}>
+                  {quickLinks.map((link, i) => (
+                    <li key={i}>
                       <Link 
                         to={link.to} 
                         search={link.search as any}
@@ -172,7 +180,7 @@ export function SearchModal({ open, onOpenChange }: { open: boolean; onOpenChang
                             className="group flex items-center rounded-md px-2 py-1.5 text-[13px] md:text-[14px] font-medium text-foreground/80 hover:bg-muted/50 hover:text-foreground transition-colors"
                           >
                             <ArrowRight className="mr-3 size-3.5 text-muted-foreground/40 transition-colors group-hover:text-foreground" strokeWidth={2} />
-                            <span>{cat.label}</span>
+                            <span>{getLiveNavLabel(collections, cat.label)}</span>
                           </Link>
                         </li>
                       ))}
@@ -197,7 +205,7 @@ export function SearchModal({ open, onOpenChange }: { open: boolean; onOpenChang
                             </div>
                             <div className="flex flex-col">
                               <span className="font-medium text-[13px] md:text-sm text-foreground group-hover:text-primary transition-colors line-clamp-1">{product.name}</span>
-                              <span className="text-[11px] text-muted-foreground">{product.category}</span>
+                              <span className="text-[11px] text-muted-foreground">{getLiveNavLabel(collections, product.category)}</span>
                             </div>
                           </Link>
                         </li>

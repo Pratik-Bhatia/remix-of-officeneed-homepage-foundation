@@ -2,8 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { bestsellerFilters, bestsellerProducts, type BestsellerCategory } from "@/lib/bestsellers";
-import { useShopifyBestsellers } from "@/lib/shopify-overlay";
+import { useShopifyBestsellers, useShopifyCollections } from "@/lib/shopify-overlay";
 import { ProductCard } from "@/components/officeneed/ProductCard";
+import { getLiveNavLabel } from "@/lib/navigation";
 import type { Product } from "@/lib/products";
 
 // Product.category has 2 values ("Printing & Branding", "Officeneed
@@ -25,6 +26,7 @@ export function Bestsellers() {
   const [canNext, setCanNext] = useState(true);
 
   const catalogue = useShopifyBestsellers(bestsellerProducts);
+  const { collections } = useShopifyCollections();
 
   const products = useMemo(
     () => (active === "All" ? catalogue : catalogue.filter((p) => toFilterCategory(p.category) === active)).slice(0, 12),
@@ -95,7 +97,7 @@ export function Bestsellers() {
                       : "bg-secondary text-secondary-foreground hover:bg-muted",
                   )}
                 >
-                  {f}
+                  {getLiveNavLabel(collections, f)}
                 </button>
               ))}
             </div>
