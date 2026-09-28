@@ -50,6 +50,11 @@ function sanitizeText(text: string | number | undefined): string {
     .trim();
 }
 
+/** One decimal place, trailing ".0" stripped -- e.g. 30 -> "30", 29.84 -> "29.8". Mirrors the exact rounding the customizer's own Logo Size inputs display, so the PDF can never show a different number than what the customer saw. */
+function formatMm(mm: number): string {
+  return parseFloat(mm.toFixed(1)).toString();
+}
+
 function formatCurrency(amount: number) {
   const isInteger = amount % 1 === 0;
   const formatted = new Intl.NumberFormat("en-IN", {
@@ -88,7 +93,12 @@ export interface CorporateQuotePDFData {
     fileName: string;
     positionX?: number | undefined;
     positionY?: number | undefined;
-    scale?: number | undefined;
+    /** The exact Width/Height (mm) shown in the customizer's Logo Size
+     * fields -- NOT the internal logoScale%, and never recalculated from
+     * position/pixel data. Absent on an older quote (pre-dating this field)
+     * or a non-Corporate-Gifting product; the PDF falls back gracefully. */
+    widthMm?: number | undefined;
+    heightMm?: number | undefined;
     rotation?: number | undefined;
     flipHorizontal?: boolean | undefined;
     flipVertical?: boolean | undefined;
@@ -196,10 +206,14 @@ export async function generateCorporateQuotePDF(data: CorporateQuotePDFData): Pr
     doc.setFontSize(10);
     doc.setFont("Roboto", "normal");
 
+    const hasSize = typeof data.logo.widthMm === "number" && isFinite(data.logo.widthMm)
+      && typeof data.logo.heightMm === "number" && isFinite(data.logo.heightMm);
     const logoRows = [
       `Logo File: ${sanitizeText(data.logo.fileName)}`,
+      // Backward-safe: an older quote saved before this field existed simply
+      // omits the line rather than showing "— mm x — mm" or crashing.
+      ...(hasSize ? [`Logo Size: ${formatMm(data.logo.widthMm!)} mm × ${formatMm(data.logo.heightMm!)} mm`] : []),
       `Position (X, Y): ${sanitizeText(data.logo.positionX)}, ${sanitizeText(data.logo.positionY)}`,
-      `Size: ${sanitizeText(data.logo.scale)}%`,
       `Rotation: ${sanitizeText(data.logo.rotation)}°`,
       `Flip: ${data.logo.flipHorizontal ? "Horizontal " : ""}${data.logo.flipVertical ? "Vertical" : ""}${!data.logo.flipHorizontal && !data.logo.flipVertical ? "None" : ""}`,
     ];

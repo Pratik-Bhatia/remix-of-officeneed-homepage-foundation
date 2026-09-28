@@ -15,7 +15,7 @@ import { motion } from "motion/react";
 // killing the customization snapshot capture. Same API, drop-in fix.
 import html2canvas from "html2canvas-pro";
 import { submitCorporateQuote } from "@/lib/corporate-quotes.functions";
-import { getBrandingLimits, computeEffectiveMaxScale, computeMinEffectiveScale, scaleToPhysicalMm, widthMmToScale, heightMmToScale, MIN_LOGO_SIZE_MM, GIFT_SET_MIN_LOGO_SIZE_MM, GIFT_SET_REFERENCE_WIDTH_MM, type PrintingMethod } from "@/lib/branding-limits";
+import { getBrandingLimits, computeEffectiveMaxScale, computeGeometricMaxScale, computeMinEffectiveScale, scaleToPhysicalMm, widthMmToScale, heightMmToScale, MIN_LOGO_SIZE_MM, GIFT_SET_REFERENCE_WIDTH_MM, CORPORATE_GIFTING_DEFAULT_REFERENCE_WIDTH_MM, type PrintingMethod, type BrandingLimits } from "@/lib/branding-limits";
 import { getPrintableArea } from "@/lib/printable-area";
 
 interface ProductCustomizerProps {
@@ -347,6 +347,24 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
     ((product.subcategories ?? []).some((s: string) => s.toLowerCase().includes("drinkware")) ||
       (product.tags ?? []).some((t: string) => t.toLowerCase().includes("drinkware")));
 
+  // Same field the PDP's "Customize This Product" CTA and every mm-based
+  // lookup below (getBrandingLimits/getPrintableArea) already key off --
+  // real Shopify collection membership (see shopify-overlay.ts), not
+  // keyword guessing -- so this is the reliable, already-established
+  // signal for "is this a Corporate Gifting product", not a new check.
+  const isCorporateGifting = product.category === "Corporate Gifting";
+
+  // The dotted printable-area boundary is only meaningful for Drinkware,
+  // whose 70x140mm engraving area is a real physical constraint the
+  // customer needs to see. Every OTHER Corporate Gifting product (Bags,
+  // Diaries, Pens, Keychains, etc.) has no such fixed-size printable
+  // surface -- same reasoning Gift Sets already use -- so the boundary is
+  // hidden for them exactly like it already is for Gift Sets. The
+  // underlying `constraintsRef` div (position/size, drag constraint) is
+  // untouched either way; only its border classes change below, so the
+  // logo still can't be dragged off the product on any of these products.
+  const hideVisibleBoundary = isGiftSet || (isCorporateGifting && !isDrinkware);
+
   const printableArea = getPrintableArea(product.category, product.subcategories?.[0] ?? "", product.slug);
 
   // The actual on-screen printable-area rect. Two unit systems:
@@ -445,36 +463,79 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
   // Falls back to 1 (square) until the logo is loaded and measured.
   const logoAspect = logoNaturalDims ? logoNaturalDims.w / logoNaturalDims.h : 1;
 
+  // Every Corporate Gifting product other than Drinkware (Gift Sets and
+  // everything else) has no `brandingLimits` entry, so gets its mm<->scale%
+  // conversion anchored to a generic per-case estimate instead -- see the
+  // constants' own comments in branding-limits.ts for what these numbers
+  // do and don't affect (display only, never the actual enforced size).
+  const genericReferenceWidthMm = isGiftSet ? GIFT_SET_REFERENCE_WIDTH_MM : CORPORATE_GIFTING_DEFAULT_REFERENCE_WIDTH_MM;
+
   /**
-   * The hard upper bound for `logoScale` (0-100) given the current printing
-   * method and logo aspect ratio.  Resolves to 100 when no limits are set
-   * (i.e., product type not in PRODUCT_BRANDING_LIMITS) so existing behaviour
-   * is fully preserved for non-drinkware products.
+   * A synthetic `BrandingLimits`-shaped object that lets the Width/Height mm
+   * input machinery below (`applyScaleWithLimits`, `getDisplayMmFromScale`,
+   * `handleWidthChange`/`handleHeightChange`) work identically for Drinkware
+   * AND every other Corporate Gifting product, without duplicating that
+   * logic: Drinkware uses its real `brandingLimits`; any other Corporate
+   * Gifting product gets this generic-reference stand-in (its `maxLogoSizeMm`
+   * is never read by the mm<->scale% math itself -- only `previewAreaWidthMm`
+   * is -- the actual maximum is `effectiveMaxScale`/`computeGeometricMaxScale`
+   * below, not this field); non-Corporate-Gifting products get `null`, same
+   * as before, so the mm control stays hidden and existing behaviour for
+   * every other category is untouched.
+   */
+  const mmConversionLimits: BrandingLimits | null =
+    brandingLimits ??
+    (isCorporateGifting ? { maxLogoSizeMm: Infinity, previewAreaWidthMm: genericReferenceWidthMm } : null);
+
+  /**
+   * The hard upper bound for `logoScale` (0-100).
+   *  - Drinkware: unchanged -- the physical Laser/UV mm production cap.
+   *  - Any other Corporate Gifting product (incl. Gift Sets): computed
+   *    dynamically from the product's OWN actual customization-area
+   *    rectangle (`activeBoundaryPx`) against the live-measured preview
+   *    panel (`containerBox`) -- never a fixed mm figure, so the logo can
+   *    never be resized beyond what genuinely fits that product's area.
+   *  - Everything else: unchanged, unconstrained (100).
    */
   const effectiveMaxScale = brandingLimits
     ? computeEffectiveMaxScale(brandingLimits, logoAspect)
-    : 100;
+    : isCorporateGifting
+      ? computeGeometricMaxScale(activeBoundaryPx.width, activeBoundaryPx.height, containerBox.width, logoAspect)
+      : 100;
 
   /**
-   * Lower bound for `logoScale`: the longest dimension must be >= 1 mm for
-   * a branding-limited product (Drinkware), or >= GIFT_SET_MIN_LOGO_SIZE_MM
-   * (10mm) for a Gift Set -- which has no `brandingLimits` entry (its
-   * maximum stays deliberately unconstrained, unchanged), but still gets a
-   * physical floor via the SAME mm<->scale% conversion machinery, just with
-   * its own reference width and minimum passed in explicitly. Anything else
+   * Lower bound for `logoScale`: the longest dimension must be >= 1 mm
+   * (`MIN_LOGO_SIZE_MM`) for Drinkware or any other Corporate Gifting
+   * product (Gift Set or not) -- using the SAME mm<->scale% conversion
+   * machinery, just with each case's own reference width. Anything else
    * unconfigured falls back to the legacy 15% floor so the logo cannot be
    * shrunk to invisibility by accident.
    */
-  const minEffectiveScale = isGiftSet
-    ? computeMinEffectiveScale(
-        { maxLogoSizeMm: Infinity, previewAreaWidthMm: GIFT_SET_REFERENCE_WIDTH_MM },
-        logoAspect,
-        GIFT_SET_MIN_LOGO_SIZE_MM,
-      )
-    : brandingLimits
-      ? computeMinEffectiveScale(brandingLimits, logoAspect)
+  const minEffectiveScale = brandingLimits
+    ? computeMinEffectiveScale(brandingLimits, logoAspect)
+    : isCorporateGifting
+      ? computeMinEffectiveScale(
+          { maxLogoSizeMm: Infinity, previewAreaWidthMm: genericReferenceWidthMm },
+          logoAspect,
+          MIN_LOGO_SIZE_MM,
+        )
       : 15;
 
+  /**
+   * The "max __ mm" hint shown next to the Width/Height inputs: Drinkware's
+   * own real `maxLogoSizeMm`, or -- for every other Corporate Gifting
+   * product -- the longest dimension (mm) that `effectiveMaxScale` (the
+   * actual geometric clamp, not an estimate) works out to at this logo's
+   * aspect ratio, so the number shown always matches what's really enforced.
+   */
+  const displayMaxLongestMm = brandingLimits
+    ? brandingLimits.maxLogoSizeMm
+    : mmConversionLimits
+      ? (() => {
+          const { widthMm, heightMm } = scaleToPhysicalMm(effectiveMaxScale, mmConversionLimits, logoAspect);
+          return Math.max(widthMm, heightMm);
+        })()
+      : 0;
 
   const initialPinchRef = useRef<{ dist: number; angle: number; initialScale: number; initialRot: number } | null>(null);
   /** Prevents the pinch-zoom max-size warning from firing on every touch frame. */
@@ -532,7 +593,7 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
    * values are not clobbered by the effect.
    */
   useEffect(() => {
-    if (!brandingLimits || !logoNaturalDims) {
+    if (!mmConversionLimits || !logoNaturalDims) {
       if (editingFieldRef.current === null) {
         setSizeInputW("");
         setSizeInputH("");
@@ -554,6 +615,19 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
   // ---------------------------------------------------------------------------
 
   /**
+   * The max-size warning shown wherever `effectiveMaxScale` is hit (typed mm
+   * input, pinch, drag-resize-handle): Drinkware states its real physical
+   * production cap; every other Corporate Gifting product has no such fixed
+   * mm figure (its max is geometric, see `computeGeometricMaxScale`), so it
+   * gets a message describing WHY instead of a specific -- and not entirely
+   * meaningful for a two-axis rectangular constraint -- mm number.
+   */
+  const maxSizeToastMessage = (): string =>
+    brandingLimits
+      ? `Maximum logo size is ${brandingLimits.maxLogoSizeMm} mm for ${printingMethod}.`
+      : "Maximum size for this product's customization area reached.";
+
+  /**
    * Core: apply a desired logoScale value while enforcing min/max physical
    * limits and showing user-friendly messages.
    *
@@ -563,14 +637,13 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
    * "31" when the max is 30) can never remain visible in the UI.
    */
   const applyScaleWithLimits = (rawScale: number): number => {
-    if (!brandingLimits) return rawScale;
-    const { maxLogoSizeMm } = brandingLimits;
+    if (!mmConversionLimits) return rawScale;
     let clamped = rawScale;
     if (!isFinite(rawScale)) {
       clamped = minEffectiveScale;
     } else if (rawScale > effectiveMaxScale) {
       clamped = effectiveMaxScale;
-      toast.info(`Maximum logo size is ${maxLogoSizeMm} mm for ${printingMethod}.`);
+      toast.info(maxSizeToastMessage());
     } else if (rawScale < minEffectiveScale) {
       clamped = minEffectiveScale;
       toast.info(`Minimum logo size is ${MIN_LOGO_SIZE_MM} mm.`);
@@ -588,8 +661,8 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
    * rotation swap (visual width <-> logical height).
    */
   const getDisplayMmFromScale = (scale: number): { wMm: number; hMm: number } => {
-    if (!brandingLimits) return { wMm: 0, hMm: 0 };
-    const logicalWmm = (scale / 100) * brandingLimits.previewAreaWidthMm;
+    if (!mmConversionLimits) return { wMm: 0, hMm: 0 };
+    const logicalWmm = (scale / 100) * mmConversionLimits.previewAreaWidthMm;
     const logicalHmm = logicalWmm / logoAspect;
     const isSwapped = (logoRotation[0] ?? 0) === 90;
     return isSwapped
@@ -613,12 +686,12 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
     editingFieldRef.current = "W";
     setSizeInputW(val);
     const enteredMm = parseFloat(val);
-    if (!isFinite(enteredMm) || enteredMm <= 0 || !brandingLimits || !logoNaturalDims) return;
+    if (!isFinite(enteredMm) || enteredMm <= 0 || !mmConversionLimits || !logoNaturalDims) return;
 
     const isSwapped = (logoRotation[0] ?? 0) === 90;
     const requestedScale = isSwapped
-      ? heightMmToScale(enteredMm, brandingLimits, logoAspect)
-      : widthMmToScale(enteredMm, brandingLimits);
+      ? heightMmToScale(enteredMm, mmConversionLimits, logoAspect)
+      : widthMmToScale(enteredMm, mmConversionLimits);
     const clampedScale = applyScaleWithLimits(requestedScale);
     const { wMm, hMm } = getDisplayMmFromScale(clampedScale);
     setSizeInputW(parseFloat(wMm.toFixed(1)).toString());
@@ -633,12 +706,12 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
     editingFieldRef.current = "H";
     setSizeInputH(val);
     const enteredMm = parseFloat(val);
-    if (!isFinite(enteredMm) || enteredMm <= 0 || !brandingLimits || !logoNaturalDims) return;
+    if (!isFinite(enteredMm) || enteredMm <= 0 || !mmConversionLimits || !logoNaturalDims) return;
 
     const isSwapped = (logoRotation[0] ?? 0) === 90;
     const requestedScale = isSwapped
-      ? widthMmToScale(enteredMm, brandingLimits)
-      : heightMmToScale(enteredMm, brandingLimits, logoAspect);
+      ? widthMmToScale(enteredMm, mmConversionLimits)
+      : heightMmToScale(enteredMm, mmConversionLimits, logoAspect);
     const clampedScale = applyScaleWithLimits(requestedScale);
     const { wMm, hMm } = getDisplayMmFromScale(clampedScale);
     setSizeInputW(parseFloat(wMm.toFixed(1)).toString());
@@ -652,7 +725,7 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
    */
   const syncInputsFromScale = () => {
     editingFieldRef.current = null;
-    if (!brandingLimits || !logoNaturalDims) return;
+    if (!mmConversionLimits || !logoNaturalDims) return;
     const { wMm, hMm } = getDisplayMmFromScale(logoScale[0] ?? 0);
     setSizeInputW(parseFloat(wMm.toFixed(1)).toString());
     setSizeInputH(parseFloat(hMm.toFixed(1)).toString());
@@ -858,7 +931,17 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
             flipH: flipH,
             flipV: flipV,
             x: logoPos.x,
-            y: logoPos.y
+            y: logoPos.y,
+            // The exact Width/Height (mm) the customer sees and typed in the
+            // Logo Size fields -- read directly from that same state, NOT
+            // recomputed from logoScale/percentage, so the PDF can never
+            // show a different number than what was on screen. Only
+            // meaningful for Corporate Gifting products (sizeInputW/H stay
+            // "" otherwise, see mmConversionLimits); omitted rather than
+            // sent as NaN when unset or mid-edit.
+            ...(isFinite(parseFloat(sizeInputW)) && isFinite(parseFloat(sizeInputH))
+              ? { widthMm: parseFloat(sizeInputW), heightMm: parseFloat(sizeInputH) }
+              : {}),
           } : undefined,
           previewImage: previewBase64
         }
@@ -902,9 +985,9 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
       // Hard clamp: never exceed the physical branding-size maximum.
       const hitMax = newScale > effectiveMaxScale;
       newScale = Math.max(minEffectiveScale, Math.min(effectiveMaxScale, newScale));
-      if (hitMax && !pinchWarnedRef.current && brandingLimits) {
+      if (hitMax && !pinchWarnedRef.current && isCorporateGifting) {
         pinchWarnedRef.current = true;
-        toast.info(`Maximum logo size is ${brandingLimits.maxLogoSizeMm} mm for ${printingMethod}.`);
+        toast.info(maxSizeToastMessage());
       }
       setLogoScale([Math.round(newScale)]);
     }
@@ -935,9 +1018,9 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
       // Hard clamp: never exceed the physical branding-size maximum.
       const hitMax = newScale > effectiveMaxScale;
       newScale = Math.max(minEffectiveScale, Math.min(effectiveMaxScale, newScale));
-      if (hitMax && !hasWarnedMax && brandingLimits) {
+      if (hitMax && !hasWarnedMax && isCorporateGifting) {
         hasWarnedMax = true;
-        toast.info(`Maximum logo size is ${brandingLimits.maxLogoSizeMm} mm for ${printingMethod}.`);
+        toast.info(maxSizeToastMessage());
       }
       setLogoScale([newScale]);
     };
@@ -988,13 +1071,15 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
                     change, load). constraintsRef is measured directly by
                     Framer Motion's `dragConstraints` below, so the drag
                     boundary is always exactly this same rect -- for a gift
-                    set the border classes are always transparent (no
-                    dotted rectangle ever drawn), but the div itself still
-                    exists so the drag still has a real boundary to measure. */}
+                    set, or any other non-Drinkware Corporate Gifting
+                    product (see hideVisibleBoundary), the border classes
+                    are always transparent (no dotted rectangle ever
+                    drawn), but the div itself still exists so the drag
+                    still has a real boundary to measure. */}
                 <div
                   ref={constraintsRef}
                   className={`absolute transition-all duration-300 pointer-events-none rounded-xl no-capture
-                    ${!isGiftSet && isDragging ? "border-2 border-dashed border-primary/40 bg-primary/5" : "border-2 border-dashed border-transparent"}
+                    ${!hideVisibleBoundary && isDragging ? "border-2 border-dashed border-primary/40 bg-primary/5" : "border-2 border-dashed border-transparent"}
                   `}
                   style={{
                     left: activeBoundaryPx.left,
@@ -1162,7 +1247,7 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
                       <div className="pl-9 space-y-6 pt-2">
 
                         {/* ── Logo Size mm control ─────────────────────────── */}
-                        {brandingLimits && logoNaturalDims && logo && (
+                        {mmConversionLimits && logoNaturalDims && logo && (
                           <div className="space-y-2">
                             <div className="flex items-center gap-1.5">
                               <Label className="text-xs font-medium text-foreground/80">Logo Size</Label>
@@ -1219,7 +1304,10 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
                               {/* Live longest-dim indicator */}
                               <div className="flex flex-col gap-1 pt-4">
                                 <span className="text-[10px] text-muted-foreground/70 leading-none">
-                                  max {brandingLimits.maxLogoSizeMm} mm
+                                  {/* Drinkware: raw integer, byte-for-byte the original "max 30 mm"
+                                      label. Every other Corporate Gifting product: one decimal, since
+                                      the geometric max is rarely a round number. */}
+                                  max {brandingLimits ? displayMaxLongestMm : displayMaxLongestMm.toFixed(1)} mm
                                 </span>
                               </div>
                             </div>

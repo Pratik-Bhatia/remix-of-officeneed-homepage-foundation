@@ -41,7 +41,12 @@ const submitQuoteSchema = z.object({
     flipH: z.boolean().optional(),
     flipV: z.boolean().optional(),
     x: z.number().optional(),
-    y: z.number().optional()
+    y: z.number().optional(),
+    // The exact Width/Height (mm) shown in the customizer's Logo Size
+    // fields. Optional so an older client build (or a non-Corporate-Gifting
+    // product, which never sets these) can't fail validation.
+    widthMm: z.number().optional(),
+    heightMm: z.number().optional()
   }).optional(),
 
   previewImage: z.string().optional(), // base64
@@ -187,7 +192,8 @@ export const submitCorporateQuote = createServerFn({ method: "POST" })
                   fileName: data.logo.name,
                   positionX: data.logo.x,
                   positionY: data.logo.y,
-                  scale: data.logo.scale,
+                  widthMm: data.logo.widthMm,
+                  heightMm: data.logo.heightMm,
                   rotation: data.logo.rotation,
                   flipHorizontal: data.logo.flipH,
                   flipVertical: data.logo.flipV,

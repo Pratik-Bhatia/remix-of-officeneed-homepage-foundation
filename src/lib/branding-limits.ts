@@ -83,25 +83,44 @@ export const PRODUCT_BRANDING_LIMITS: Record<ProductBrandingKey, ProductBranding
 };
 
 /**
- * Gift Sets deliberately have NO entry above -- their multi-item photo has
- * no single print-area width a `maxLogoSizeMm` could meaningfully describe,
- * so their maximum stays fully unconstrained (logoScale up to 100), exactly
- * as before. They still get a physical MINIMUM floor so a logo can't be
- * shrunk to illegibility, using this file's existing mm<->scale% machinery
- * (`computeMinEffectiveScale`'s optional `minSizeMm` param) rather than a
- * second, pixel-based system.
+ * Gift Sets, and every other Corporate Gifting product with no entry above,
+ * deliberately have no fixed `maxLogoSizeMm` -- a multi-item gift-set photo
+ * (or a single-item product with no dedicated calibration yet) has no one
+ * print-area width that spec could meaningfully describe. Their maximum is
+ * instead computed dynamically per-render from the product's own actual
+ * customization-area geometry (see `computeGeometricMaxScale` below), never
+ * a hardcoded mm cap. They still get a physical MINIMUM floor (1mm, see
+ * `MIN_LOGO_SIZE_MM`) so a logo can't be shrunk to illegibility, using this
+ * file's existing mm<->scale% machinery (`computeMinEffectiveScale`) rather
+ * than a second, pixel-based system.
  */
-export const GIFT_SET_MIN_LOGO_SIZE_MM = 10;
 
 /**
- * Conversion anchor for the Gift Set minimum: the physical width (mm) the
- * customiser's preview PANEL (not just the product photo -- logoScale% is
- * relative to the panel, same basis as every other product here) is taken
- * to represent. An estimate based on a typical multi-item gift-set photo's
- * framing, not a measured fact -- if 10mm doesn't look physically right on
- * screen, this is the number to adjust.
+ * Conversion anchor for Gift Sets' mm<->scale% display: the physical width
+ * (mm) the customiser's preview PANEL (not just the product photo --
+ * logoScale% is relative to the panel, same basis as every other product
+ * here) is taken to represent. An estimate based on a typical multi-item
+ * gift-set photo's framing, not a measured fact -- if a shown mm value
+ * doesn't look physically right on screen, this is the number to adjust.
  */
 export const GIFT_SET_REFERENCE_WIDTH_MM = 400;
+
+/**
+ * Same idea as `GIFT_SET_REFERENCE_WIDTH_MM`, but for every OTHER Corporate
+ * Gifting product (Bags, Diaries, Luxury Pens, Metal Pen, Keychains, Mobile
+ * Stand, Electronics, ...) that has no dedicated `MmPrintableArea` entry of
+ * its own in printable-area.ts -- a single-item photo, typically framed
+ * more tightly than a multi-item gift-set photo. Also an estimate, not a
+ * measured fact per product: it only affects the mm NUMBER shown/typed in
+ * the Width/Height inputs, never the actual enforced size -- the real
+ * on-screen/printed size is always driven by `logoScale%` against this
+ * product's own measured `printableAreaPx` (via `computeGeometricMaxScale`),
+ * which is exact regardless of this estimate. Adjust here (or, better, give
+ * a specific subcategory its own `MmPrintableArea` in printable-area.ts,
+ * the same way Drinkware already has) if the shown mm looks physically
+ * wrong for a particular product photo's framing.
+ */
+export const CORPORATE_GIFTING_DEFAULT_REFERENCE_WIDTH_MM = 150;
 
 // ---------------------------------------------------------------------------
 // Lookup helpers
@@ -164,6 +183,35 @@ export function computeEffectiveMaxScale(
   }
   // Tall -- constrain via the height; width must shrink proportionally
   return maxScaleForWidth * logoAspect;
+}
+
+/**
+ * Maximum logoScale% that keeps a logo of the given aspect ratio fully
+ * inside a rectangular customization area -- e.g. a product's own
+ * `printableAreaPx`/`activeBoundaryPx` -- expressed in the SAME pixel space
+ * as the container `logoScale%` is itself relative to (the customiser's
+ * preview panel width).
+ *
+ * Unlike `computeEffectiveMaxScale` (which assumes a single longest-side mm
+ * spec -- correct for Drinkware's own physical `maxLogoSizeMm` production
+ * limit, a genuine square-ish cap), this treats the area as an actual
+ * width x height RECTANGLE: the logo (rendered at `width: X%`, `height:
+ * auto`, so it always keeps its own aspect ratio) must fit both axes at
+ * once, so the binding constraint is whichever axis is tighter -- not
+ * necessarily the longest one. This is what lets a non-Drinkware Corporate
+ * Gifting product's maximum be "however big actually fits this product's
+ * real customization area" instead of a hardcoded mm figure.
+ */
+export function computeGeometricMaxScale(
+  areaWidthPx: number,
+  areaHeightPx: number,
+  containerWidthPx: number,
+  logoAspect: number,
+): number {
+  if (!(containerWidthPx > 0) || !(logoAspect > 0)) return 100;
+  const scaleCapWidth = (areaWidthPx / containerWidthPx) * 100;
+  const scaleCapHeight = (areaHeightPx * logoAspect / containerWidthPx) * 100;
+  return Math.max(0, Math.min(scaleCapWidth, scaleCapHeight));
 }
 
 // ---------------------------------------------------------------------------
