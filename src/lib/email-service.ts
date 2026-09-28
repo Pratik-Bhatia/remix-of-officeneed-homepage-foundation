@@ -29,26 +29,85 @@ function getInternalEmail() {
   return process.env["OFFICENEED_ENQUIRY_EMAIL"] || "contact@officeneed.in";
 }
 
+export type EmailAttachment = { filename: string; content: Buffer };
+
+/**
+ * Resend's `post()` sends the whole payload through a plain `JSON.stringify`
+ * (see node_modules/resend/dist/index.mjs). A raw Node `Buffer` has its own
+ * `toJSON()` that `JSON.stringify` invokes automatically, turning it into
+ * `{"type":"Buffer","data":[...]}` instead of file bytes -- Resend's API
+ * expects `content` as a base64 STRING in the JSON body (confirmed by the
+ * SDK's own internal forward-email code path, which does
+ * `Buffer.from(...).toString("base64")` before attaching). Passing a Buffer
+ * straight through silently produces a malformed/unusable attachment. Every
+ * attachment is converted here so no caller has to remember this.
+ */
+function toResendAttachments(attachments?: EmailAttachment[]) {
+  if (!attachments?.length) return undefined;
+  return attachments.map((a) => ({ filename: a.filename, content: a.content.toString("base64") }));
+}
+
 /** Send a simple HTML email to the internal team inbox. */
-export async function sendInternalHtmlEmail(subject: string, html: string): Promise<boolean> {
+export async function sendInternalHtmlEmail(
+  subject: string,
+  html: string,
+  attachments?: EmailAttachment[],
+): Promise<boolean> {
   const resend = getResendClient();
   if (!resend) return false;
-  const { error } = await resend.emails.send({ from: getEmailFrom(), to: getInternalEmail(), subject, html });
+  const resendAttachments = toResendAttachments(attachments);
+  if (attachments?.length) {
+    console.log(
+      `[EmailService] sending internal email with ${attachments.length} attachment(s):`,
+      attachments.map((a) => `${a.filename} (${a.content.length} bytes)`).join(", "),
+    );
+  }
+  const { data, error } = await resend.emails.send({
+    from: getEmailFrom(),
+    to: getInternalEmail(),
+    subject,
+    html,
+    ...(resendAttachments ? { attachments: resendAttachments } : {}),
+  });
   if (error) {
     console.error("[EmailService] Internal html email error:", error);
     return false;
+  }
+  if (attachments?.length) {
+    console.log(`[EmailService] internal email accepted by Resend, id=${data?.id}`);
   }
   return true;
 }
 
 /** Send a simple HTML email to a customer. */
-export async function sendCustomerHtmlEmail(to: string, subject: string, html: string): Promise<boolean> {
+export async function sendCustomerHtmlEmail(
+  to: string,
+  subject: string,
+  html: string,
+  attachments?: EmailAttachment[],
+): Promise<boolean> {
   const resend = getResendClient();
   if (!resend) return false;
-  const { error } = await resend.emails.send({ from: getEmailFrom(), to, subject, html });
+  const resendAttachments = toResendAttachments(attachments);
+  if (attachments?.length) {
+    console.log(
+      `[EmailService] sending customer email with ${attachments.length} attachment(s):`,
+      attachments.map((a) => `${a.filename} (${a.content.length} bytes)`).join(", "),
+    );
+  }
+  const { data, error } = await resend.emails.send({
+    from: getEmailFrom(),
+    to,
+    subject,
+    html,
+    ...(resendAttachments ? { attachments: resendAttachments } : {}),
+  });
   if (error) {
     console.error("[EmailService] Customer html email error:", error);
     return false;
+  }
+  if (attachments?.length) {
+    console.log(`[EmailService] customer email accepted by Resend, id=${data?.id}`);
   }
   return true;
 }

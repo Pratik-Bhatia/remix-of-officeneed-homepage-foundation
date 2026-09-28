@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { getUploadClient } from "./attachments.server";
 import { sendCustomerHtmlEmail, sendInternalHtmlEmail } from "./email-service";
+import { generateCorporateQuotePDF } from "./pdf-generator";
 
 const MAX_BYTES = 10 * 1024 * 1024; // 10MB
 
@@ -149,7 +150,70 @@ export const submitCorporateQuote = createServerFn({ method: "POST" })
         logoUrl = publicLogoData.publicUrl;
       }
 
-      // 5. Send Emails
+      // 5. Generate the quote PDF -- keeps every existing field (customer,
+      // product, printing method, logo position/scale/rotation/flip) plus
+      // the Customization Preview, built from the exact same snapshot
+      // embedded in the emails above, not independently recalculated.
+      // Never allowed to block the quote itself: on failure, the quote
+      // still saves and emails still send, just without the PDF attached.
+      console.log(
+        `[QuotePDF] ${refNumber}: previewImage present=${Boolean(data.previewImage)} ` +
+        `len=${data.previewImage?.length ?? 0} startsWithDataUrl=${data.previewImage?.startsWith("data:image") ?? false}`,
+      );
+      let pdfBuffer: Buffer | null = null;
+      try {
+        console.log(`[QuotePDF] ${refNumber}: calling generateCorporateQuotePDF()`);
+        pdfBuffer = await generateCorporateQuotePDF({
+          refNumber,
+          date: new Date().toLocaleDateString("en-IN", { year: "numeric", month: "long", day: "numeric" }),
+          customer: {
+            name: data.fullName,
+            company: data.company,
+            email: data.email,
+            phone: data.phone,
+          },
+          order: {
+            productName: data.product.name,
+            variant: data.product.variant,
+            quantity: data.quantity,
+            printingMethod: data.printingMethod,
+            deliveryDate: data.deliveryDate,
+            location: data.location,
+          },
+          requirements: data.requirements,
+          ...(data.logo
+            ? {
+                logo: {
+                  fileName: data.logo.name,
+                  positionX: data.logo.x,
+                  positionY: data.logo.y,
+                  scale: data.logo.scale,
+                  rotation: data.logo.rotation,
+                  flipHorizontal: data.logo.flipH,
+                  flipVertical: data.logo.flipV,
+                },
+              }
+            : {}),
+          ...(data.previewImage ? { previewImageDataUrl: data.previewImage } : {}),
+        });
+        const looksLikePdf = pdfBuffer.length > 4 && pdfBuffer.subarray(0, 4).toString("latin1") === "%PDF";
+        console.log(
+          `[QuotePDF] ${refNumber}: generated buffer, bytes=${pdfBuffer.length}, startsWithPDFHeader=${looksLikePdf}`,
+        );
+        if (!looksLikePdf || pdfBuffer.length === 0) {
+          console.error(`[QuotePDF] ${refNumber}: generated buffer is not a valid PDF -- discarding attachment`);
+          pdfBuffer = null;
+        }
+      } catch (pdfError) {
+        console.error(`[QuotePDF] ${refNumber}: generation threw:`, pdfError);
+        if (pdfError instanceof Error) console.error(pdfError.stack);
+      }
+      const pdfAttachments = pdfBuffer
+        ? [{ filename: `OfficeNeed-Quote-${refNumber}.pdf`, content: pdfBuffer }]
+        : undefined;
+      console.log(`[QuotePDF] ${refNumber}: attachment object created=${Boolean(pdfAttachments)}`);
+
+      // 6. Send Emails
       try {
         // Internal Notification
         const internalHtml = `
@@ -171,11 +235,13 @@ export const submitCorporateQuote = createServerFn({ method: "POST" })
           ${logoUrl ? `<h3>Attached Logo</h3><p><img src="${logoUrl}" alt="Logo" style="max-width: 300px; max-height: 300px; border: 1px solid #ccc; background-color: #f9f9f9; padding: 10px;" /></p><p><a href="${logoUrl}" target="_blank">Download Original Logo</a></p>` : '<p>No logo was attached.</p>'}
           
           ${previewUrl ? `<h3>Customization Preview</h3><img src="${previewUrl}" alt="Preview" style="max-width: 600px; width: 100%; border: 1px solid #eee; border-radius: 8px;" />` : '<p>No branding preview available.</p>'}
+          ${pdfAttachments ? '<p><em>The complete quote request, including the customization preview, is attached as a PDF.</em></p>' : ''}
         `;
-        
+
         await sendInternalHtmlEmail(
           `New Corporate Quote Request - ${data.company} - ${data.product.name}`,
-          internalHtml
+          internalHtml,
+          pdfAttachments
         );
 
         // Customer Confirmation
@@ -192,12 +258,14 @@ export const submitCorporateQuote = createServerFn({ method: "POST" })
           <p><strong>Quantity:</strong> ${data.quantity}</p>
           <p><strong>Printing Method:</strong> ${data.printingMethod || "Standard"}</p>
           ${previewUrl ? `<img src="${previewUrl}" alt="Preview" style="max-width: 400px; width: 100%; border: 1px solid #eee; border-radius: 8px; margin-top: 20px;" />` : ''}
+          ${pdfAttachments ? '<p style="margin-top: 16px;"><em>We\'ve attached a PDF summary of your request, including your customization preview, for your records.</em></p>' : ''}
         `;
 
         await sendCustomerHtmlEmail(
           data.email,
           `Quote Request Received: ${data.product.name}`,
-          customerHtml
+          customerHtml,
+          pdfAttachments
         );
       } catch (emailError) {
         console.error("Failed to send emails:", emailError);

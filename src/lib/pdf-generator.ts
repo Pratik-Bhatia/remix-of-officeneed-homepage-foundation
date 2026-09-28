@@ -66,6 +66,205 @@ function formatCurrency(amount: number) {
   return formatted.replace(/[\u202F\u00A0\s]+/g, "");
 }
 
+export interface CorporateQuotePDFData {
+  refNumber: string;
+  date: string;
+  customer: {
+    name: string;
+    company: string;
+    email: string;
+    phone: string;
+  };
+  order: {
+    productName: string;
+    variant?: string | undefined;
+    quantity: number;
+    printingMethod?: string | undefined;
+    deliveryDate?: string | undefined;
+    location: string;
+  };
+  requirements?: string | undefined;
+  logo?: {
+    fileName: string;
+    positionX?: number | undefined;
+    positionY?: number | undefined;
+    scale?: number | undefined;
+    rotation?: number | undefined;
+    flipHorizontal?: boolean | undefined;
+    flipVertical?: boolean | undefined;
+  } | undefined;
+  /** Exact rendered customization snapshot captured client-side (PNG data URL). */
+  previewImageDataUrl?: string | undefined;
+}
+
+/**
+ * Corporate quote PDF -- reuses the exact same jsPDF/autoTable/font/logo
+ * setup as `generateEnquiryPDF` above rather than a second PDF toolchain.
+ * The "Customization Preview" section embeds the PNG data URL captured
+ * client-side from the customizer's own rendered DOM (see
+ * ProductCustomizer.tsx's captureCustomizationSnapshot) -- the exact
+ * composition the customer saw, not independently recalculated from the
+ * technical logo fields also included below.
+ */
+export async function generateCorporateQuotePDF(data: CorporateQuotePDFData): Promise<Buffer> {
+  const doc = new jsPDF({
+    orientation: "portrait",
+    unit: "mm",
+    format: "a4",
+  });
+
+  const marginX = 20;
+  let currentY = 20;
+
+  doc.addFileToVFS("Roboto-Regular.ttf", robotoRegularBase64);
+  doc.addFont("Roboto-Regular.ttf", "Roboto", "normal");
+  doc.addFileToVFS("Roboto-Bold.ttf", robotoBoldBase64);
+  doc.addFont("Roboto-Bold.ttf", "Roboto", "bold");
+
+  // Header: Logo / Branding
+  doc.addImage(officeneedLogoBase64, 'PNG', marginX, 12, 48, 10);
+
+  doc.setFontSize(10);
+  doc.setFont("Roboto", "normal");
+  doc.setTextColor(100, 100, 100);
+  currentY = 28;
+  doc.text("Corporate Gifting - Quote Request", marginX, currentY);
+
+  doc.setFontSize(10);
+  doc.setTextColor(50, 50, 50);
+  doc.text(`Reference: ${data.refNumber}`, 190, 16, { align: "right" });
+  doc.text(`Date: ${data.date}`, 190, 22, { align: "right" });
+
+  currentY += 15;
+  doc.setDrawColor(220, 220, 220);
+  doc.line(marginX, currentY, 190, currentY);
+  currentY += 10;
+
+  // Customer Details & Order Details (two columns)
+  doc.setFontSize(12);
+  doc.setFont("Roboto", "bold");
+  doc.setTextColor(0, 0, 0);
+  doc.text("Customer Details", marginX, currentY);
+  doc.text("Order Details", 110, currentY);
+
+  currentY += 8;
+  doc.setFontSize(10);
+  doc.setFont("Roboto", "normal");
+
+  const leftCol = [
+    `Name: ${sanitizeText(data.customer.name)}`,
+    `Company: ${sanitizeText(data.customer.company)}`,
+    `Email: ${sanitizeText(data.customer.email)}`,
+    `Phone: ${sanitizeText(data.customer.phone)}`,
+  ];
+
+  const rightCol = [
+    `Product: ${sanitizeText(data.order.productName)}`,
+    `Variant: ${sanitizeText(data.order.variant)}`,
+    `Quantity: ${sanitizeText(data.order.quantity)}`,
+    `Printing Method: ${sanitizeText(data.order.printingMethod)}`,
+    `Delivery Date: ${sanitizeText(data.order.deliveryDate)}`,
+    `Delivery Location: ${sanitizeText(data.order.location)}`,
+  ];
+
+  for (let i = 0; i < Math.max(leftCol.length, rightCol.length); i++) {
+    if (leftCol[i]) doc.text(leftCol[i]!, marginX, currentY);
+    if (rightCol[i]) doc.text(rightCol[i]!, 110, currentY);
+    currentY += 6;
+  }
+
+  if (data.requirements) {
+    currentY += 4;
+    doc.setFont("Roboto", "bold");
+    doc.text("Additional Requirements:", marginX, currentY);
+    currentY += 6;
+    doc.setFont("Roboto", "normal");
+    const splitNotes = doc.splitTextToSize(data.requirements, 170);
+    doc.text(splitNotes, marginX, currentY);
+    currentY += splitNotes.length * 6;
+  }
+
+  // Logo & Customization Data -- the stable technical fields (kept for
+  // internal reference), independent of the visual preview below.
+  if (data.logo) {
+    currentY += 6;
+    doc.setFontSize(12);
+    doc.setFont("Roboto", "bold");
+    doc.setTextColor(0, 0, 0);
+    doc.text("Logo & Customization Data", marginX, currentY);
+    currentY += 8;
+    doc.setFontSize(10);
+    doc.setFont("Roboto", "normal");
+
+    const logoRows = [
+      `Logo File: ${sanitizeText(data.logo.fileName)}`,
+      `Position (X, Y): ${sanitizeText(data.logo.positionX)}, ${sanitizeText(data.logo.positionY)}`,
+      `Size: ${sanitizeText(data.logo.scale)}%`,
+      `Rotation: ${sanitizeText(data.logo.rotation)}°`,
+      `Flip: ${data.logo.flipHorizontal ? "Horizontal " : ""}${data.logo.flipVertical ? "Vertical" : ""}${!data.logo.flipHorizontal && !data.logo.flipVertical ? "None" : ""}`,
+    ];
+    for (const row of logoRows) {
+      doc.text(row, marginX, currentY);
+      currentY += 6;
+    }
+  }
+
+  // Customization Preview -- the exact rendered composition captured from
+  // the customizer, not independently redrawn from the fields above.
+  currentY += 6;
+  doc.setFontSize(12);
+  doc.setFont("Roboto", "bold");
+  doc.setTextColor(0, 0, 0);
+  doc.text("Customization Preview", marginX, currentY);
+  currentY += 8;
+
+  if (data.previewImageDataUrl) {
+    try {
+      const props = doc.getImageProperties(data.previewImageDataUrl);
+      const maxWidth = 170;
+      const maxHeight = 100;
+      const ratio = Math.min(maxWidth / props.width, maxHeight / props.height, 1);
+      const w = props.width * ratio;
+      const h = props.height * ratio;
+      if (currentY + h > 272) {
+        doc.addPage();
+        currentY = 20;
+      }
+      doc.addImage(data.previewImageDataUrl, "PNG", marginX, currentY, w, h);
+      currentY += h + 10;
+    } catch (err) {
+      console.error("[OfficeNeed] failed to embed customization preview", err);
+      doc.setFontSize(10);
+      doc.setFont("Roboto", "normal");
+      doc.setTextColor(120, 120, 120);
+      doc.text("Preview image could not be embedded.", marginX, currentY);
+      doc.setTextColor(0, 0, 0);
+      currentY += 10;
+    }
+  } else {
+    doc.setFontSize(10);
+    doc.setFont("Roboto", "normal");
+    doc.setTextColor(120, 120, 120);
+    doc.text("No customization preview available for this request.", marginX, currentY);
+    doc.setTextColor(0, 0, 0);
+    currentY += 10;
+  }
+
+  // Footer
+  const pageCount = doc.getNumberOfPages();
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i);
+    doc.setFont("Roboto", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(150, 150, 150);
+    const footerText = `Thank you for choosing OfficeNeed. This document is a quote request summary, not a final tax invoice. | Page ${i} of ${pageCount}`;
+    doc.text(footerText, marginX, 285);
+  }
+
+  const arrayBuffer = doc.output('arraybuffer');
+  return Buffer.from(arrayBuffer);
+}
+
 export async function generateEnquiryPDF(data: EnquiryPDFData): Promise<Buffer> {
   const doc = new jsPDF({
     orientation: "portrait",
