@@ -8,7 +8,12 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Upload, X, Check, Loader2, RotateCw, Move, Pencil, AlertCircle, FlipHorizontal2, FlipVertical2, ArrowLeft, Lock, Minus, Plus } from "lucide-react";
 import { motion } from "motion/react";
-import html2canvas from "html2canvas";
+// html2canvas-pro (not html2canvas): the original chokes on modern CSS
+// color functions (oklch/oklab/lab/lch/color-mix) -- which this app's
+// Tailwind design tokens use -- and throws "Attempting to parse an
+// unsupported color function" the moment it walks any element using them,
+// killing the customization snapshot capture. Same API, drop-in fix.
+import html2canvas from "html2canvas-pro";
 import { submitCorporateQuote } from "@/lib/corporate-quotes.functions";
 import { getBrandingLimits, computeEffectiveMaxScale, computeMinEffectiveScale, scaleToPhysicalMm, widthMmToScale, heightMmToScale, MIN_LOGO_SIZE_MM, GIFT_SET_MIN_LOGO_SIZE_MM, GIFT_SET_REFERENCE_WIDTH_MM, type PrintingMethod } from "@/lib/branding-limits";
 import { getPrintableArea } from "@/lib/printable-area";
