@@ -777,20 +777,6 @@ function ProductDetail() {
                 )}
               </div>
 
-              {/* B2B Affordance */}
-              <div className="mt-5 text-center">
-                <a 
-                  href="#enquiry-heading" 
-                  className="text-[13px] text-muted-foreground/80 hover:text-foreground transition-colors underline decoration-border hover:decoration-foreground underline-offset-4"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    document.getElementById('enquiry-heading')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                  }}
-                >
-                  Need this for corporate gifting? Request a Quote
-                </a>
-              </div>
-
               {/* Product Information Accordions */}
               <ProductInformation product={product} />
             </div>
