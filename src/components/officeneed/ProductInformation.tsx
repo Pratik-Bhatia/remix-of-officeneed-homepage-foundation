@@ -9,9 +9,16 @@ export function ProductInformation({ product }: { product: Product }) {
     sections.push({
       title: "DESCRIPTION",
       content: (
-        <div 
-          className="prose prose-sm max-w-none text-muted-foreground" 
-          dangerouslySetInnerHTML={{ __html: product.descriptionHtml || `<p>${product.description}</p>` }} 
+        // [&_strong]/[&_b]: @tailwindcss/typography isn't installed in this
+        // project (`prose` here is a no-op class, kept as-is rather than
+        // touched by this fix), so any <strong>/<b> in the raw Shopify
+        // description HTML rendered nothing but the browser's own bold
+        // user-agent style -- nothing in this app ever overrode it. Reset
+        // just those two tags to the paragraph's own normal weight, without
+        // touching the actual HTML content or any other element.
+        <div
+          className="prose prose-sm max-w-none text-muted-foreground [&_strong]:font-normal [&_b]:font-normal"
+          dangerouslySetInnerHTML={{ __html: product.descriptionHtml || `<p>${product.description}</p>` }}
         />
       ),
     });
@@ -141,9 +148,16 @@ export function ProductInformation({ product }: { product: Product }) {
   });
 
   return (
-    <div className="mt-12 border-t border-border/60">
+    // mt-8 (not mt-12): matches the same section-gap token the Trust
+    // Badges block above already uses for its own top margin, so the gap
+    // stays visually balanced now that nothing (the removed CTA link)
+    // sits between the two sections filling it.
+    <div className="mt-8 border-t border-border/60">
       {sections.map((section, idx) => (
-        <details key={idx} className="group border-b border-border/60 py-5" open={idx === 0}>
+        // No `open` prop: every accordion, including Description, starts
+        // closed. Previously `open={idx === 0}` forced whichever section
+        // happened to be first (always Description) open on every page load.
+        <details key={idx} className="group border-b border-border/60 py-5">
           <summary className="flex cursor-pointer items-center justify-between text-[11px] font-medium tracking-[0.15em] uppercase text-foreground list-none outline-none focus-visible:ring-1">
             {section.title}
             <span className="text-muted-foreground group-open:hidden">
