@@ -771,7 +771,10 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
    * in-flight) commit before the snapshot is taken.
    */
   const captureCustomizationSnapshot = async (): Promise<string> => {
-    if (!previewContainerRef.current) return "";
+    if (!previewContainerRef.current) {
+      console.error("[QuoteSnapshot] previewContainerRef is null -- cannot capture");
+      return "";
+    }
     setIsSelected(false);
     await new Promise((r) => setTimeout(r, 100));
     try {
@@ -781,8 +784,15 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
         backgroundColor: "#F9FAFB",
         ignoreElements: (element) => element.classList.contains("no-capture"),
       });
-      return canvas.toDataURL("image/png");
-    } catch {
+      const dataUrl = canvas.toDataURL("image/png");
+      console.log(`[QuoteSnapshot] captured, length=${dataUrl.length}`);
+      return dataUrl;
+    } catch (err) {
+      // Deliberately NOT silent: a tainted canvas (e.g. a cross-origin
+      // product image the CDN didn't serve with the right CORS headers)
+      // throws a SecurityError right here on toDataURL(), and swallowing
+      // it is exactly what made this failure invisible before.
+      console.error("[QuoteSnapshot] html2canvas capture failed:", err);
       return "";
     }
   };
