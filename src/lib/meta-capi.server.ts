@@ -6,13 +6,13 @@ export interface CapiEventInput {
   eventName: string;
   eventId: string;
   eventSourceUrl?: string | undefined;
-  customData?: Record<string, unknown>;
+  customData?: Record<string, unknown> | undefined;
   email?: string | undefined;
   phone?: string | undefined;
-  clientIp?: string;
-  userAgent?: string;
-  fbp?: string;
-  fbc?: string;
+  clientIp?: string | undefined;
+  userAgent?: string | undefined;
+  fbp?: string | undefined;
+  fbc?: string | undefined;
 }
 
 /** Sends one event to Meta Conversions API. Returns false (never throws) on failure. */

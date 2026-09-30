@@ -54,8 +54,8 @@ function newEventId() {
 }
 
 export interface MetaUserData {
-  email?: string;
-  phone?: string;
+  email?: string | undefined;
+  phone?: string | undefined;
 }
 
 export function trackEvent(
