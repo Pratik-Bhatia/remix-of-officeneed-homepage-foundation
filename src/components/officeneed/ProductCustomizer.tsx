@@ -1,3 +1,4 @@
+import { trackLead } from "@/lib/meta-pixel";
 import { toast } from "sonner";
 import { processLogoServer } from "@/lib/image-processing.functions";
 ﻿import { useState, useRef, useEffect, useCallback } from "react";
@@ -947,6 +948,7 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
         }
       });
       if (!result.ok) throw new Error(result.error);
+        trackLead("Corporate Quote", { email: formData.email, phone: formData.phone }, { content_name: product.name });
         setRefNumber(result.refNumber);
         toast.success("Quote request submitted successfully! We will contact you shortly.");
         onOpenChange(false);

@@ -14,6 +14,8 @@ import { reportLovableError } from "../lib/lovable-error-reporting";
 import { Toaster } from "@/components/ui/sonner";
 import { useCartSync } from "@/hooks/useCartSync";
 import { ChatWidget } from "@/components/officeneed/ChatWidget";
+import { MetaPixel } from "@/components/officeneed/MetaPixel";
+import { META_PIXEL_ID } from "@/lib/meta-pixel";
 
 
 
@@ -114,6 +116,11 @@ function RootShell({ children }: { children: ReactNode }) {
         <HeadContent />
       </head>
       <body>
+        {META_PIXEL_ID ? (
+          <noscript>
+            <img height="1" width="1" style={{ display: "none" }} alt="" src={`https://www.facebook.com/tr?id=${META_PIXEL_ID}&ev=PageView&noscript=1`} />
+          </noscript>
+        ) : null}
         {children}
         <Scripts />
       </body>
@@ -130,6 +137,7 @@ function RootComponent() {
       <Outlet />
       <ChatWidget />
       <CartSync />
+      <MetaPixel />
       <Toaster position="top-center" />
     </QueryClientProvider>
   );

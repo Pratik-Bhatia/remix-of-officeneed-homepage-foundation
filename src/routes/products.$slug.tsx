@@ -1,3 +1,4 @@
+import { trackViewContent } from "@/lib/meta-pixel";
 import { useMemo, useState, useRef, useEffect } from "react";
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { Minus, Plus, ChevronLeft, ChevronRight, Loader2, ZoomIn, X, ShieldCheck, Lock, Award, Truck } from "lucide-react";
@@ -397,6 +398,19 @@ function ProductDetail() {
     ? parseFloat(selectedVariant.price.amount)
     : (product.priceAmount ?? NaN);
   const hasNumericPrice = Number.isFinite(unitAmount) && unitAmount > 0;
+
+  // Meta ViewContent: once per product/variant shown.
+  useEffect(() => {
+    if (!selectedVariant) return;
+    trackViewContent({
+      variantId: selectedVariant.id,
+      name: product.name,
+      price: parseFloat(selectedVariant.price.amount) || 0,
+      currency: selectedVariant.price.currencyCode,
+      category: product.category,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedVariant?.id]);
   const qtyMultiplier = quantity;
   const displayPrice = hasNumericPrice
     ? formatMoney(unitAmount * qtyMultiplier, currency)

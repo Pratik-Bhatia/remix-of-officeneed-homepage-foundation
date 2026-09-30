@@ -4,6 +4,7 @@ import { ShoppingBag, Loader2 } from "lucide-react";
 import { Navbar } from "@/components/officeneed/Navbar";
 import { Footer } from "@/components/officeneed/Footer";
 import { useCartStore } from "@/stores/cartStore";
+import { trackInitiateCheckout } from "@/lib/meta-pixel";
 import { formatMoney } from "@/lib/shopify";
 import { CartLineItem } from "@/components/officeneed/CartLineItem";
 import { CartProfileLinks } from "@/components/officeneed/CartProfileLinks";
@@ -54,6 +55,7 @@ function CartPage() {
     try {
       const checkoutUrl = await prepareCheckout();
       if (!checkoutUrl) { win?.close(); return; }
+      trackInitiateCheckout(useCartStore.getState().items, subtotal);
       if (win) win.location.href = checkoutUrl;
       else window.open(checkoutUrl, "_blank");
     } finally {

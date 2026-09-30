@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { Link } from "@tanstack/react-router";
 import { Loader2, ShoppingBag, X } from "lucide-react";
 import { useCartStore } from "@/stores/cartStore";
+import { trackInitiateCheckout } from "@/lib/meta-pixel";
 import { cn } from "@/lib/utils";
 import { formatMoney } from "@/lib/shopify";
 import { lockScroll, unlockScroll } from "@/lib/scroll-lock";
@@ -47,6 +48,7 @@ export function CartDrawer({ triggerClassName }: { triggerClassName?: string }) 
         win?.close();
         return;
       }
+      trackInitiateCheckout(useCartStore.getState().items, discountedSubtotal);
       if (win) win.location.href = checkoutUrl;
       else window.open(checkoutUrl, "_blank");
     } finally {

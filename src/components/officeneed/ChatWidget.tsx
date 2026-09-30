@@ -1,3 +1,4 @@
+import { trackLead } from "@/lib/meta-pixel";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
@@ -648,6 +649,7 @@ export function ChatWidget() {
       });
 
       if (!result.ok) throw new Error(result.error);
+      trackLead("Chat Enquiry", { email: final.email || undefined, phone: final.phone || undefined });
       setTyping(false);
       setLoadingMsg("");
       setPhase("done");
