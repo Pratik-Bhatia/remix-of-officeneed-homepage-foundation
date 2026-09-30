@@ -38,6 +38,8 @@ const supabaseEnvCompatibilityPlugin = () => ({
 if (supabaseUrl) process.env["VITE_SUPABASE_URL"] = supabaseUrl;
 if (supabasePublishableKey) process.env["VITE_SUPABASE_PUBLISHABLE_KEY"] = supabasePublishableKey;
 
+// Meta Pixel ID is public (it appears in the browser by design).
+const metaPixelId = process.env["VITE_META_PIXEL_ID"] ?? process.env["META_PIXEL_ID"] ?? "1610689520588834";
 
 export default defineConfig({
   vite: {
@@ -45,6 +47,7 @@ export default defineConfig({
     define: {
       "import.meta.env.VITE_SUPABASE_URL": JSON.stringify(supabaseUrl),
       "import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY": JSON.stringify(supabasePublishableKey),
+      "import.meta.env.VITE_META_PIXEL_ID": JSON.stringify(metaPixelId),
     },
   },
   tanstackStart: {
