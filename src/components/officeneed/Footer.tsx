@@ -326,6 +326,8 @@ export function Footer() {
                     if (!result.ok) {
                       toast.error(result.error || "Failed to subscribe.");
                     } else {
+                      const { trackLead } = await import("@/lib/meta-pixel");
+                      trackLead("Newsletter", { email });
                       toast.success("Successfully subscribed to our newsletter!");
                       form.reset();
                     }

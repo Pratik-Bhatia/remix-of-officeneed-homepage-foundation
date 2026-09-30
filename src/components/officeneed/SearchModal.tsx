@@ -1,3 +1,4 @@
+import { trackSearch } from "@/lib/meta-pixel";
 import { lockScroll, unlockScroll } from "@/lib/scroll-lock";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
@@ -36,6 +37,19 @@ export function SearchModal({ open, onOpenChange }: { open: boolean; onOpenChang
   // pressing Enter still searches immediately via handleKeyDown, unaffected.
   useEffect(() => {
     const id = setTimeout(() => setDebouncedQuery(query), 150);
+    return () => clearTimeout(id);
+  }, [query]);
+
+  // Meta Search event: once the shopper pauses typing (not every keystroke).
+  const lastTrackedSearch = useRef("");
+  useEffect(() => {
+    const q = query.trim();
+    if (q.length < 2) return;
+    const id = setTimeout(() => {
+      if (q.toLowerCase() === lastTrackedSearch.current) return;
+      lastTrackedSearch.current = q.toLowerCase();
+      trackSearch(q);
+    }, 1200);
     return () => clearTimeout(id);
   }, [query]);
 
