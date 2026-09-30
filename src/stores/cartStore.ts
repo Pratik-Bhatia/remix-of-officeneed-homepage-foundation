@@ -5,6 +5,7 @@ import { storefrontApiRequest, type ShopifyProduct } from "@/lib/shopify";
 import { getCustomerToken } from "@/lib/customer";
 import { appendAttribution, getAttribution } from "@/lib/attribution";
 import { getCustomerCart, saveCustomerCart } from "@/lib/customer-cart.functions";
+import { trackAddToCart } from "@/lib/meta-pixel";
 
 export interface CartItem {
   lineId: string | null;
@@ -374,6 +375,7 @@ export const useCartStore = create<CartStore>()(
 
         addItem: async (item) => {
           set({ isLoading: true });
+          const qtyBefore = get().items.find((i) => i.variantId === item.variantId)?.quantity ?? 0;
           try {
             const { items, cartId, clearCart } = get();
             const existing = items.find((i) => i.variantId === item.variantId);
@@ -453,6 +455,17 @@ export const useCartStore = create<CartStore>()(
             toast.error("Couldn't add this item to your bag. Please try again.");
           } finally {
             set({ isLoading: false });
+            // Only fire once Shopify has actually accepted the line.
+            const qtyAfter = get().items.find((i) => i.variantId === item.variantId)?.quantity ?? 0;
+            if (qtyAfter > qtyBefore) {
+              trackAddToCart({
+                variantId: item.variantId,
+                name: item.product.node.title,
+                price: parseFloat(item.price.amount),
+                currency: item.price.currencyCode,
+                quantity: qtyAfter - qtyBefore,
+              });
+            }
           }
         },
 
