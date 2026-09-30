@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import type { Product } from "@/lib/products";
 import { submitEnquiry } from "@/lib/enquiries.functions";
+import { trackLead } from "@/lib/meta-pixel";
 
 export type EnquiryPayload = {
   productSlug: string;
@@ -30,6 +31,7 @@ async function submitEnquiryToBackend(payload: EnquiryPayload) {
   if (!result.ok) {
     throw new Error(result.error);
   }
+  trackLead("Product Enquiry", { email: payload.email }, { content_name: payload.productName });
 }
 
 export function EnquiryDialog({
