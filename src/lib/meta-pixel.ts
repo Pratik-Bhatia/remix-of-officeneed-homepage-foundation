@@ -8,7 +8,7 @@
  */
 import { sendMetaCapiEvent } from "@/lib/meta-capi.functions";
 
-export const META_PIXEL_ID: string = import.meta.env.VITE_META_PIXEL_ID ?? "";
+export const META_PIXEL_ID: string = import.meta.env["VITE_META_PIXEL_ID"] ?? "";
 
 type Fbq = ((...args: unknown[]) => void) & { callMethod?: unknown; queue?: unknown[] };
 declare global {

@@ -24,7 +24,7 @@ export const sendMetaCapiEvent = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => schema.parse(d))
   .handler(async ({ data }) => {
     const token = process.env["META_CAPI_ACCESS_TOKEN"];
-    const pixelId = import.meta.env.VITE_META_PIXEL_ID;
+    const pixelId = import.meta.env["VITE_META_PIXEL_ID"];
     if (!token || !pixelId) return { ok: false as const };
     const req = getRequest();
     const h = req.headers;

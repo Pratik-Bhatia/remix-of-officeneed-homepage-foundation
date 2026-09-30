@@ -40,6 +40,7 @@ if (supabasePublishableKey) process.env["VITE_SUPABASE_PUBLISHABLE_KEY"] = supab
 
 // Meta Pixel ID is public (it appears in the browser by design).
 const metaPixelId = process.env["VITE_META_PIXEL_ID"] ?? process.env["META_PIXEL_ID"] ?? "1610689520588834";
+process.env["VITE_META_PIXEL_ID"] = metaPixelId;
 
 export default defineConfig({
   vite: {

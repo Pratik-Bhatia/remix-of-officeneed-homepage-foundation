@@ -5,10 +5,10 @@ const sha256 = (v: string) => createHash("sha256").update(v).digest("hex");
 export interface CapiEventInput {
   eventName: string;
   eventId: string;
-  eventSourceUrl?: string;
+  eventSourceUrl?: string | undefined;
   customData?: Record<string, unknown>;
-  email?: string;
-  phone?: string;
+  email?: string | undefined;
+  phone?: string | undefined;
   clientIp?: string;
   userAgent?: string;
   fbp?: string;
@@ -18,16 +18,16 @@ export interface CapiEventInput {
 /** Sends one event to Meta Conversions API. Returns false (never throws) on failure. */
 export async function sendCapiEvent(pixelId: string, token: string, e: CapiEventInput) {
   const user_data: Record<string, unknown> = {};
-  if (e.email) user_data.em = [sha256(e.email.trim().toLowerCase())];
+  if (e.email) user_data["em"] = [sha256(e.email.trim().toLowerCase())];
   if (e.phone) {
     let digits = e.phone.replace(/\D/g, "");
     if (digits.length === 10) digits = `91${digits}`; // India-only store
-    if (digits) user_data.ph = [sha256(digits)];
+    if (digits) user_data["ph"] = [sha256(digits)];
   }
-  if (e.clientIp) user_data.client_ip_address = e.clientIp;
-  if (e.userAgent) user_data.client_user_agent = e.userAgent;
-  if (e.fbp) user_data.fbp = e.fbp;
-  if (e.fbc) user_data.fbc = e.fbc;
+  if (e.clientIp) user_data["client_ip_address"] = e.clientIp;
+  if (e.userAgent) user_data["client_user_agent"] = e.userAgent;
+  if (e.fbp) user_data["fbp"] = e.fbp;
+  if (e.fbc) user_data["fbc"] = e.fbc;
 
   const body: Record<string, unknown> = {
     data: [
@@ -43,7 +43,7 @@ export async function sendCapiEvent(pixelId: string, token: string, e: CapiEvent
     ],
   };
   const testCode = process.env["META_TEST_EVENT_CODE"];
-  if (testCode) body.test_event_code = testCode;
+  if (testCode) body["test_event_code"] = testCode;
 
   try {
     const res = await fetch(
