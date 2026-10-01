@@ -140,14 +140,14 @@ export function ProductCard({
               // existing zoom-on-hover keeps animating smoothly, while also
               // covering opacity on this same element in case any future
               // hover-state opacity change is added here.
-              // Less inner padding on mobile only (sm: unchanged) -- the
+              // Minimal inner padding on mobile only (sm: unchanged) -- the
               // square image area is much smaller in a 2-up mobile grid, so
-              // the same padding used at desktop sizes left a lot of empty
-              // space around the product; object-contain/centering and the
-              // aspect-square container are untouched, so nothing crops,
-              // stretches or shifts, the product just fills more of the
-              // same frame.
-              "h-full w-full object-contain object-center p-4 sm:p-8 transition duration-200 ease-out",
+              // even the previous p-4 still left the product looking small
+              // against a lot of empty frame; object-contain/centering and
+              // the aspect-square container are untouched, so nothing crops,
+              // stretches or shifts for any aspect ratio, the product just
+              // fills noticeably more of the same frame.
+              "h-full w-full object-contain object-center p-1.5 sm:p-8 transition duration-200 ease-out",
               isOfficeneedExclusive
                 ? "scale-[var(--content-scale)] group-hover:scale-[calc(var(--content-scale)*1.05)]"
                 : "group-hover:scale-105",
