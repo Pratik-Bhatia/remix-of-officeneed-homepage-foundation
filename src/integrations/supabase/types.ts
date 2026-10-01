@@ -36,6 +36,7 @@ export type Database = {
           product_id: string
           product_name: string
           product_variant: string | null
+          product_variant_id: string | null
           quantity: number
           required_delivery_date: string | null
           status: string
@@ -63,6 +64,7 @@ export type Database = {
           product_id: string
           product_name: string
           product_variant?: string | null
+          product_variant_id?: string | null
           quantity: number
           required_delivery_date?: string | null
           status?: string
@@ -90,6 +92,7 @@ export type Database = {
           product_id?: string
           product_name?: string
           product_variant?: string | null
+          product_variant_id?: string | null
           quantity?: number
           required_delivery_date?: string | null
           status?: string
