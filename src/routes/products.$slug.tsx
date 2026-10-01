@@ -132,7 +132,7 @@ export const Route = createFileRoute("/products/$slug")({
   notFoundComponent: ProductNotFound,
   errorComponent: ({ error }) => (
     <div className="mx-auto max-w-md px-5 py-24 text-center" role="alert">
-      <p className="text-sm text-muted-foreground">{error.message}</p>
+      <p className="text-sm text-muted-foreground">{error instanceof Error ? error.message : "Something went wrong."}</p>
     </div>
   ),
   component: ProductDetail,
