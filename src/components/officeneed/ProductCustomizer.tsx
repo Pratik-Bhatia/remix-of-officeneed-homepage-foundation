@@ -1176,12 +1176,17 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
     }
   };
 
-  /** Polls productImageRef until the (possibly just-swapped) component photo has actually finished loading, so a capture never races a still-loading <img>. Capped so a slow/broken image can't hang the flow forever -- captures whatever's there once the cap is hit. */
-  const waitForActiveImageLoad = async (maxWaitMs = 3000) => {
+  /** Polls productImageRef until it's showing `expectedSrc` (when given) AND
+   * that exact image has finished loading, so a capture never races a
+   * still-loading <img> OR a stale one left over from the previously
+   * active component. Capped so a slow/broken image can't hang the flow
+   * forever -- captures whatever's there once the cap is hit. */
+  const waitForActiveImageLoad = async (expectedSrc?: string, maxWaitMs = 3000) => {
     const start = Date.now();
     while (Date.now() - start < maxWaitMs) {
       const img = productImageRef.current;
-      if (img && img.complete && img.naturalWidth > 0) return;
+      const srcMatches = !expectedSrc || img?.getAttribute("src") === expectedSrc;
+      if (img && srcMatches && img.complete && img.naturalWidth > 0) return;
       await new Promise((r) => setTimeout(r, 50));
     }
   };
@@ -1223,12 +1228,29 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
           const comp = giftSetComponentsList[i]!;
           const state = finalStates[comp.id];
           if (!state?.logo) continue;
-          if (i !== activeComponentIndex) {
-            applyComponentStateToFlatBuffer(state);
-            setActiveComponentIndex(i);
-            await new Promise((r) => setTimeout(r, 50));
-          }
-          await waitForActiveImageLoad();
+          // Always switch explicitly, even if `i` looks like it's already
+          // the active component: `activeComponentIndex` here is a value
+          // closed over when this function started and never updates for
+          // the rest of this call, even though setActiveComponentIndex
+          // below DOES really change the DOM each iteration. Skipping the
+          // switch for whichever component happened to be active when the
+          // user clicked "Request a Quote" meant that component's capture
+          // silently reused whatever photo the PREVIOUS loop iteration had
+          // switched the DOM to -- confirmed live: both components' capture
+          // logged the exact same <img src> (the one from the iteration
+          // before). Unconditionally re-applying state + switching for
+          // every component removes the dependency on that stale value.
+          applyComponentStateToFlatBuffer(state);
+          setActiveComponentIndex(i);
+          await new Promise((r) => setTimeout(r, 50));
+          // Same resolution activeComponentImageUrl itself uses (variant
+          // match, else the component's own base image) -- computed here,
+          // not read back off `activeComponent`, since that's derived from
+          // React state that (per the comment above) this closure won't see
+          // update mid-loop.
+          const expectedSrc = comp.variantImages?.find((v) => v.title === selectedVariant?.title)?.imageUrl
+            ?? comp.imageUrl;
+          await waitForActiveImageLoad(expectedSrc);
           previews[comp.id] = await captureCustomizationSnapshot();
         }
         setComponentPreviews(previews);
