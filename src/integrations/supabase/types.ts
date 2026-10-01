@@ -20,6 +20,7 @@ export type Database = {
           company_name: string
           created_at: string
           customer_name: string
+          customization_data: Json | null
           delivery_location: string
           id: string
           logo_filename: string | null
@@ -36,6 +37,7 @@ export type Database = {
           product_id: string
           product_name: string
           product_variant: string | null
+          product_variant_id: string | null
           quantity: number
           required_delivery_date: string | null
           status: string
@@ -47,6 +49,7 @@ export type Database = {
           company_name: string
           created_at?: string
           customer_name: string
+          customization_data?: Json | null
           delivery_location: string
           id?: string
           logo_filename?: string | null
@@ -63,6 +66,7 @@ export type Database = {
           product_id: string
           product_name: string
           product_variant?: string | null
+          product_variant_id?: string | null
           quantity: number
           required_delivery_date?: string | null
           status?: string
@@ -74,6 +78,7 @@ export type Database = {
           company_name?: string
           created_at?: string
           customer_name?: string
+          customization_data?: Json | null
           delivery_location?: string
           id?: string
           logo_filename?: string | null
@@ -90,6 +95,7 @@ export type Database = {
           product_id?: string
           product_name?: string
           product_variant?: string | null
+          product_variant_id?: string | null
           quantity?: number
           required_delivery_date?: string | null
           status?: string
