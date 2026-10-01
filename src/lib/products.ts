@@ -76,6 +76,28 @@ export type Product = {
   tags?: string[];
   /** Shopify's product_type field -- already fetched by the Storefront query, exposed for search/filtering. */
   productType?: string;
+  /**
+   * Real per-component data for a multi-item Corporate Gifting set, sourced
+   * from the `custom.gift_set_components` Shopify metaobject reference list
+   * (see shopify-overlay.ts) -- the single source of truth for "what are
+   * this gift set's individual, separately-brandable items", never guessed
+   * from image position, title text, or tags. Absent/undefined on every
+   * single-item product and on any gift set that hasn't been given this
+   * metafield yet (both cases behave exactly as before this field existed).
+   */
+  giftSetComponents?: Array<{
+    /** Stable metaobject GID -- used as the React key and to key per-component state. */
+    id: string;
+    name: string;
+    /** Fallback photo, used when no variant-specific image matches (or the
+     * product has no variants/this component has no variant images at all). */
+    imageUrl: string;
+    customizable: boolean;
+    /** Optional per-variant photos (custom.gift_set_components ->
+     * variant_images/variant_titles on the metaobject). `title` must match
+     * a real Shopify variant title exactly for the lookup to succeed. */
+    variantImages?: Array<{ title: string; imageUrl: string }>;
+  }>;
 };
 
 /** Category tabs for the listing page. Mirrors the site catalogue naming. */

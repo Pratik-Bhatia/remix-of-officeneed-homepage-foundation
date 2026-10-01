@@ -297,6 +297,79 @@ function metafieldLookup(node: ShopifyProductNode): (namespace: string, key: str
     values.get(`${namespace}.${key}`) ?? getDevFallbackMetafieldValue(node.handle, namespace, key);
 }
 
+/**
+ * Resolves `custom.gift_set_components` (a list.metaobject_reference field)
+ * into the site's own Product["giftSetComponents"] shape. Each referenced
+ * `gift_set_component` metaobject carries its own `name` (text), `image`
+ * (file reference, resolved via the `reference` field on MediaImage), and
+ * `customizable` (boolean, as the literal string "true"/"false") fields --
+ * see the GraphQL shape in shopify.ts's PRODUCT_BY_HANDLE_QUERY. A
+ * malformed/incomplete entry (missing name or image, e.g. mid-edit in
+ * Shopify Admin) is skipped rather than surfaced as a broken component; a
+ * genuinely empty or absent metafield returns undefined, not [], so
+ * `(giftSetComponents?.length ?? 0) >= 2` stays a clean single check for
+ * "does this product have real multi-component data".
+ */
+function parseGiftSetComponents(node: ShopifyProductNode): Product["giftSetComponents"] {
+  const edges = node.giftSetComponents?.references?.edges;
+  if (!edges?.length) return undefined;
+
+  const components = edges
+    .map(({ node: metaobject }) => {
+      const fields = new Map(metaobject.fields.map((f) => [f.key, f]));
+      const name = fields.get("name")?.value?.trim();
+      const imageUrl = fields.get("image")?.reference?.image?.url;
+      if (!name || !imageUrl) return null;
+
+      // variant_images (list.file_reference) resolves via `references`
+      // (plural -- a single `image` field resolves via `reference`,
+      // singular, above); variant_titles (list.single_line_text_field) is a
+      // JSON-encoded string array in `.value`, Shopify's own wire format
+      // for list-of-scalar metafields. Paired strictly by array position --
+      // the Nth title names the Nth image -- so a length mismatch (an
+      // editing mistake in Shopify Admin) is treated as "no reliable
+      // variant data" and skipped entirely rather than guessing a pairing,
+      // same spirit as skipping a component missing name/image above.
+      let variantImages: Array<{ title: string; imageUrl: string }> | undefined;
+      const variantImageUrls = fields.get("variant_images")?.references?.edges
+        ?.map((e) => e.node.image?.url)
+        .filter((u): u is string => Boolean(u));
+      const variantTitlesRaw = fields.get("variant_titles")?.value;
+      if (variantImageUrls?.length && variantTitlesRaw) {
+        try {
+          const titles: unknown = JSON.parse(variantTitlesRaw);
+          if (
+            Array.isArray(titles) &&
+            titles.length === variantImageUrls.length &&
+            titles.every((t) => typeof t === "string" && t.trim())
+          ) {
+            variantImages = titles.map((title, i) => ({
+              title: (title as string).trim(),
+              imageUrl: variantImageUrls[i]!,
+            }));
+          } else {
+            console.warn(
+              `[OfficeNeed] gift-set component "${name}": variant_images/variant_titles length mismatch -- ignoring variant images for this component.`,
+            );
+          }
+        } catch {
+          console.warn(`[OfficeNeed] gift-set component "${name}": variant_titles is not valid JSON -- ignoring.`);
+        }
+      }
+
+      return {
+        id: metaobject.id,
+        name,
+        imageUrl,
+        customizable: fields.get("customizable")?.value === "true",
+        ...(variantImages ? { variantImages } : {}),
+      };
+    })
+    .filter((c): c is NonNullable<typeof c> => c !== null);
+
+  return components.length ? components : undefined;
+}
+
 export function shopifyNodeToProduct(node: ShopifyProductNode): Product {
   const images = nodeImages(node);
   const collectionHandles = node.collections?.edges.map(e => e.node.handle) ?? [];
@@ -354,6 +427,10 @@ export function shopifyNodeToProduct(node: ShopifyProductNode): Product {
     ...(node.tags?.length ? { tags: node.tags } : {}),
     ...(node.vendor ? { vendor: node.vendor } : {}),
     ...(node.productType ? { productType: node.productType } : {}),
+    ...(() => {
+      const giftSetComponents = parseGiftSetComponents(node);
+      return giftSetComponents ? { giftSetComponents } : {};
+    })(),
     ...(amount > 0
       ? { priceAmount: amount, currencyCode: node.priceRange.minVariantPrice.currencyCode }
       : {}),

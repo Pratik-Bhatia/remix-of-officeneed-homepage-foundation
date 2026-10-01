@@ -49,6 +49,27 @@ export interface ShopifyProductNode {
   options: Array<{ name: string; values: string[] }>;
   collections?: { edges: Array<{ node: { handle: string } }> };
   metafields?: Array<{ namespace: string; key: string; value: string } | null>;
+  /** custom.gift_set_components -- list.metaobject_reference. Only present
+   * on the single-product PDP query (PRODUCT_BY_HANDLE_QUERY), same as
+   * `metafields` above. Absent/null on a single-item product; each entry
+   * resolves the referenced `gift_set_component` metaobject's own fields. */
+  giftSetComponents?: {
+    references?: {
+      edges: Array<{
+        node: {
+          id: string;
+          fields: Array<{
+            key: string;
+            value: string;
+            reference?: { image?: { url: string; altText: string | null } | null } | null;
+            /** For a LIST field (e.g. variant_images, a list.file_reference) --
+             * `reference` above only resolves a single-reference field. */
+            references?: { edges: Array<{ node: { image?: { url: string; altText: string | null } | null } } >} | null;
+          }>;
+        };
+      }>;
+    } | null;
+  } | null;
 }
 
 export interface ShopifyProduct {
@@ -111,6 +132,31 @@ export const PRODUCT_BY_HANDLE_QUERY = `
         namespace
         key
         value
+      }
+      giftSetComponents: metafield(namespace: "custom", key: "gift_set_components") {
+        references(first: 20) {
+          edges {
+            node {
+              ... on Metaobject {
+                id
+                fields {
+                  key
+                  value
+                  reference {
+                    ... on MediaImage { image { url altText } }
+                  }
+                  references(first: 20) {
+                    edges {
+                      node {
+                        ... on MediaImage { image { url altText } }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     }
   }

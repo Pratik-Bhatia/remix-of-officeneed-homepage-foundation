@@ -105,6 +105,29 @@ export interface CorporateQuotePDFData {
   } | undefined;
   /** Exact rendered customization snapshot captured client-side (PNG data URL). */
   previewImageDataUrl?: string | undefined;
+  /**
+   * Multi-component gift sets only (see ProductCustomizer.tsx's
+   * isMultiComponentGiftSet). One entry per real Shopify gift-set
+   * component, in order. Absent entirely for a single-item product --
+   * the existing `logo`/`previewImageDataUrl` fields above are untouched
+   * and still fully describe a single-item quote exactly as before.
+   */
+  giftSetComponents?: Array<{
+    name: string;
+    customized: boolean;
+    /** The Shopify variant selected when this quote was submitted (same
+     * value for every component in the set -- one variant is active at a
+     * time), shown alongside each component's own line for clarity. */
+    variant?: string | undefined;
+    logoFileName?: string | undefined;
+    widthMm?: number | undefined;
+    heightMm?: number | undefined;
+    rotation?: number | undefined;
+    flip?: string | undefined;
+    /** This component's own captured mockup (PNG data URL) -- the exact
+     * rendered composition for that item, never redrawn from x/y/scale. */
+    previewImageDataUrl?: string | undefined;
+  }> | undefined;
 }
 
 /**
@@ -262,6 +285,90 @@ export async function generateCorporateQuotePDF(data: CorporateQuotePDFData): Pr
     doc.text("No customization preview available for this request.", marginX, currentY);
     doc.setTextColor(0, 0, 0);
     currentY += 10;
+  }
+
+  // Gift Set Components -- multi-component gift sets only (data.giftSetComponents
+  // is undefined for every single-item quote, so this section simply doesn't
+  // render then, exactly as before this feature existed). Each customized
+  // component's own captured mockup is embedded directly, same pattern as
+  // the single Customization Preview above -- this is what makes it visually
+  // unambiguous which items actually received the logo, not X/Y/rotation text.
+  if (data.giftSetComponents?.length) {
+    const contentBottom = 272;
+    const ensureSpace = (needed: number) => {
+      if (currentY + needed > contentBottom) {
+        doc.addPage();
+        currentY = 20;
+      }
+    };
+
+    ensureSpace(20);
+    currentY += 6;
+    doc.setFontSize(14);
+    doc.setFont("Roboto", "bold");
+    doc.setTextColor(0, 0, 0);
+    doc.text("Gift Set Components", marginX, currentY);
+    currentY += 10;
+
+    for (const comp of data.giftSetComponents) {
+      ensureSpace(16);
+      doc.setFontSize(11);
+      doc.setFont("Roboto", "bold");
+      doc.setTextColor(0, 0, 0);
+      // "A5 Notebook Diary — Brown" (component + variant), per the user's
+      // own requested format.
+      doc.text(comp.variant ? `${comp.name} — ${comp.variant}` : comp.name, marginX, currentY);
+      currentY += 6;
+
+      if (!comp.customized) {
+        doc.setFontSize(9);
+        doc.setFont("Roboto", "normal");
+        doc.setTextColor(120, 120, 120);
+        doc.text("Not customized", marginX, currentY);
+        doc.setTextColor(0, 0, 0);
+        currentY += 9;
+        continue;
+      }
+
+      // "30 x 30 mm" on its own line, exactly as requested -- never a percentage.
+      if (comp.widthMm && comp.heightMm) {
+        doc.setFontSize(10);
+        doc.setFont("Roboto", "normal");
+        doc.setTextColor(90, 90, 90);
+        doc.text(`${comp.widthMm.toFixed(1)} × ${comp.heightMm.toFixed(1)} mm`, marginX, currentY);
+        doc.setTextColor(0, 0, 0);
+        currentY += 7;
+      }
+
+      if (comp.previewImageDataUrl) {
+        try {
+          const props = doc.getImageProperties(comp.previewImageDataUrl);
+          const maxWidth = 150;
+          const maxHeight = 90;
+          const ratio = Math.min(maxWidth / props.width, maxHeight / props.height, 1);
+          const w = props.width * ratio;
+          const h = props.height * ratio;
+          ensureSpace(h + 10);
+          doc.addImage(comp.previewImageDataUrl, "PNG", marginX, currentY, w, h);
+          currentY += h + 10;
+        } catch (err) {
+          console.error(`[OfficeNeed] failed to embed preview for gift-set component "${comp.name}"`, err);
+          doc.setFontSize(9);
+          doc.setFont("Roboto", "normal");
+          doc.setTextColor(120, 120, 120);
+          doc.text("Preview image could not be embedded.", marginX, currentY);
+          doc.setTextColor(0, 0, 0);
+          currentY += 8;
+        }
+      } else {
+        doc.setFontSize(9);
+        doc.setFont("Roboto", "normal");
+        doc.setTextColor(120, 120, 120);
+        doc.text("No captured preview available for this item.", marginX, currentY);
+        doc.setTextColor(0, 0, 0);
+        currentY += 8;
+      }
+    }
   }
 
   // Footer

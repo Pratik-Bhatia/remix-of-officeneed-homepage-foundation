@@ -29,7 +29,13 @@ const submitQuoteSchema = z.object({
   product: z.object({
     id: z.string(),
     name: z.string(),
-    variant: z.string().optional()
+    variant: z.string().optional(),
+    // The exact Shopify variant id the customer had selected on the PDP at
+    // the moment they clicked Request a Quote (see ProductCustomizer.tsx --
+    // read live from the selectedVariant prop, never frozen earlier, so a
+    // late variant change is always reflected). Optional so an older
+    // client build can't fail validation.
+    variantId: z.string().optional()
   }),
   
   logo: z.object({
@@ -50,6 +56,29 @@ const submitQuoteSchema = z.object({
   }).optional(),
 
   previewImage: z.string().optional(), // base64
+
+  // Multi-component gift sets only (see ProductCustomizer.tsx's
+  // isMultiComponentGiftSet) -- one structured entry per real Shopify
+  // gift-set component, each with its OWN logo/size/position/rotation/flip
+  // and its OWN captured preview, instead of a single flattened top-level
+  // value that can't say which item actually got the logo. Absent entirely
+  // for a single-item product, so submitQuoteSchema stays backward-safe.
+  giftSetCustomizations: z.array(
+    z.discriminatedUnion("customized", [
+      z.object({ component: z.string(), customized: z.literal(false) }),
+      z.object({
+        component: z.string(),
+        customized: z.literal(true),
+        logo: z.string().optional(),
+        widthMm: z.number().optional(),
+        heightMm: z.number().optional(),
+        position: z.object({ x: z.number(), y: z.number() }).optional(),
+        rotation: z.number().optional(),
+        flip: z.string().optional(),
+        previewImage: z.string().optional(), // base64 -- this component's own captured mockup
+      }),
+    ]),
+  ).optional(),
 });
 
 export const submitCorporateQuote = createServerFn({ method: "POST" })
@@ -104,6 +133,36 @@ export const submitCorporateQuote = createServerFn({ method: "POST" })
         previewPath = path;
       }
 
+      // 2b. Upload each gift-set component's OWN captured preview (if any),
+      // and its own logo file if it has one -- same storage bucket/pattern
+      // as the single-item logo/preview above, just once per customized
+      // component. Never blocks the quote: a failed component upload is
+      // logged and that one component simply has no preview URL downstream,
+      // it doesn't fail the whole submission.
+      const componentPreviewUrls = new Map<string, string>();
+      if (data.giftSetCustomizations) {
+        for (const [i, comp] of data.giftSetCustomizations.entries()) {
+          if (!comp.customized || !comp.previewImage) continue;
+          try {
+            const base64Data = comp.previewImage.replace(/^data:image\/\w+;base64,/, "");
+            const buffer = base64ToUint8Array(base64Data);
+            const safeComponentName = comp.component.replace(/[^a-z0-9]/gi, "_").toLowerCase();
+            const path = `previews/${timestamp}-${random}-${safeCompanyName}-component-${i}-${safeComponentName}.png`;
+            const { error } = await client.storage
+              .from("corporate-quote-assets")
+              .upload(path, buffer, { contentType: "image/png" });
+            if (error) {
+              console.error(`Component preview upload failed (${comp.component}):`, error);
+              continue;
+            }
+            const { data: publicUrlData } = client.storage.from("corporate-quote-assets").getPublicUrl(path);
+            componentPreviewUrls.set(comp.component, publicUrlData.publicUrl);
+          } catch (err) {
+            console.error(`Component preview upload exception (${comp.component}):`, err);
+          }
+        }
+      }
+
       // 3. Insert into database
       const { data: dbData, error: dbError } = await client
         .from("corporate_quote_requests")
@@ -120,6 +179,7 @@ export const submitCorporateQuote = createServerFn({ method: "POST" })
           product_id: data.product.id,
           product_name: data.product.name,
           product_variant: data.product.variant || null,
+          product_variant_id: data.product.variantId || null,
           logo_storage_path: logoPath,
           logo_filename: data.logo?.name || null,
           logo_position_x: data.logo?.x || null,
@@ -129,7 +189,36 @@ export const submitCorporateQuote = createServerFn({ method: "POST" })
           logo_flip_horizontal: data.logo?.flipH || false,
           logo_flip_vertical: data.logo?.flipV || false,
           preview_image_path: previewPath,
-          status: 'new'
+          status: 'new',
+          // Pre-existing jsonb column, previously unused -- the natural fit
+          // for structured, variable-shape data like a multi-component gift
+          // set's per-item breakdown, without a schema migration. Absent
+          // (null) for any single-item quote, exactly as before this field
+          // existed. Preview images are stored as their uploaded Supabase
+          // URLs here (componentPreviewUrls), not the raw base64 payload,
+          // to keep the row small -- the PDF/email still embed the actual
+          // captured image, just read from the request payload directly
+          // rather than round-tripping through this column.
+          customization_data: data.giftSetCustomizations
+            ? {
+                variant: data.product.variant,
+                components: data.giftSetCustomizations.map((c) => ({
+                  component: c.component,
+                  customized: c.customized,
+                  ...(c.customized
+                    ? {
+                        logo: c.logo,
+                        widthMm: c.widthMm,
+                        heightMm: c.heightMm,
+                        position: c.position,
+                        rotation: c.rotation,
+                        flip: c.flip,
+                        previewUrl: componentPreviewUrls.get(c.component) ?? null,
+                      }
+                    : {}),
+                })),
+              }
+            : null,
         })
         .select('id')
         .single();
@@ -201,6 +290,30 @@ export const submitCorporateQuote = createServerFn({ method: "POST" })
               }
             : {}),
           ...(data.previewImage ? { previewImageDataUrl: data.previewImage } : {}),
+          // Multi-component gift set: each entry's own captured mockup
+          // comes straight from the request payload (the raw base64 this
+          // client actually rendered), same as previewImageDataUrl above --
+          // never the uploaded Supabase URL, which jsPDF can't fetch itself
+          // server-side, and never recalculated from position/rotation data.
+          ...(data.giftSetCustomizations
+            ? {
+                giftSetComponents: data.giftSetCustomizations.map((c) => ({
+                  name: c.component,
+                  customized: c.customized,
+                  variant: data.product.variant,
+                  ...(c.customized
+                    ? {
+                        logoFileName: c.logo,
+                        widthMm: c.widthMm,
+                        heightMm: c.heightMm,
+                        rotation: c.rotation,
+                        flip: c.flip,
+                        previewImageDataUrl: c.previewImage,
+                      }
+                    : {}),
+                })),
+              }
+            : {}),
         });
         const looksLikePdf = pdfBuffer.length > 4 && pdfBuffer.subarray(0, 4).toString("latin1") === "%PDF";
         console.log(
@@ -219,6 +332,32 @@ export const submitCorporateQuote = createServerFn({ method: "POST" })
         : undefined;
       console.log(`[QuotePDF] ${refNumber}: attachment object created=${Boolean(pdfAttachments)}`);
 
+      // Gift-set component breakdown, shared by both emails below: makes it
+      // explicit which items actually received the logo instead of leaving
+      // the team to infer it from coordinates (the whole point of this
+      // feature) -- each customized component's own captured preview is
+      // embedded from its uploaded Supabase URL, same pattern as the
+      // single-item Customization Preview above.
+      const giftSetComponentsHtml = data.giftSetCustomizations
+        ? `
+          <h3>Customization</h3>
+          ${data.giftSetCustomizations
+            .map((c) => {
+              const label = data.product.variant ? `${c.component} — ${data.product.variant}` : c.component;
+              if (!c.customized) {
+                return `<p>${label} → Not customized</p>`;
+              }
+              const url = componentPreviewUrls.get(c.component);
+              const sizeStr = c.widthMm && c.heightMm ? ` (${c.widthMm.toFixed(1)} × ${c.heightMm.toFixed(1)} mm)` : "";
+              return `
+                <p><strong>${label} → Customized${sizeStr}</strong></p>
+                ${url ? `<img src="${url}" alt="${c.component} preview" style="max-width: 400px; width: 100%; border: 1px solid #eee; border-radius: 8px; margin-bottom: 12px;" />` : ""}
+              `;
+            })
+            .join("")}
+        `
+        : "";
+
       // 6. Send Emails
       try {
         // Internal Notification
@@ -232,6 +371,7 @@ export const submitCorporateQuote = createServerFn({ method: "POST" })
           
           <h3>Requirements</h3>
           <p><strong>Product:</strong> ${data.product.name}</p>
+          ${data.product.variant ? `<p><strong>Variant:</strong> ${data.product.variant}</p>` : ''}
           <p><strong>Quantity:</strong> ${data.quantity}</p>
           <p><strong>Printing Method:</strong> ${data.printingMethod || "Standard"}</p>
           <p><strong>Delivery Location:</strong> ${data.location}</p>
@@ -241,6 +381,7 @@ export const submitCorporateQuote = createServerFn({ method: "POST" })
           ${logoUrl ? `<h3>Attached Logo</h3><p><img src="${logoUrl}" alt="Logo" style="max-width: 300px; max-height: 300px; border: 1px solid #ccc; background-color: #f9f9f9; padding: 10px;" /></p><p><a href="${logoUrl}" target="_blank">Download Original Logo</a></p>` : '<p>No logo was attached.</p>'}
           
           ${previewUrl ? `<h3>Customization Preview</h3><img src="${previewUrl}" alt="Preview" style="max-width: 600px; width: 100%; border: 1px solid #eee; border-radius: 8px;" />` : '<p>No branding preview available.</p>'}
+          ${giftSetComponentsHtml}
           ${pdfAttachments ? '<p><em>The complete quote request, including the customization preview, is attached as a PDF.</em></p>' : ''}
         `;
 
@@ -261,9 +402,11 @@ export const submitCorporateQuote = createServerFn({ method: "POST" })
           <p><strong>Reference Number:</strong> ${refNumber}</p>
           <p><strong>Company:</strong> ${data.company}</p>
           <p><strong>Product:</strong> ${data.product.name}</p>
+          ${data.product.variant ? `<p><strong>Variant:</strong> ${data.product.variant}</p>` : ''}
           <p><strong>Quantity:</strong> ${data.quantity}</p>
           <p><strong>Printing Method:</strong> ${data.printingMethod || "Standard"}</p>
           ${previewUrl ? `<img src="${previewUrl}" alt="Preview" style="max-width: 400px; width: 100%; border: 1px solid #eee; border-radius: 8px; margin-top: 20px;" />` : ''}
+          ${giftSetComponentsHtml}
           ${pdfAttachments ? '<p style="margin-top: 16px;"><em>We\'ve attached a PDF summary of your request, including your customization preview, for your records.</em></p>' : ''}
         `;
 

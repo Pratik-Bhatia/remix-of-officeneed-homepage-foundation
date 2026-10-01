@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Upload, X, Check, Loader2, RotateCw, Move, Pencil, AlertCircle, FlipHorizontal2, FlipVertical2, ArrowLeft, Lock, Minus, Plus } from "lucide-react";
-import { motion } from "motion/react";
+import { motion, useMotionValue } from "motion/react";
 // html2canvas-pro (not html2canvas): the original chokes on modern CSS
 // color functions (oklch/oklab/lab/lch/color-mix) -- which this app's
 // Tailwind design tokens use -- and throws "Attempting to parse an
@@ -188,9 +188,9 @@ async function measureVisibleBounds(
 
 export function ProductCustomizer({ product, selectedVariant, open, onOpenChange }: ProductCustomizerProps) {
   const [step, setStep] = useState<Step>("customize");
-  
-  const previewImage = selectedVariant?.image?.url || product.images?.[0] || "https://placehold.co/800x1000/f8f9fa/a1a1aa?text=Product+Image";
-  
+
+  const defaultPreviewImage = selectedVariant?.image?.url || product.images?.[0] || "https://placehold.co/800x1000/f8f9fa/a1a1aa?text=Product+Image";
+
   const [logo, setLogo] = useState<string | null>(null);
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoBase64, setLogoBase64] = useState<string | null>(null);
@@ -212,16 +212,233 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
   /** Raw string values for the Width / Height mm inputs (allows partial typing). */
   const [sizeInputW, setSizeInputW] = useState("");
   const [sizeInputH, setSizeInputH] = useState("");
-  
-  
 
-  
+  // ---------------------------------------------------------------------------
+  // Multi-component gift sets
+  //
+  // A product is treated as a real multi-component set ONLY when Shopify's
+  // own `custom.gift_set_components` data (see shopify-overlay.ts) has 2+
+  // entries -- never guessed from image count, title text, or tags. Every
+  // other product (including every gift set that hasn't been given this
+  // metafield yet) is completely unaffected by anything below and behaves
+  // exactly as before this feature existed.
+  //
+  // Architecture: rather than a second, parallel customization engine, the
+  // EXISTING flat state above (logo, logoScale, logoRotation, flipH/V,
+  // logoPos, logoNaturalDims, uvLogo, laserLogo, ...) is reused AS-IS as the
+  // live "editing buffer" for whichever single component (or the whole
+  // product, for a non-multi-component item) is currently active.
+  // `componentStates` is just a save slot per component, populated by
+  // `selectComponent` right before it overwrites the flat state with the
+  // newly-selected component's own saved values (or blank defaults). Every
+  // existing handler (upload, drag, resize, rotate, flip, mm inputs,
+  // captureCustomizationSnapshot, ...) is untouched and has no idea this
+  // wrapper exists -- it just keeps reading/writing the same flat state it
+  // always has.
+  // ---------------------------------------------------------------------------
+  type GiftSetComponent = {
+    id: string;
+    name: string;
+    imageUrl: string;
+    customizable: boolean;
+    variantImages?: Array<{ title: string; imageUrl: string }>;
+  };
+  type ComponentCustomization = {
+    logo: string | null;
+    logoFile: File | null;
+    logoBase64: string | null;
+    logoDataUrl: string | null;
+    uvLogo: string | null;
+    laserLogo: string | null;
+    logoScale: number;
+    logoRotation: number;
+    flipH: boolean;
+    flipV: boolean;
+    logoPos: { x: number; y: number };
+    logoNaturalDims: { w: number; h: number } | null;
+  };
+  const BLANK_COMPONENT_STATE: ComponentCustomization = {
+    logo: null, logoFile: null, logoBase64: null, logoDataUrl: null,
+    uvLogo: null, laserLogo: null, logoScale: 50, logoRotation: 0,
+    flipH: false, flipV: false, logoPos: { x: 0, y: 0 }, logoNaturalDims: null,
+  };
+  const giftSetComponentsList: GiftSetComponent[] = product.giftSetComponents ?? [];
+  const isMultiComponentGiftSet = giftSetComponentsList.length >= 2;
+  const [activeComponentIndex, setActiveComponentIndex] = useState<number | null>(
+    isMultiComponentGiftSet ? 0 : null,
+  );
+  const [componentStates, setComponentStates] = useState<Record<string, ComponentCustomization>>({});
+  const isViewingComponent = isMultiComponentGiftSet && activeComponentIndex !== null;
+  const activeComponent = isViewingComponent ? giftSetComponentsList[activeComponentIndex!] ?? null : null;
+
+  // Variant-aware component image: if this component has variant_images/
+  // variant_titles data (see shopify-overlay.ts's parseGiftSetComponents),
+  // look up the photo matching the CURRENTLY selected Shopify variant by
+  // exact title match -- never the first/default image. A component with
+  // no variant data at all, or no entry matching this specific variant
+  // (e.g. that color hasn't been photographed for this item yet), falls
+  // back to the component's own single base image, exactly as before this
+  // existed -- never a guess, never the product's own top-level image.
+  const activeComponentImageUrl = activeComponent
+    ? activeComponent.variantImages?.find((v) => v.title === selectedVariant?.title)?.imageUrl
+      ?? activeComponent.imageUrl
+    : null;
+
+  // The single hook point that makes the ENTIRE existing geometry/printable-
+  // area/drag-boundary engine (productImageBox, containerBox, printableAreaPx,
+  // activeBoundaryPx, all unchanged below) operate on the active component's
+  // own real photo instead of the product's own image, with zero changes to
+  // that engine itself: it all already re-measures from scratch whenever
+  // this value changes (see the `previewImage` useEffect further down).
+  const previewImage = activeComponentImageUrl || defaultPreviewImage;
+
+  /** Snapshot of the live flat editing buffer, for saving into componentStates. */
+  const currentFlatComponentState = (): ComponentCustomization => ({
+    logo, logoFile, logoBase64, logoDataUrl, uvLogo, laserLogo,
+    logoScale: logoScale[0] ?? 50, logoRotation: logoRotation[0] ?? 0,
+    flipH, flipV,
+    // Read the motion values directly rather than trusting `logoPos` state:
+    // a component switch can happen while a boundary-clamped drag's elastic
+    // snap-back is still animating (onDragTransitionEnd hasn't fired yet),
+    // and the motion values are always Framer's current live truth.
+    logoPos: { x: logoMotionX.get(), y: logoMotionY.get() },
+    logoNaturalDims,
+  });
+
+  /** Applies a saved (or blank) component state to the live flat editing buffer. */
+  const applyComponentStateToFlatBuffer = (state: ComponentCustomization) => {
+    setLogo(state.logo);
+    setLogoFile(state.logoFile);
+    setLogoBase64(state.logoBase64);
+    setLogoDataUrl(state.logoDataUrl);
+    setUvLogo(state.uvLogo);
+    setLaserLogo(state.laserLogo);
+    setLogoScale([state.logoScale]);
+    setLogoRotation([state.logoRotation]);
+    setFlipH(state.flipH);
+    setFlipV(state.flipV);
+    setLogoPos(state.logoPos);
+    logoMotionX.set(state.logoPos.x);
+    logoMotionY.set(state.logoPos.y);
+    setLogoNaturalDims(state.logoNaturalDims);
+    setIsSelected(false);
+  };
+
+  /**
+   * Switches which component the flat editing buffer represents: saves the
+   * currently-active component's live state, then loads the target
+   * component's own saved (or blank) state into that same buffer. Refused
+   * while a just-uploaded logo is still being processed (isProcessingLaser)
+   * -- the async processing callback writes into the flat buffer by
+   * closure, not by component id, so switching mid-flight would silently
+   * attach the result to the WRONG component once it resolves.
+   */
+  const selectComponent = (newIndex: number) => {
+    if (newIndex === activeComponentIndex) return;
+    if (logo && isProcessingLaser) {
+      toast.info("Please wait a moment for your logo to finish processing.");
+      return;
+    }
+    const currentId = activeComponentIndex !== null ? giftSetComponentsList[activeComponentIndex]?.id : undefined;
+    const savedStates = currentId ? { ...componentStates, [currentId]: currentFlatComponentState() } : componentStates;
+    if (currentId) setComponentStates(savedStates);
+
+    const target = giftSetComponentsList[newIndex];
+    if (!target) return;
+    const restored = savedStates[target.id] ?? BLANK_COMPONENT_STATE;
+    applyComponentStateToFlatBuffer(restored);
+    setActiveComponentIndex(newIndex);
+  };
+
+  /** For the currently-active component this reads the LIVE flat buffer
+   * (componentStates isn't updated until the user switches away); for any
+   * other component it reads its last-saved state. */
+  const isComponentCustomized = (index: number): boolean => {
+    const comp = giftSetComponentsList[index];
+    if (!comp) return false;
+    if (index === activeComponentIndex) return Boolean(logo);
+    return Boolean(componentStates[comp.id]?.logo);
+  };
+
+  /** The saved (or live, for the active one) state for a given component index -- used by the review list and by the quote-submission loop. */
+  const getComponentState = (index: number): ComponentCustomization => {
+    const comp = giftSetComponentsList[index];
+    if (index === activeComponentIndex) return currentFlatComponentState();
+    return (comp && componentStates[comp.id]) ?? BLANK_COMPONENT_STATE;
+  };
+
+  /** Mirrors getDisplayMmFromScale's math for an arbitrary (not necessarily active) component's saved state -- each component has its own logo aspect ratio, so this can't just read the live logoAspect/mmConversionLimits below. */
+  const getComponentDisplayMm = (state: ComponentCustomization): { wMm: number; hMm: number } | null => {
+    if (!state.logo || !state.logoNaturalDims) return null;
+    const aspect = state.logoNaturalDims.w / state.logoNaturalDims.h;
+    const logicalWmm = (state.logoScale / 100) * genericReferenceWidthMm;
+    const logicalHmm = logicalWmm / aspect;
+    return state.logoRotation === 90 ? { wMm: logicalHmm, hMm: logicalWmm } : { wMm: logicalWmm, hMm: logicalHmm };
+  };
+
+  /**
+   * There is no longer a separate "apply to all" choice: uploading a logo
+   * IS the single global action, and it always reaches every customizable
+   * component automatically. Called once from handleLogoUpload right after
+   * processing finishes, with the actual values passed explicitly (not read
+   * back from state, which wouldn't have flushed yet inside that async
+   * callback). Only writes OTHER components -- the active one's result is
+   * already in the live flat buffer via the normal setLogo/setUvLogo/etc.
+   * calls in handleLogoUpload, and gets saved into componentStates the
+   * normal way (selectComponent) the next time the user switches away.
+   *
+   * Each component gets its OWN independent copy of the placement fields
+   * (centered, default scale, no rotation/flip) -- not a shared reference --
+   * so a later per-component adjustment (drag, resize, rotate, flip) can
+   * never affect any other component. That isolation is the existing
+   * save/restore engine in selectComponent, completely unchanged; this
+   * function only seeds the initial values each component starts from.
+   */
+  const propagateLogoToOtherComponents = (fresh: {
+    logo: string;
+    logoFile: File;
+    logoBase64: string;
+    logoDataUrl: string;
+    uvLogo: string | null;
+    laserLogo: string | null;
+    logoNaturalDims: { w: number; h: number } | null;
+  }) => {
+    if (!isMultiComponentGiftSet) return;
+    const activeId = activeComponentIndex !== null ? giftSetComponentsList[activeComponentIndex]?.id : undefined;
+    setComponentStates((prev) => {
+      const next = { ...prev };
+      for (const comp of giftSetComponentsList) {
+        if (!comp.customizable || comp.id === activeId) continue;
+        next[comp.id] = {
+          ...fresh,
+          logoScale: 50,
+          logoRotation: 0,
+          flipH: false,
+          flipV: false,
+          logoPos: { x: 0, y: 0 },
+        };
+      }
+      return next;
+    });
+  };
+
   const constraintsRef = useRef<HTMLDivElement>(null);
   const previewContainerRef = useRef<HTMLDivElement>(null);
   const productImageRef = useRef<HTMLImageElement>(null);
   const [isSelected, setIsSelected] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [logoPos, setLogoPos] = useState({ x: 0, y: 0 });
+  // Framer Motion's own live transform for the draggable logo. `logoPos`
+  // (plain state, above) remains the single source of truth for save/
+  // restore/serialization (componentStates, PDF capture, the mini-preview
+  // indicator) -- unchanged. These motion values exist ONLY so the drag
+  // gesture's on-screen position (including dragConstraints clamping/
+  // elastic snap-back, which Framer applies live and asynchronously) can be
+  // read back exactly as rendered, instead of reconstructed by hand from
+  // PanInfo math (which doesn't account for constraint clamping and was the
+  // root cause of logo position drift when switching gift-set components).
+  const logoMotionX = useMotionValue(0);
+  const logoMotionY = useMotionValue(0);
 
   // ---------------------------------------------------------------------------
   // Product image bounds -> printable area
@@ -336,6 +553,19 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
     (product.subcategories ?? []).some((s: string) => GIFT_SET_PATTERN.test(s)) ||
     GIFT_SET_PATTERN.test(product.name ?? "");
 
+  // `isGiftSet`'s "constrain to the whole rendered photo" treatment exists
+  // specifically because a multi-item composite photo has no single
+  // coherent printable surface. That reasoning stops applying the moment
+  // `previewImage` is actually a single real component's own clean photo
+  // (isViewingComponent) -- at that point it should be treated exactly
+  // like any other single-item Corporate Gifting product (the fraction-
+  // based default printable area, generic single-item reference width),
+  // not like the composite-image fallback. Used only where the GEOMETRY
+  // needs this distinction (activeBoundaryPx, genericReferenceWidthMm);
+  // `isGiftSet` itself is untouched everywhere else (e.g. hideVisibleBoundary,
+  // which already evaluates the same way in both cases).
+  const effectiveIsGiftSet = isGiftSet && !isViewingComponent;
+
   // Drinkware's branding area is a FIXED PHYSICAL size (70x140mm), not a
   // fraction of the photo -- checked (and given priority) only when the
   // product is NOT a gift set, since the same classify() gap that misfiles
@@ -397,12 +627,48 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
           height: printableArea.height * productImageBox.height,
         };
 
-  // Single source of truth for BOTH the dotted outline's CSS position and
-  // the drag boundary (constraintsRef measures its own rendered rect,
-  // which this directly controls): the product-specific printable area for
-  // an individual product, or the full measured image bounds for a gift
-  // set -- never a mix of the two, and never independently computed.
-  const activeBoundaryPx = isGiftSet ? productImageBox : printableAreaPx;
+  // Single source of truth for the dotted outline's CSS position AND the
+  // max-scale clamp (computeGeometricMaxScale below): the product-specific
+  // printable area for an individual product, or the full measured image
+  // bounds for a gift set -- never a mix of the two, and never
+  // independently computed.
+  const activeBoundaryPx = effectiveIsGiftSet ? productImageBox : printableAreaPx;
+
+  // The drag boundary (constraintsRef measures its own rendered rect, which
+  // this directly controls) is DELIBERATELY NOT always activeBoundaryPx:
+  // for a gift set, activeBoundaryPx (productImageBox) is re-measured from
+  // scratch for every component's own photo, and genuinely differs in size
+  // between components with different aspect ratios -- so constraintsRef
+  // genuinely resizes every single switch. Framer Motion's ref-based
+  // dragConstraints watches that element for resizes and, on every one,
+  // repositions the draggable to preserve its relative "progress" within
+  // the (now different-sized) bounds -- correct behavior for an actual
+  // window resize, but switching components isn't a resize, it's a
+  // discrete jump to a different component's own independent position.
+  // Confirmed via a 7-cycle Diary<->Pen stress test: with activeBoundaryPx
+  // driving the constraint box, the restored position crept by a few px
+  // EVERY switch, unbounded. containerBox (the <img>'s own rendered box,
+  // before object-contain's per-photo letterboxing is trimmed out of it)
+  // only changes size on an actual panel/window resize -- never when
+  // switching which gift-set component is active -- so using it for the
+  // constraint box on gift sets specifically sidesteps Framer's resize
+  // machinery entirely for the resize events that shouldn't trigger it,
+  // while a real window resize still constrains/repositions exactly as
+  // intended. Non-gift-set products (Drinkware's real printable area, etc.)
+  // are completely unaffected: dragBoundaryPx === activeBoundaryPx for them,
+  // unchanged.
+  //
+  // Deliberately `isGiftSet`, not `effectiveIsGiftSet`: the latter is
+  // false while viewing an individual component (isViewingComponent), which
+  // is exactly when activeBoundaryPx falls back to printableAreaPx --
+  // itself still derived from productImageBox for these generic (non-
+  // Drinkware) Corporate Gifting products, so it resizes on every switch
+  // too. The drag-boundary fix needs to apply for the whole gift-set
+  // experience, component view included -- that's the entire scenario it's
+  // fixing.
+  const dragBoundaryPx = isGiftSet
+    ? { left: 0, top: 0, width: containerBox.width, height: containerBox.height }
+    : activeBoundaryPx;
 
   // Drinkware only: a CSS clip-path (expressed in the SAME coordinate space
   // the logo's own absolute positioning already uses -- previewContainerRef,
@@ -442,6 +708,15 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
    */
   const [customizationSnapshot, setCustomizationSnapshot] = useState("");
   const [isCapturingSnapshot, setIsCapturingSnapshot] = useState(false);
+  /**
+   * Multi-component gift sets only. Same reasoning as customizationSnapshot
+   * above (previewContainerRef/the component selector UI don't exist once
+   * `step` leaves "customize"): captured per customized component in
+   * handleProceedToQuote, read back by submitQuote once the user is on the
+   * quote-details form.
+   */
+  const [componentPreviews, setComponentPreviews] = useState<Record<string, string>>({});
+  const [finalComponentStates, setFinalComponentStates] = useState<Record<string, ComponentCustomization>>({});
 
   const quantityNum = parseInt(formData.quantity, 10) || 1;
   const isUvAvailable = quantityNum >= 25;
@@ -469,7 +744,7 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
   // conversion anchored to a generic per-case estimate instead -- see the
   // constants' own comments in branding-limits.ts for what these numbers
   // do and don't affect (display only, never the actual enforced size).
-  const genericReferenceWidthMm = isGiftSet ? GIFT_SET_REFERENCE_WIDTH_MM : CORPORATE_GIFTING_DEFAULT_REFERENCE_WIDTH_MM;
+  const genericReferenceWidthMm = effectiveIsGiftSet ? GIFT_SET_REFERENCE_WIDTH_MM : CORPORATE_GIFTING_DEFAULT_REFERENCE_WIDTH_MM;
 
   /**
    * A synthetic `BrandingLimits`-shaped object that lets the Width/Height mm
@@ -749,6 +1024,8 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
       setLogo(url);
       setIsSelected(true);
       setLogoPos({ x: 0, y: 0 });
+      logoMotionX.set(0);
+      logoMotionY.set(0);
       
       const reader = new FileReader();
       reader.onloadend = async () => {
@@ -781,8 +1058,9 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
             // is constrained to `maxLogoSizeMm`.  If no branding limits are
             // configured for this product, the scale is left at the default.
             // -------------------------------------------------------------------
+            let bounds: { w: number; h: number } | null = null;
             try {
-              const bounds = await measureVisibleBounds(res.uvLogoUrl);
+              bounds = await measureVisibleBounds(res.uvLogoUrl);
               setLogoNaturalDims(bounds);
 
               // Re-derive limits now that we have dimensions (printingMethod
@@ -803,6 +1081,20 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
               // Measurement failed -- keep the default scale; physical limits
               // will still be enforced via the resize clamps below.
             }
+
+            // Multi-component gift sets only: the one uploaded logo is the
+            // whole set's logo, so it's automatically made available to
+            // every OTHER customizable component now, each with its own
+            // independent default placement (see propagateLogoToOtherComponents).
+            propagateLogoToOtherComponents({
+              logo: url,
+              logoFile: file,
+              logoBase64: base64,
+              logoDataUrl: result,
+              uvLogo: res.uvLogoUrl,
+              laserLogo: res.laserLogoUrl,
+              logoNaturalDims: bounds,
+            });
           }
         } catch (error: any) {
           console.error("Failed to process logo:", error);
@@ -823,10 +1115,18 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
     setLogoBase64(null);
       setLogoDataUrl(null);
       setIsSelected(false);
+    // Multi-component gift sets: there's one shared logo for the whole set,
+    // so removing it clears every component's customization, not just the
+    // currently active one.
+    if (isMultiComponentGiftSet) {
+      setComponentStates({});
+    }
   };
 
   const handleResetPosition = () => {
     setLogoPos({ x: 0, y: 0 });
+    logoMotionX.set(0);
+    logoMotionY.set(0);
     setLogoRotation([0]);
     // Reset to the physical maximum for the current method (or 50 if unconstrained).
     const resetScale = brandingLimits && logoNaturalDims
@@ -876,15 +1176,33 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
     }
   };
 
+  /** Polls productImageRef until the (possibly just-swapped) component photo has actually finished loading, so a capture never races a still-loading <img>. Capped so a slow/broken image can't hang the flow forever -- captures whatever's there once the cap is hit. */
+  const waitForActiveImageLoad = async (maxWaitMs = 3000) => {
+    const start = Date.now();
+    while (Date.now() - start < maxWaitMs) {
+      const img = productImageRef.current;
+      if (img && img.complete && img.naturalWidth > 0) return;
+      await new Promise((r) => setTimeout(r, 50));
+    }
+  };
+
   /**
-   * Fires when the user leaves the "customize" step. The snapshot MUST be
-   * captured here, not inside submitQuote: previewContainerRef only exists
-   * while `step === "customize"` is rendered (see the JSX below), so by the
-   * time the user reaches the quote form's own submit button that DOM has
-   * already unmounted and the ref is null -- capturing there would silently
-   * send an empty preview. Also refuses to proceed while a just-uploaded
-   * logo's laser/UV variants are still processing, so the snapshot can
-   * never show the "Processing Logo..." spinner instead of the real logo.
+   * Fires when the user leaves the "customize" step. The snapshot(s) MUST be
+   * captured here, not inside submitQuote: previewContainerRef (and, for a
+   * multi-component set, the component selector itself) only exist while
+   * `step === "customize"` is rendered (see the JSX below), so by the time
+   * the user reaches the quote form's own submit button that DOM has
+   * already unmounted -- capturing there would silently send an empty
+   * preview. Also refuses to proceed while a just-uploaded logo's laser/UV
+   * variants are still processing, so a snapshot can never show the
+   * "Processing Logo..." spinner instead of the real logo.
+   *
+   * For a multi-component gift set, this walks through every component
+   * that actually has a logo, switching the flat editing buffer to it
+   * (exactly like selectComponent), waiting for that component's own photo
+   * to finish loading, then reusing captureCustomizationSnapshot completely
+   * unchanged -- so each capture is the same real, clean, rendered
+   * composition the customer saw, per component, not a reconstruction.
    */
   const handleProceedToQuote = async () => {
     if (logo && isProcessingLaser) {
@@ -893,8 +1211,32 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
     }
     setIsCapturingSnapshot(true);
     try {
-      const snapshot = await captureCustomizationSnapshot();
-      setCustomizationSnapshot(snapshot);
+      if (isMultiComponentGiftSet) {
+        const finalStates: Record<string, ComponentCustomization> = { ...componentStates };
+        if (activeComponentIndex !== null) {
+          const currentId = giftSetComponentsList[activeComponentIndex]?.id;
+          if (currentId) finalStates[currentId] = currentFlatComponentState();
+        }
+
+        const previews: Record<string, string> = {};
+        for (let i = 0; i < giftSetComponentsList.length; i++) {
+          const comp = giftSetComponentsList[i]!;
+          const state = finalStates[comp.id];
+          if (!state?.logo) continue;
+          if (i !== activeComponentIndex) {
+            applyComponentStateToFlatBuffer(state);
+            setActiveComponentIndex(i);
+            await new Promise((r) => setTimeout(r, 50));
+          }
+          await waitForActiveImageLoad();
+          previews[comp.id] = await captureCustomizationSnapshot();
+        }
+        setComponentPreviews(previews);
+        setFinalComponentStates(finalStates);
+      } else {
+        const snapshot = await captureCustomizationSnapshot();
+        setCustomizationSnapshot(snapshot);
+      }
       setStep("quote");
     } finally {
       setIsCapturingSnapshot(false);
@@ -906,7 +1248,50 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
     setIsSubmitting(true);
     setErrorMsg(null);
     try {
-      const previewBase64 = customizationSnapshot;
+      // For a multi-component gift set, build one structured entry per
+      // component from the state + previews captured in handleProceedToQuote
+      // -- each component's own logo/size/position/rotation/flip AND its own
+      // real captured mockup, never a single flattened top-level value that
+      // can't say which item actually got the logo.
+      const giftSetCustomizations = isMultiComponentGiftSet
+        ? giftSetComponentsList.map((comp) => {
+            const state = finalComponentStates[comp.id];
+            if (!state?.logo || !state.logoFile || !state.logoBase64) {
+              return { component: comp.name, customized: false as const };
+            }
+            const mm = getComponentDisplayMm(state);
+            return {
+              component: comp.name,
+              customized: true as const,
+              logo: state.logoFile.name,
+              widthMm: mm?.wMm,
+              heightMm: mm?.hMm,
+              position: state.logoPos,
+              rotation: state.logoRotation,
+              flip: state.flipH && state.flipV ? "both" : state.flipH ? "horizontal" : state.flipV ? "vertical" : "none",
+              previewImage: componentPreviews[comp.id] || "",
+            };
+          })
+        : undefined;
+
+      // Backward-compatible single top-level logo/preview: for a multi-
+      // component set this is the FIRST customized component, so any
+      // existing code reading these flat fields still sees something
+      // sensible -- the complete, authoritative data is giftSetCustomizations.
+      const primaryCustomized = isMultiComponentGiftSet
+        ? giftSetComponentsList.map((c) => finalComponentStates[c.id]).find((s) => s?.logo)
+        : undefined;
+      const effLogoFile = isMultiComponentGiftSet ? primaryCustomized?.logoFile ?? null : logoFile;
+      const effLogoBase64 = isMultiComponentGiftSet ? primaryCustomized?.logoBase64 ?? null : logoBase64;
+      const effScale = isMultiComponentGiftSet ? primaryCustomized?.logoScale : logoScale[0];
+      const effRotation = isMultiComponentGiftSet ? primaryCustomized?.logoRotation : logoRotation[0];
+      const effFlipH = isMultiComponentGiftSet ? (primaryCustomized?.flipH ?? false) : flipH;
+      const effFlipV = isMultiComponentGiftSet ? (primaryCustomized?.flipV ?? false) : flipV;
+      const effLogoPos = isMultiComponentGiftSet ? primaryCustomized?.logoPos : logoPos;
+      const previewBase64 = isMultiComponentGiftSet
+        ? (giftSetComponentsList.map((c) => componentPreviews[c.id]).find(Boolean) ?? "")
+        : customizationSnapshot;
+
       const result = await submitCorporateQuote({
         data: {
           fullName: formData.fullName,
@@ -921,18 +1306,23 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
           product: {
             id: product.id || product.slug,
             name: product.name,
-            variant: selectedVariant?.title || product.variants?.[0]?.title
+            variant: selectedVariant?.title || product.variants?.[0]?.title,
+            // Read live from the selectedVariant PROP at submit time (never
+            // frozen into local state earlier), so a variant switch right
+            // before clicking Request a Quote is always what gets recorded
+            // -- never a stale id left over from an earlier selection.
+            variantId: selectedVariant?.id,
           },
-          logo: logoFile && logoBase64 ? {
-            name: logoFile.name,
-            mimeType: logoFile.type,
-            content: logoBase64,
-            scale: logoScale[0],
-            rotation: logoRotation[0],
-            flipH: flipH,
-            flipV: flipV,
-            x: logoPos.x,
-            y: logoPos.y,
+          logo: effLogoFile && effLogoBase64 ? {
+            name: effLogoFile.name,
+            mimeType: effLogoFile.type,
+            content: effLogoBase64,
+            scale: effScale,
+            rotation: effRotation,
+            flipH: effFlipH,
+            flipV: effFlipV,
+            x: effLogoPos?.x,
+            y: effLogoPos?.y,
             // The exact Width/Height (mm) the customer sees and typed in the
             // Logo Size fields -- read directly from that same state, NOT
             // recomputed from logoScale/percentage, so the PDF can never
@@ -940,11 +1330,18 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
             // meaningful for Corporate Gifting products (sizeInputW/H stay
             // "" otherwise, see mmConversionLimits); omitted rather than
             // sent as NaN when unset or mid-edit.
-            ...(isFinite(parseFloat(sizeInputW)) && isFinite(parseFloat(sizeInputH))
+            ...(!isMultiComponentGiftSet && isFinite(parseFloat(sizeInputW)) && isFinite(parseFloat(sizeInputH))
               ? { widthMm: parseFloat(sizeInputW), heightMm: parseFloat(sizeInputH) }
               : {}),
+            ...(isMultiComponentGiftSet && primaryCustomized
+              ? (() => {
+                  const mm = getComponentDisplayMm(primaryCustomized);
+                  return mm ? { widthMm: mm.wMm, heightMm: mm.hMm } : {};
+                })()
+              : {}),
           } : undefined,
-          previewImage: previewBase64
+          previewImage: previewBase64,
+          ...(giftSetCustomizations ? { giftSetCustomizations } : {}),
         }
       });
       if (!result.ok) throw new Error(result.error);
@@ -1084,10 +1481,10 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
                     ${!hideVisibleBoundary && isDragging ? "border-2 border-dashed border-primary/40 bg-primary/5" : "border-2 border-dashed border-transparent"}
                   `}
                   style={{
-                    left: activeBoundaryPx.left,
-                    top: activeBoundaryPx.top,
-                    width: activeBoundaryPx.width,
-                    height: activeBoundaryPx.height,
+                    left: dragBoundaryPx.left,
+                    top: dragBoundaryPx.top,
+                    width: dragBoundaryPx.width,
+                    height: dragBoundaryPx.height,
                   }}
                 />
                 
@@ -1110,6 +1507,38 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
                     style={logoClipPath ? { clipPath: logoClipPath } : undefined}
                   >
                   <motion.div
+                    // THE actual root cause of "dragging one component's
+                    // logo also moves another's": Framer Motion's `drag`
+                    // tracks position via its OWN internal transform once a
+                    // drag happens, and does NOT reliably re-sync from a
+                    // plain style.x/y on every re-render -- so switching
+                    // components (which updates logoPos in React state)
+                    // still left the DOM element wherever the LAST drag put
+                    // it. The state itself was always correctly isolated
+                    // per component (see selectComponent/componentStates);
+                    // this is a rendering-layer fix, not a state fix: a
+                    // `key` that changes with the active component forces
+                    // React to unmount/remount this element, which resets
+                    // Framer's internal drag transform so the new render's
+                    // style.x/y (logoPos) actually takes effect as a fresh
+                    // starting position.
+                    //
+                    // style.x/y below are bound to logoMotionX/Y (Framer
+                    // MotionValues), not plain numbers: dragConstraints +
+                    // dragElastic clamp the LIVE rendered position during a
+                    // drag (e.g. a small component's printable area can't
+                    // fit the same pointer travel a large one can), and that
+                    // clamped result is only ever reflected in Framer's own
+                    // motion value -- never in PanInfo (info.point/info.offset
+                    // are raw, unclamped pointer deltas). Reconstructing the
+                    // resting position by hand from PanInfo therefore drifted
+                    // from what was actually on screen the moment the
+                    // boundary was hit. Binding style.x/y directly to the
+                    // motion values means the DOM is always driven by
+                    // Framer's own clamped truth, and reading `.get()` off
+                    // them (below, and in selectComponent's save step) always
+                    // returns exactly that same rendered value -- settled
+                    // elastic snap-back included.
                     drag
                     dragConstraints={constraintsRef}
                     dragElastic={0.05}
@@ -1118,9 +1547,19 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
                       setIsDragging(true);
                       setIsSelected(true);
                     }}
-                    onDragEnd={(e, info) => {
+                    onDragEnd={() => {
                       setIsDragging(false);
-                      setLogoPos({ x: info.point.x, y: info.point.y });
+                      setLogoPos({ x: logoMotionX.get(), y: logoMotionY.get() });
+                    }}
+                    onDragTransitionEnd={() => {
+                      // Fires once any post-release elastic snap-back spring
+                      // (dragConstraints + dragElastic) finishes settling --
+                      // which happens AFTER onDragEnd, so logoPos must be
+                      // re-synced here too or a save (switching components
+                      // right after a boundary-clamped drag) could capture
+                      // the still-mid-animation value instead of the final
+                      // rest position.
+                      setLogoPos({ x: logoMotionX.get(), y: logoMotionY.get() });
                     }}
                     onClick={(e) => {
                       e.stopPropagation();
@@ -1138,8 +1577,8 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
                       mixBlendMode: activeMixBlend,
                       touchAction: "none",
                       opacity: 0.95,
-                      x: logoPos.x,
-                      y: logoPos.y,
+                      x: logoMotionX,
+                      y: logoMotionY,
                     }}
                   >
                     {isProcessingLaser ? (
@@ -1195,10 +1634,61 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
                   </DialogHeader>
 
                   <div className="space-y-10">
+                    {isMultiComponentGiftSet && (
+                      <div className="space-y-2">
+                        <Label className="text-base font-semibold">
+                          Gift Set Components <span className="font-normal text-muted-foreground">({giftSetComponentsList.length} items)</span>
+                        </Label>
+                        <div className="flex flex-wrap gap-2">
+                          {giftSetComponentsList.map((comp, idx) => {
+                            const customized = isComponentCustomized(idx);
+                            const active = idx === activeComponentIndex;
+                            const mm = customized ? getComponentDisplayMm(getComponentState(idx)) : null;
+                            return (
+                              <button
+                                key={comp.id}
+                                type="button"
+                                disabled={!comp.customizable}
+                                onClick={() => selectComponent(idx)}
+                                className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-left transition-colors ${
+                                  active
+                                    ? "border-primary bg-primary/5 ring-1 ring-primary/20"
+                                    : "border-border hover:bg-muted/50"
+                                } ${!comp.customizable ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+                              >
+                                <img
+                                  src={comp.variantImages?.find((v) => v.title === selectedVariant?.title)?.imageUrl ?? comp.imageUrl}
+                                  alt={comp.name}
+                                  className="w-9 h-9 rounded-lg object-cover border border-border/50 bg-muted/30 shrink-0"
+                                />
+                                <div className="min-w-0">
+                                  <div className="text-sm font-medium truncate max-w-[110px]">{comp.name}</div>
+                                  <div className="text-[11px] text-muted-foreground flex items-center gap-1">
+                                    {!comp.customizable ? (
+                                      "Not customizable"
+                                    ) : customized ? (
+                                      <>
+                                        <Check className="w-3 h-3 text-primary shrink-0" />
+                                        {mm ? `${mm.wMm.toFixed(1)}×${mm.hMm.toFixed(1)}mm` : "Customized"}
+                                      </>
+                                    ) : (
+                                      "Not customized"
+                                    )}
+                                  </div>
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
                     <div className="space-y-4">
                       <div className="flex items-center gap-3">
                         <div className="flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-bold">1</div>
-                        <Label className="text-base font-semibold">Add Your Logo</Label>
+                        <Label className="text-base font-semibold">
+                          {isMultiComponentGiftSet && activeComponent ? `Add Your Logo — ${activeComponent.name}` : "Add Your Logo"}
+                        </Label>
                       </div>
                       
                       {!logo ? (
@@ -1441,6 +1931,18 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
                     </button>
                   </div>
                 </div>
+
+                {/* Per-item status/size already live in the Gift Set
+                    Components chips above -- this is just the one thing
+                    that isn't shown elsewhere. No "logo application" choice
+                    here anymore: the one uploaded logo is automatically the
+                    whole set's logo (see propagateLogoToOtherComponents). */}
+                {isMultiComponentGiftSet && (selectedVariant?.title || product.variants?.[0]?.title) && (
+                  <p className="mb-4 text-sm">
+                    <span className="text-muted-foreground">Variant: </span>
+                    <span className="font-medium">{selectedVariant?.title || product.variants?.[0]?.title}</span>
+                  </p>
+                )}
 
                 <Button
                   className="w-full text-base h-14 font-semibold shadow-sm"
