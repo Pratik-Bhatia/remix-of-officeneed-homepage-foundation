@@ -1,7 +1,7 @@
 import { trackViewContent } from "@/lib/meta-pixel";
 import { useMemo, useState, useRef, useEffect } from "react";
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
-import { Minus, Plus, ChevronLeft, ChevronRight, Loader2, ZoomIn, X, ShieldCheck, Lock, Award, Truck } from "lucide-react";
+import { Minus, Plus, ChevronLeft, ChevronRight, Loader2, ZoomIn, X, ShieldCheck, Lock, Award, Truck, BadgeCheck } from "lucide-react";
 import { Navbar } from "@/components/officeneed/Navbar";
 import { Footer } from "@/components/officeneed/Footer";
 import { ProductCard } from "@/components/officeneed/ProductCard";
@@ -769,7 +769,7 @@ function ProductDetail() {
               )}
 
               {/* Trust Badges */}
-              <div className="mt-8 grid grid-cols-3 border-t border-border/60 pt-6 pb-2 w-full">
+              <div className="mt-8 grid grid-cols-4 border-t border-border/60 pt-6 pb-2 w-full">
                 <div className="flex flex-col items-center justify-start text-center">
                   <ShieldCheck className="size-5 mb-1 text-foreground/70" />
                   <span className="text-[10px] leading-tight font-medium uppercase tracking-wider text-muted-foreground">Quality<br/>Assured</span>
@@ -789,6 +789,10 @@ function ProductDetail() {
                     <span className="text-[10px] leading-tight font-medium uppercase tracking-wider text-muted-foreground">Fast<br/>Dispatch</span>
                   </div>
                 )}
+                <div className="flex flex-col items-center justify-start text-center">
+                  <BadgeCheck className="size-5 mb-1 text-foreground/70" />
+                  <span className="text-[10px] leading-tight font-medium uppercase tracking-wider text-muted-foreground">100%<br/>Guaranteed</span>
+                </div>
               </div>
 
               {/* Product Information Accordions */}
