@@ -20,6 +20,7 @@ export type Database = {
           company_name: string
           created_at: string
           customer_name: string
+          customization_data: Json | null
           delivery_location: string
           id: string
           logo_filename: string | null
@@ -48,6 +49,7 @@ export type Database = {
           company_name: string
           created_at?: string
           customer_name: string
+          customization_data?: Json | null
           delivery_location: string
           id?: string
           logo_filename?: string | null
@@ -76,6 +78,7 @@ export type Database = {
           company_name?: string
           created_at?: string
           customer_name?: string
+          customization_data?: Json | null
           delivery_location?: string
           id?: string
           logo_filename?: string | null
