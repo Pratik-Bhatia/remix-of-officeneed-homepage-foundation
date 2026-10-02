@@ -12,9 +12,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { signInCustomer, registerCustomer, CustomerAuthError } from "@/lib/customer";
+import { signInCustomer, registerCustomer, getCustomerToken, CustomerAuthError } from "@/lib/customer";
+import { saveBusinessRegistration } from "@/lib/business-registration.functions";
 import { refreshSaves } from "@/lib/saves";
 import { useNavigate } from "@tanstack/react-router";
+import { splitFullName } from "@/lib/name-utils";
 
 export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const [mode, setMode] = useState<"signin" | "register">("signin");
@@ -23,17 +25,12 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
   // any pricing flag. Whether someone actually gets B2B pricing is
   // determined entirely server-side after sign-in (see
   // src/lib/b2b.functions.ts) from Shopify's real Customer -> Company
-  // Contact -> Role Assignment -> Company Location relationship.
-  //
-  // The "Company" tab specifically must NEVER offer self-registration: a
-  // B2B account can only come from a company contact Shopify already
-  // knows about (created/assigned by the merchant in Shopify Admin), so
-  // "Create Account" here would be misleading at best -- it would create
-  // an ordinary B2C customer that merely LOOKS like it registered as a
-  // company, with no real company relationship behind it. Switching to
-  // this tab forces signin mode and keeps it there; see the Tabs
-  // onValueChange below and the conditional render of the mode-toggle link
-  // further down.
+  // Contact -> Role Assignment -> Company Location relationship. The
+  // Company tab's "Create Business Account" form creates an ordinary
+  // Shopify customer through the SAME registerCustomer() every B2C signup
+  // uses, plus a company name/GST intake record (see
+  // src/lib/business-registration.functions.ts) for the merchant to review
+  // -- it does NOT itself grant B2B pricing or create a Shopify Company.
   const [entryType, setEntryType] = useState<"customer" | "company">("customer");
   const [busy, setBusy] = useState(false);
   const navigate = useNavigate();
@@ -49,6 +46,34 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
       if (mode === "signin") {
         await signInCustomer(email, password);
         toast.success("Successfully logged in");
+      } else if (entryType === "company") {
+        const confirmPassword = String(form.get("confirmPassword") ?? "");
+        if (password !== confirmPassword) throw new Error("Passwords don't match.");
+        const fullName = String(form.get("fullName") ?? "").trim();
+        const companyName = String(form.get("companyName") ?? "").trim();
+        const phone = String(form.get("phone") ?? "").trim();
+        const gstNumber = String(form.get("gstNumber") ?? "").trim();
+        const { firstName, lastName } = splitFullName(fullName);
+        await registerCustomer({
+          email,
+          password,
+          ...(firstName ? { firstName } : {}),
+          ...(lastName ? { lastName } : {}),
+          ...(phone ? { phone } : {}),
+        });
+        // The Shopify customer is already created and signed in at this
+        // point -- a failure saving the company/GST intake record is
+        // secondary and must not look like the whole registration failed.
+        const token = getCustomerToken();
+        if (token) {
+          try {
+            await saveBusinessRegistration({ data: { token, companyName, ...(gstNumber ? { gstNumber } : {}) } });
+          } catch (saveErr) {
+            console.error("Failed to save business registration details:", saveErr);
+            toast.warning("Account created, but we couldn't save your company details. Please contact OfficeNeed.");
+          }
+        }
+        toast.success("Account created successfully");
       } else {
         const firstName = String(form.get("firstName") ?? "").trim();
         const lastName = String(form.get("lastName") ?? "").trim();
@@ -75,8 +100,7 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
     }
   };
 
-  // Company is sign-in only, always -- see the comment on entryType above.
-  const effectiveMode = entryType === "company" ? "signin" : mode;
+  const isCompanyRegister = entryType === "company" && mode === "register";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -84,13 +108,15 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
         <DialogHeader>
           <DialogTitle>
             {entryType === "company"
-              ? "Business account"
-              : effectiveMode === "signin" ? "Sign in to your account" : "Create your account"}
+              ? mode === "signin" ? "Sign in to your business account" : "Create your business account"
+              : mode === "signin" ? "Sign in to your account" : "Create your account"}
           </DialogTitle>
           <DialogDescription>
             {entryType === "company"
-              ? "Sign in with your existing company account. Your company account must be created and approved by OfficeNeed."
-              : effectiveMode === "signin"
+              ? mode === "signin"
+                ? "Sign in with your business email to see your orders and saved products."
+                : "Register your business. B2B pricing is enabled separately once OfficeNeed sets up your company account in Shopify."
+              : mode === "signin"
                 ? "Sign in to see your orders and saved products."
                 : "Create an account to track your orders and keep a list of saved products."}
           </DialogDescription>
@@ -100,7 +126,7 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
           value={entryType}
           onValueChange={(v) => {
             setEntryType(v as "customer" | "company");
-            if (v === "company") setMode("signin");
+            setMode("signin");
           }}
           className="w-full"
         >
@@ -111,7 +137,18 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
         </Tabs>
 
         <form onSubmit={handleSubmit} className="space-y-4 py-4">
-          {effectiveMode === "register" ? (
+          {isCompanyRegister ? (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="fullName">Full Name</Label>
+                <Input id="fullName" name="fullName" autoComplete="name" required />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="companyName">Company Name</Label>
+                <Input id="companyName" name="companyName" autoComplete="organization" required />
+              </div>
+            </>
+          ) : mode === "register" ? (
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="firstName">First Name</Label>
@@ -126,8 +163,22 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
 
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
-            <Input id="email" name="email" type="email" required autoComplete="email" placeholder="you@company.com" />
+            <Input id="email" name="email" type="email" required autoComplete="email" placeholder="you@example.com" />
           </div>
+
+          {isCompanyRegister ? (
+            <div className="space-y-2">
+              <Label htmlFor="phone">Phone Number</Label>
+              <Input id="phone" name="phone" type="tel" autoComplete="tel" placeholder="+91 98765 43210" />
+            </div>
+          ) : null}
+
+          {isCompanyRegister ? (
+            <div className="space-y-2">
+              <Label htmlFor="gstNumber">GST Number</Label>
+              <Input id="gstNumber" name="gstNumber" autoComplete="off" placeholder="22AAAAA0000A1Z5" />
+            </div>
+          ) : null}
 
           <div className="space-y-2">
             <Label htmlFor="password">Password</Label>
@@ -137,31 +188,41 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
               type="password"
               required
               minLength={5}
-              autoComplete={effectiveMode === "signin" ? "current-password" : "new-password"}
+              autoComplete={mode === "signin" ? "current-password" : "new-password"}
             />
           </div>
 
+          {isCompanyRegister ? (
+            <div className="space-y-2">
+              <Label htmlFor="confirmPassword">Confirm Password</Label>
+              <Input
+                id="confirmPassword"
+                name="confirmPassword"
+                type="password"
+                required
+                minLength={5}
+                autoComplete="new-password"
+              />
+            </div>
+          ) : null}
+
           <Button type="submit" className="w-full" disabled={busy}>
             {busy ? <Loader2 className="size-4 animate-spin mr-2" /> : null}
-            {effectiveMode === "signin" ? "Sign In" : "Create Account"}
+            {mode === "signin" ? "Sign In" : isCompanyRegister ? "Create Business Account" : "Create Account"}
           </Button>
         </form>
 
-        {entryType === "company" ? (
-          <p className="text-center text-xs text-muted-foreground mt-2">
-            Need a business account? Contact OfficeNeed to have one set up for you.
-          </p>
-        ) : (
-          <div className="text-center text-sm text-muted-foreground mt-2">
-            <button
-              type="button"
-              className="text-primary hover:underline font-medium"
-              onClick={() => setMode(mode === "signin" ? "register" : "signin")}
-            >
-              {mode === "signin" ? "New here? Create an account" : "Already have an account? Sign in"}
-            </button>
-          </div>
-        )}
+        <div className="text-center text-sm text-muted-foreground mt-2">
+          <button
+            type="button"
+            className="text-primary hover:underline font-medium"
+            onClick={() => setMode(mode === "signin" ? "register" : "signin")}
+          >
+            {mode === "signin"
+              ? entryType === "company" ? "New business? Create a business account" : "New here? Create an account"
+              : "Already have an account? Sign in"}
+          </button>
+        </div>
       </DialogContent>
     </Dialog>
   );

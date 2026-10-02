@@ -16,7 +16,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useCustomer, signInCustomer, registerCustomer, signOutCustomer, CustomerAuthError } from "@/lib/customer";
+import { useCustomer, signInCustomer, registerCustomer, signOutCustomer, getCustomerToken, CustomerAuthError } from "@/lib/customer";
+import { saveBusinessRegistration } from "@/lib/business-registration.functions";
+import { splitFullName } from "@/lib/name-utils";
 import { CustomerContext } from "@/lib/customer-context";
 import { clearSaves, refreshSaves } from "@/lib/saves";
 import { cn } from "@/lib/utils";
@@ -45,11 +47,13 @@ const navItems = [
 
 function SignInPanel({ onDone }: { onDone: () => Promise<void> }) {
   const [mode, setMode] = useState<"signin" | "register">("signin");
-  // Company is sign-in only -- see CustomerAuthModal.tsx's identical field
-  // for the full reasoning (never reaches Shopify, never grants B2B
-  // pricing by itself, and never offers self-registration into a company).
+  // See CustomerAuthModal.tsx's identical field for the full reasoning --
+  // the Company tab's registration form creates an ordinary Shopify
+  // customer through the SAME registerCustomer() as B2C, plus a company
+  // name/GST intake record; it never grants B2B pricing by itself.
   const [entryType, setEntryType] = useState<"customer" | "company">("customer");
   const [busy, setBusy] = useState(false);
+  const isCompanyRegister = entryType === "company" && mode === "register";
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -58,8 +62,32 @@ function SignInPanel({ onDone }: { onDone: () => Promise<void> }) {
     const password = String(form.get("password") ?? "");
     setBusy(true);
     try {
-      if (effectiveMode === "signin") {
+      if (mode === "signin") {
         await signInCustomer(email, password);
+      } else if (isCompanyRegister) {
+        const confirmPassword = String(form.get("confirmPassword") ?? "");
+        if (password !== confirmPassword) throw new Error("Passwords don't match.");
+        const fullName = String(form.get("fullName") ?? "").trim();
+        const companyName = String(form.get("companyName") ?? "").trim();
+        const phone = String(form.get("phone") ?? "").trim();
+        const gstNumber = String(form.get("gstNumber") ?? "").trim();
+        const { firstName, lastName } = splitFullName(fullName);
+        await registerCustomer({
+          email,
+          password,
+          ...(firstName ? { firstName } : {}),
+          ...(lastName ? { lastName } : {}),
+          ...(phone ? { phone } : {}),
+        });
+        const token = getCustomerToken();
+        if (token) {
+          try {
+            await saveBusinessRegistration({ data: { token, companyName, ...(gstNumber ? { gstNumber } : {}) } });
+          } catch (saveErr) {
+            console.error("Failed to save business registration details:", saveErr);
+            toast.warning("Account created, but we couldn't save your company details. Please contact OfficeNeed.");
+          }
+        }
       } else {
         const firstName = String(form.get("firstName") ?? "").trim();
         const lastName = String(form.get("lastName") ?? "").trim();
@@ -82,19 +110,19 @@ function SignInPanel({ onDone }: { onDone: () => Promise<void> }) {
     }
   };
 
-  const effectiveMode = entryType === "company" ? "signin" : mode;
-
   return (
     <div className="mx-auto w-full max-w-md rounded-2xl border border-border p-6 sm:p-8">
       <h2 className="text-lg font-medium text-foreground">
         {entryType === "company"
-          ? "Business account"
-          : effectiveMode === "signin" ? "Sign in to your account" : "Create your account"}
+          ? mode === "signin" ? "Sign in to your business account" : "Create your business account"
+          : mode === "signin" ? "Sign in to your account" : "Create your account"}
       </h2>
       <p className="mt-2 text-sm text-muted-foreground">
         {entryType === "company"
-          ? "Sign in with your existing company account. Your company account must be created and approved by OfficeNeed."
-          : effectiveMode === "signin"
+          ? mode === "signin"
+            ? "Use your business email and password to see your orders and saved products."
+            : "Register your business. B2B pricing is enabled separately once OfficeNeed sets up your company account in Shopify."
+          : mode === "signin"
             ? "Use the email and password from your Officeneed store account to see your orders and saved products."
             : "Create an account to track your orders and keep a list of saved products."}
       </p>
@@ -103,7 +131,7 @@ function SignInPanel({ onDone }: { onDone: () => Promise<void> }) {
         value={entryType}
         onValueChange={(v) => {
           setEntryType(v as "customer" | "company");
-          if (v === "company") setMode("signin");
+          setMode("signin");
         }}
         className="mt-5 w-full"
       >
@@ -114,7 +142,22 @@ function SignInPanel({ onDone }: { onDone: () => Promise<void> }) {
       </Tabs>
 
       <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-        {effectiveMode === "register" ? (
+        {isCompanyRegister ? (
+          <>
+            <div className="space-y-2">
+              <Label htmlFor="fullName" className="text-xs font-medium tracking-wide text-muted-foreground">
+                Full Name
+              </Label>
+              <Input id="fullName" name="fullName" className="rounded-xl" autoComplete="name" required />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="companyName" className="text-xs font-medium tracking-wide text-muted-foreground">
+                Company Name
+              </Label>
+              <Input id="companyName" name="companyName" className="rounded-xl" autoComplete="organization" required />
+            </div>
+          </>
+        ) : mode === "register" ? (
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="firstName" className="text-xs font-medium tracking-wide text-muted-foreground">
@@ -138,6 +181,24 @@ function SignInPanel({ onDone }: { onDone: () => Promise<void> }) {
           <Input id="email" name="email" type="email" required className="rounded-xl" autoComplete="email" />
         </div>
 
+        {isCompanyRegister ? (
+          <div className="space-y-2">
+            <Label htmlFor="phone" className="text-xs font-medium tracking-wide text-muted-foreground">
+              Phone Number
+            </Label>
+            <Input id="phone" name="phone" type="tel" className="rounded-xl" autoComplete="tel" placeholder="+91 98765 43210" />
+          </div>
+        ) : null}
+
+        {isCompanyRegister ? (
+          <div className="space-y-2">
+            <Label htmlFor="gstNumber" className="text-xs font-medium tracking-wide text-muted-foreground">
+              GST Number
+            </Label>
+            <Input id="gstNumber" name="gstNumber" className="rounded-xl" autoComplete="off" placeholder="22AAAAA0000A1Z5" />
+          </div>
+        ) : null}
+
         <div className="space-y-2">
           <Label htmlFor="password" className="text-xs font-medium tracking-wide text-muted-foreground">
             Password
@@ -149,28 +210,41 @@ function SignInPanel({ onDone }: { onDone: () => Promise<void> }) {
             required
             minLength={5}
             className="rounded-xl"
-            autoComplete={effectiveMode === "signin" ? "current-password" : "new-password"}
+            autoComplete={mode === "signin" ? "current-password" : "new-password"}
           />
         </div>
 
+        {isCompanyRegister ? (
+          <div className="space-y-2">
+            <Label htmlFor="confirmPassword" className="text-xs font-medium tracking-wide text-muted-foreground">
+              Confirm Password
+            </Label>
+            <Input
+              id="confirmPassword"
+              name="confirmPassword"
+              type="password"
+              required
+              minLength={5}
+              className="rounded-xl"
+              autoComplete="new-password"
+            />
+          </div>
+        ) : null}
+
         <Button type="submit" disabled={busy} className="w-full rounded-full">
-          {busy ? "Please wait…" : effectiveMode === "signin" ? "Sign in" : "Create account"}
+          {busy ? "Please wait…" : mode === "signin" ? "Sign in" : isCompanyRegister ? "Create Business Account" : "Create account"}
         </Button>
       </form>
 
-      {entryType === "company" ? (
-        <p className="mt-5 text-center text-xs text-muted-foreground">
-          Need a business account? Contact OfficeNeed to have one set up for you.
-        </p>
-      ) : (
-        <button
-          type="button"
-          onClick={() => setMode(mode === "signin" ? "register" : "signin")}
-          className="mt-5 w-full text-sm text-muted-foreground underline underline-offset-4 transition-colors hover:text-foreground"
-        >
-          {mode === "signin" ? "New here? Create an account" : "Already have an account? Sign in"}
-        </button>
-      )}
+      <button
+        type="button"
+        onClick={() => setMode(mode === "signin" ? "register" : "signin")}
+        className="mt-5 w-full text-sm text-muted-foreground underline underline-offset-4 transition-colors hover:text-foreground"
+      >
+        {mode === "signin"
+          ? entryType === "company" ? "New business? Create a business account" : "New here? Create an account"
+          : "Already have an account? Sign in"}
+      </button>
     </div>
   );
 }

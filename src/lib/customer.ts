@@ -284,6 +284,11 @@ export async function registerCustomer(input: {
   password: string;
   firstName?: string;
   lastName?: string;
+  /** Native Shopify customer field (CustomerCreateInput.phone) -- not
+   * metafield data, so it's passed straight through like the rest of this
+   * input. Optional and unused by existing B2C registration, which never
+   * passes it -- that path's behavior is unchanged. */
+  phone?: string;
 }): Promise<void> {
   try {
     const resp = await storefrontApiRequest(
