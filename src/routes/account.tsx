@@ -16,7 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useCustomer, signInCustomer, registerCustomer, signOutCustomer } from "@/lib/customer";
+import { useCustomer, signInCustomer, registerCustomer, signOutCustomer, CustomerAuthError } from "@/lib/customer";
 import { CustomerContext } from "@/lib/customer-context";
 import { clearSaves, refreshSaves } from "@/lib/saves";
 import { cn } from "@/lib/utils";
@@ -45,9 +45,9 @@ const navItems = [
 
 function SignInPanel({ onDone }: { onDone: () => Promise<void> }) {
   const [mode, setMode] = useState<"signin" | "register">("signin");
-  // Purely a copy/title choice -- see CustomerAuthModal.tsx's identical
-  // field for why this never reaches Shopify and never grants B2B pricing
-  // by itself.
+  // Company is sign-in only -- see CustomerAuthModal.tsx's identical field
+  // for the full reasoning (never reaches Shopify, never grants B2B
+  // pricing by itself, and never offers self-registration into a company).
   const [entryType, setEntryType] = useState<"customer" | "company">("customer");
   const [busy, setBusy] = useState(false);
 
@@ -58,7 +58,7 @@ function SignInPanel({ onDone }: { onDone: () => Promise<void> }) {
     const password = String(form.get("password") ?? "");
     setBusy(true);
     try {
-      if (mode === "signin") {
+      if (effectiveMode === "signin") {
         await signInCustomer(email, password);
       } else {
         const firstName = String(form.get("firstName") ?? "").trim();
@@ -73,30 +73,40 @@ function SignInPanel({ onDone }: { onDone: () => Promise<void> }) {
       await onDone();
       await refreshSaves(true);
     } catch (error) {
+      if (error instanceof CustomerAuthError && error.code === "TAKEN") {
+        setMode("signin");
+      }
       toast.error(error instanceof Error ? error.message : "Something went wrong. Please try again.");
     } finally {
       setBusy(false);
     }
   };
 
+  const effectiveMode = entryType === "company" ? "signin" : mode;
+
   return (
     <div className="mx-auto w-full max-w-md rounded-2xl border border-border p-6 sm:p-8">
       <h2 className="text-lg font-medium text-foreground">
         {entryType === "company"
-          ? mode === "signin" ? "Sign in to your business account" : "Create your business account"
-          : mode === "signin" ? "Sign in to your account" : "Create your account"}
+          ? "Business account"
+          : effectiveMode === "signin" ? "Sign in to your account" : "Create your account"}
       </h2>
       <p className="mt-2 text-sm text-muted-foreground">
         {entryType === "company"
-          ? mode === "signin"
-            ? "Use your business email and password to see your orders and saved products."
-            : "Create a business account to track your orders and keep a list of saved products."
-          : mode === "signin"
+          ? "Sign in with your existing company account. Your company account must be created and approved by OfficeNeed."
+          : effectiveMode === "signin"
             ? "Use the email and password from your Officeneed store account to see your orders and saved products."
             : "Create an account to track your orders and keep a list of saved products."}
       </p>
 
-      <Tabs value={entryType} onValueChange={(v) => setEntryType(v as "customer" | "company")} className="mt-5 w-full">
+      <Tabs
+        value={entryType}
+        onValueChange={(v) => {
+          setEntryType(v as "customer" | "company");
+          if (v === "company") setMode("signin");
+        }}
+        className="mt-5 w-full"
+      >
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="customer">Customer</TabsTrigger>
           <TabsTrigger value="company">Company</TabsTrigger>
@@ -104,7 +114,7 @@ function SignInPanel({ onDone }: { onDone: () => Promise<void> }) {
       </Tabs>
 
       <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-        {mode === "register" ? (
+        {effectiveMode === "register" ? (
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="firstName" className="text-xs font-medium tracking-wide text-muted-foreground">
@@ -139,22 +149,28 @@ function SignInPanel({ onDone }: { onDone: () => Promise<void> }) {
             required
             minLength={5}
             className="rounded-xl"
-            autoComplete={mode === "signin" ? "current-password" : "new-password"}
+            autoComplete={effectiveMode === "signin" ? "current-password" : "new-password"}
           />
         </div>
 
         <Button type="submit" disabled={busy} className="w-full rounded-full">
-          {busy ? "Please wait…" : mode === "signin" ? "Sign in" : "Create account"}
+          {busy ? "Please wait…" : effectiveMode === "signin" ? "Sign in" : "Create account"}
         </Button>
       </form>
 
-      <button
-        type="button"
-        onClick={() => setMode(mode === "signin" ? "register" : "signin")}
-        className="mt-5 w-full text-sm text-muted-foreground underline underline-offset-4 transition-colors hover:text-foreground"
-      >
-        {mode === "signin" ? "New here? Create an account" : "Already have an account? Sign in"}
-      </button>
+      {entryType === "company" ? (
+        <p className="mt-5 text-center text-xs text-muted-foreground">
+          Need a business account? Contact OfficeNeed to have one set up for you.
+        </p>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setMode(mode === "signin" ? "register" : "signin")}
+          className="mt-5 w-full text-sm text-muted-foreground underline underline-offset-4 transition-colors hover:text-foreground"
+        >
+          {mode === "signin" ? "New here? Create an account" : "Already have an account? Sign in"}
+        </button>
+      )}
     </div>
   );
 }

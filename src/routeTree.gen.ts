@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AboutUsRouteImport } from './routes/about-us'
 import { Route as AccountRouteImport } from './routes/account'
+import { Route as ActivateRouteImport } from './routes/activate'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as BlogRouteImport } from './routes/blog'
 import { Route as CancellationPolicyRouteImport } from './routes/cancellation-policy'
@@ -49,6 +50,11 @@ const AboutUsRoute = AboutUsRouteImport.update({
 const AccountRoute = AccountRouteImport.update({
   id: '/account',
   path: '/account',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ActivateRoute = ActivateRouteImport.update({
+  id: '/activate',
+  path: '/activate',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthRoute = AuthRouteImport.update({
@@ -171,6 +177,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/about-us': typeof AboutUsRoute
   '/account': typeof AccountRouteWithChildren
+  '/activate': typeof ActivateRoute
   '/auth': typeof AuthRoute
   '/blog': typeof BlogRouteWithChildren
   '/cancellation-policy': typeof CancellationPolicyRoute
@@ -198,6 +205,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/about-us': typeof AboutUsRoute
+  '/activate': typeof ActivateRoute
   '/auth': typeof AuthRoute
   '/blog': typeof BlogRouteWithChildren
   '/cancellation-policy': typeof CancellationPolicyRoute
@@ -227,6 +235,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/about-us': typeof AboutUsRoute
   '/account': typeof AccountRouteWithChildren
+  '/activate': typeof ActivateRoute
   '/auth': typeof AuthRoute
   '/blog': typeof BlogRouteWithChildren
   '/cancellation-policy': typeof CancellationPolicyRoute
@@ -257,6 +266,7 @@ export interface FileRouteTypes {
     | '/'
     | '/about-us'
     | '/account'
+    | '/activate'
     | '/auth'
     | '/blog'
     | '/cancellation-policy'
@@ -284,6 +294,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/about-us'
+    | '/activate'
     | '/auth'
     | '/blog'
     | '/cancellation-policy'
@@ -312,6 +323,7 @@ export interface FileRouteTypes {
     | '/'
     | '/about-us'
     | '/account'
+    | '/activate'
     | '/auth'
     | '/blog'
     | '/cancellation-policy'
@@ -341,6 +353,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AboutUsRoute: typeof AboutUsRoute
   AccountRoute: typeof AccountRouteWithChildren
+  ActivateRoute: typeof ActivateRoute
   AuthRoute: typeof AuthRoute
   BlogRoute: typeof BlogRouteWithChildren
   CancellationPolicyRoute: typeof CancellationPolicyRoute
@@ -382,6 +395,13 @@ declare module '@tanstack/react-router' {
       path: '/account'
       fullPath: '/account'
       preLoaderRoute: typeof AccountRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/activate': {
+      id: '/activate'
+      path: '/activate'
+      fullPath: '/activate'
+      preLoaderRoute: typeof ActivateRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth': {
@@ -579,6 +599,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AboutUsRoute: AboutUsRoute,
   AccountRoute: AccountRouteWithChildren,
+  ActivateRoute: ActivateRoute,
   AuthRoute: AuthRoute,
   BlogRoute: BlogRouteWithChildren,
   CancellationPolicyRoute: CancellationPolicyRoute,

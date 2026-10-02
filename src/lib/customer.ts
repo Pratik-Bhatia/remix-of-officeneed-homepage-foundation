@@ -238,12 +238,24 @@ export async function fetchCustomer(token: string): Promise<Customer | null> {
 
 /* --------------------------------- actions -------------------------------- */
 
+/** Carries Shopify's own CustomerErrorCode (e.g. "TAKEN", "CUSTOMER_DISABLED",
+ * "ALREADY_ENABLED", "TOKEN_INVALID") alongside the message, so callers can
+ * branch on the stable code instead of matching locale-dependent message text. */
+export class CustomerAuthError extends Error {
+  code: string | null;
+  constructor(message: string, code: string | null) {
+    super(message);
+    this.name = "CustomerAuthError";
+    this.code = code;
+  }
+}
+
 export async function signInCustomer(email: string, password: string): Promise<void> {
   const resp = await storefrontApiRequest(
     `mutation Login($input: CustomerAccessTokenCreateInput!) {
        customerAccessTokenCreate(input: $input) {
          customerAccessToken { accessToken expiresAt }
-         customerUserErrors { message }
+         customerUserErrors { code message }
        }
      }`,
     { input: { email, password } },
@@ -251,11 +263,18 @@ export async function signInCustomer(email: string, password: string): Promise<v
   const result = (resp?.data as {
     customerAccessTokenCreate: {
       customerAccessToken: { accessToken: string; expiresAt: string } | null;
-      customerUserErrors: Array<{ message: string }>;
+      customerUserErrors: Array<{ code: string | null; message: string }>;
     };
   }).customerAccessTokenCreate;
   if (!result.customerAccessToken) {
-    throw new Error(result.customerUserErrors[0]?.message ?? "Incorrect email or password.");
+    const err = result.customerUserErrors[0];
+    if (err?.code === "CUSTOMER_DISABLED") {
+      throw new CustomerAuthError(
+        "This account hasn't been activated yet. Check your email for the activation link from OfficeNeed.",
+        err.code,
+      );
+    }
+    throw new CustomerAuthError(err?.message ?? "Incorrect email or password.", err?.code ?? null);
   }
   setCustomerToken(result.customerAccessToken);
 }
@@ -269,13 +288,24 @@ export async function registerCustomer(input: {
   try {
     const resp = await storefrontApiRequest(
       `mutation Register($input: CustomerCreateInput!) {
-         customerCreate(input: $input) { customerUserErrors { message } }
+         customerCreate(input: $input) { customerUserErrors { code message } }
        }`,
       { input },
     );
-    const errors = (resp?.data as { customerCreate: { customerUserErrors: Array<{ message: string }> } })
+    const errors = (resp?.data as { customerCreate: { customerUserErrors: Array<{ code: string | null; message: string }> } })
       .customerCreate.customerUserErrors;
-    if (errors.length) throw new Error(errors[0]?.message ?? "Could not create your account.");
+    const err = errors[0];
+    if (err) {
+      // TAKEN: Shopify's customer uniqueness constraint -- never worked
+      // around. An account with this email already exists (active or
+      // still pending its own activation link, which the Storefront API
+      // doesn't distinguish for an anonymous registration attempt); the
+      // correct next step is always "sign in", never "create another".
+      if (err.code === "TAKEN") {
+        throw new CustomerAuthError("An account already exists with this email. Please sign in.", err.code);
+      }
+      throw new CustomerAuthError(err.message ?? "Could not create your account.", err.code ?? null);
+    }
     await signInCustomer(input.email, input.password);
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
@@ -286,6 +316,49 @@ export async function registerCustomer(input: {
     }
     throw error;
   }
+}
+
+/**
+ * Classic Shopify customer account activation (shopify.dev/docs/storefronts/
+ * headless/building-with-the-storefront-api/customer-accounts): the
+ * activation email links to OUR storefront with Shopify's own
+ * account_activation_url carried through as the `activation_url` query
+ * param (see src/routes/account.activate.tsx) -- we pass that URL to
+ * Shopify VERBATIM, never parsed apart. customerActivateByUrl is Shopify's
+ * own documented recommended mutation for exactly this (no need to
+ * separately extract the customer id/token from the URL). On success this
+ * creates no second customer -- it activates the SAME Shopify customer the
+ * link was issued for, and returns a real customerAccessToken for them,
+ * stored via the existing setCustomerToken() (same path signInCustomer
+ * uses), which already fires the officeneed-customer-token event.
+ */
+export async function activateCustomer(activationUrl: string, password: string): Promise<void> {
+  const resp = await storefrontApiRequest(
+    `mutation ActivateByUrl($activationUrl: URL!, $password: String!) {
+       customerActivateByUrl(activationUrl: $activationUrl, password: $password) {
+         customerAccessToken { accessToken expiresAt }
+         customerUserErrors { code message }
+       }
+     }`,
+    { activationUrl, password },
+  );
+  const result = (resp?.data as {
+    customerActivateByUrl: {
+      customerAccessToken: { accessToken: string; expiresAt: string } | null;
+      customerUserErrors: Array<{ code: string | null; message: string }>;
+    };
+  }).customerActivateByUrl;
+  if (!result.customerAccessToken) {
+    const err = result.customerUserErrors[0];
+    if (err?.code === "ALREADY_ENABLED") {
+      throw new CustomerAuthError("This account has already been activated. Please sign in instead.", err.code);
+    }
+    if (err?.code === "TOKEN_INVALID" || err?.code === "NOT_FOUND") {
+      throw new CustomerAuthError("This activation link is invalid or has expired. Please contact OfficeNeed for a new one.", err.code);
+    }
+    throw new CustomerAuthError(err?.message ?? "Could not activate your account.", err?.code ?? null);
+  }
+  setCustomerToken(result.customerAccessToken);
 }
 
 export async function updateCustomer(

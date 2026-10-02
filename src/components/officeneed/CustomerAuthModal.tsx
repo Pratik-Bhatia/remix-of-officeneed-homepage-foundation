@@ -12,18 +12,28 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { signInCustomer, registerCustomer } from "@/lib/customer";
+import { signInCustomer, registerCustomer, CustomerAuthError } from "@/lib/customer";
 import { refreshSaves } from "@/lib/saves";
 import { useNavigate } from "@tanstack/react-router";
 
 export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const [mode, setMode] = useState<"signin" | "register">("signin");
-  // Purely a copy/title choice -- NEVER sent to Shopify, never read by
-  // signInCustomer/registerCustomer, never sets any pricing flag. Whether
-  // someone actually gets B2B pricing is determined entirely server-side
-  // after sign-in (see src/lib/b2b.functions.ts) from Shopify's real
-  // customer-company relationship -- picking "Company" here does not
-  // grant it.
+  // Which tab is selected is PURELY a UI entry point -- it is NEVER sent to
+  // Shopify, never read by signInCustomer/registerCustomer, and never sets
+  // any pricing flag. Whether someone actually gets B2B pricing is
+  // determined entirely server-side after sign-in (see
+  // src/lib/b2b.functions.ts) from Shopify's real Customer -> Company
+  // Contact -> Role Assignment -> Company Location relationship.
+  //
+  // The "Company" tab specifically must NEVER offer self-registration: a
+  // B2B account can only come from a company contact Shopify already
+  // knows about (created/assigned by the merchant in Shopify Admin), so
+  // "Create Account" here would be misleading at best -- it would create
+  // an ordinary B2C customer that merely LOOKS like it registered as a
+  // company, with no real company relationship behind it. Switching to
+  // this tab forces signin mode and keeps it there; see the Tabs
+  // onValueChange below and the conditional render of the mode-toggle link
+  // further down.
   const [entryType, setEntryType] = useState<"customer" | "company">("customer");
   const [busy, setBusy] = useState(false);
   const navigate = useNavigate();
@@ -54,11 +64,19 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
       await refreshSaves(true);
       navigate({ to: "/account" });
     } catch (error) {
+      // An email that's already registered should send the shopper to
+      // sign in, not leave them stuck on a failed "Create Account" form.
+      if (error instanceof CustomerAuthError && error.code === "TAKEN") {
+        setMode("signin");
+      }
       toast.error(error instanceof Error ? error.message : "Something went wrong. Please try again.");
     } finally {
       setBusy(false);
     }
   };
+
+  // Company is sign-in only, always -- see the comment on entryType above.
+  const effectiveMode = entryType === "company" ? "signin" : mode;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -66,21 +84,26 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
         <DialogHeader>
           <DialogTitle>
             {entryType === "company"
-              ? mode === "signin" ? "Sign in to your business account" : "Create your business account"
-              : mode === "signin" ? "Sign in to your account" : "Create your account"}
+              ? "Business account"
+              : effectiveMode === "signin" ? "Sign in to your account" : "Create your account"}
           </DialogTitle>
           <DialogDescription>
             {entryType === "company"
-              ? mode === "signin"
-                ? "Sign in with your business email to see your orders and saved products."
-                : "Create a business account to track your orders and keep a list of saved products."
-              : mode === "signin"
+              ? "Sign in with your existing company account. Your company account must be created and approved by OfficeNeed."
+              : effectiveMode === "signin"
                 ? "Sign in to see your orders and saved products."
                 : "Create an account to track your orders and keep a list of saved products."}
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs value={entryType} onValueChange={(v) => setEntryType(v as "customer" | "company")} className="w-full">
+        <Tabs
+          value={entryType}
+          onValueChange={(v) => {
+            setEntryType(v as "customer" | "company");
+            if (v === "company") setMode("signin");
+          }}
+          className="w-full"
+        >
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="customer">Customer</TabsTrigger>
             <TabsTrigger value="company">Company</TabsTrigger>
@@ -88,7 +111,7 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
         </Tabs>
 
         <form onSubmit={handleSubmit} className="space-y-4 py-4">
-          {mode === "register" ? (
+          {effectiveMode === "register" ? (
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="firstName">First Name</Label>
@@ -114,25 +137,31 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
               type="password"
               required
               minLength={5}
-              autoComplete={mode === "signin" ? "current-password" : "new-password"}
+              autoComplete={effectiveMode === "signin" ? "current-password" : "new-password"}
             />
           </div>
-          
+
           <Button type="submit" className="w-full" disabled={busy}>
             {busy ? <Loader2 className="size-4 animate-spin mr-2" /> : null}
-            {mode === "signin" ? "Sign In" : "Create Account"}
+            {effectiveMode === "signin" ? "Sign In" : "Create Account"}
           </Button>
         </form>
 
-        <div className="text-center text-sm text-muted-foreground mt-2">
-          <button
-            type="button"
-            className="text-primary hover:underline font-medium"
-            onClick={() => setMode(mode === "signin" ? "register" : "signin")}
-          >
-            {mode === "signin" ? "New here? Create an account" : "Already have an account? Sign in"}
-          </button>
-        </div>
+        {entryType === "company" ? (
+          <p className="text-center text-xs text-muted-foreground mt-2">
+            Need a business account? Contact OfficeNeed to have one set up for you.
+          </p>
+        ) : (
+          <div className="text-center text-sm text-muted-foreground mt-2">
+            <button
+              type="button"
+              className="text-primary hover:underline font-medium"
+              onClick={() => setMode(mode === "signin" ? "register" : "signin")}
+            >
+              {mode === "signin" ? "New here? Create an account" : "Already have an account? Sign in"}
+            </button>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );
