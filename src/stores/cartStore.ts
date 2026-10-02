@@ -3,6 +3,7 @@ import { persist, createJSONStorage } from "zustand/middleware";
 import { toast } from "sonner";
 import { storefrontApiRequest, type ShopifyProduct } from "@/lib/shopify";
 import { getCustomerToken } from "@/lib/customer";
+import { useB2BStore } from "@/stores/b2bStore";
 import { appendAttribution, getAttribution } from "@/lib/attribution";
 import { getCustomerCart, saveCustomerCart } from "@/lib/customer-cart.functions";
 import { trackAddToCart } from "@/lib/meta-pixel";
@@ -98,7 +99,7 @@ const CART_DISCOUNT_CODES_UPDATE_MUTATION = `
 const CART_BUYER_IDENTITY_UPDATE_MUTATION = `
   mutation cartBuyerIdentityUpdate($cartId: ID!, $buyerIdentity: CartBuyerIdentityInput!) {
     cartBuyerIdentityUpdate(cartId: $cartId, buyerIdentity: $buyerIdentity) {
-      cart { id checkoutUrl }
+      cart { ${FULL_CART_FIELDS} }
       userErrors { field message code }
     }
   }
@@ -198,10 +199,18 @@ function itemsFromRemote(cart: any): CartItem[] {
 }
 
 
-/** Build buyerIdentity from the signed-in Shopify customer, if any. */
-function currentBuyerIdentity(): { customerAccessToken: string; countryCode: string } | null {
+/** Build buyerIdentity from the signed-in Shopify customer, if any.
+ * companyLocationId comes ONLY from the server-resolved b2bStore (see
+ * src/lib/b2b.functions.ts) -- never from anything the browser supplies
+ * directly, so a B2C customer can never put a company location on their
+ * own cart by any client-side means. */
+function currentBuyerIdentity(): { customerAccessToken: string; countryCode: string; companyLocationId?: string } | null {
   const token = getCustomerToken();
-  return token ? { customerAccessToken: token, countryCode: "IN" } : null;
+  if (!token) return null;
+  const { companyLocationId } = useB2BStore.getState();
+  return companyLocationId
+    ? { customerAccessToken: token, countryCode: "IN", companyLocationId }
+    : { customerAccessToken: token, countryCode: "IN" };
 }
 
 function formatCheckoutUrl(checkoutUrl: string): string {
@@ -628,10 +637,17 @@ export const useCartStore = create<CartStore>()(
               console.error("Buyer identity update failed:", errors);
               return checkoutUrl;
             }
-            const url = data?.data?.cartBuyerIdentityUpdate?.cart?.checkoutUrl;
+            const updatedCart = data?.data?.cartBuyerIdentityUpdate?.cart;
+            const url = updatedCart?.checkoutUrl;
             if (!url) return checkoutUrl;
+            // Refresh cost/items now, not just checkoutUrl: attaching a
+            // companyLocationId can change Shopify's computed price for
+            // this cart, and the old behavior (only storing checkoutUrl)
+            // left the visible subtotal/total stale until the next
+            // syncCart() -- right before checkout is exactly the moment
+            // that staleness mattered most.
+            applyCart(updatedCart);
             const formatted = formatCheckoutUrl(url);
-            set({ checkoutUrl: formatted });
             return formatted;
           } catch (error) {
             console.error("Failed to attach customer to cart:", error);
@@ -673,7 +689,7 @@ export const useCartStore = create<CartStore>()(
                 }
                 storefrontApiRequest(CART_BUYER_IDENTITY_UPDATE_MUTATION, {
                   cartId: remoteId,
-                  buyerIdentity: { customerAccessToken: token, countryCode: "IN" },
+                  buyerIdentity: currentBuyerIdentity() ?? { customerAccessToken: token, countryCode: "IN" },
                 }).catch(() => {});
                 set({
                   cartId: remote.id,
@@ -691,7 +707,7 @@ export const useCartStore = create<CartStore>()(
               saveCustomerCart({ data: { token, cartId } }).catch(() => {});
               storefrontApiRequest(CART_BUYER_IDENTITY_UPDATE_MUTATION, {
                 cartId,
-                buyerIdentity: { customerAccessToken: token, countryCode: "IN" },
+                buyerIdentity: currentBuyerIdentity() ?? { customerAccessToken: token, countryCode: "IN" },
               }).catch(() => {});
             }
           } catch (error) {

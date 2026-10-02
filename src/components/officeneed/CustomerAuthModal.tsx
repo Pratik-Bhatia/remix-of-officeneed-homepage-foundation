@@ -11,12 +11,20 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { signInCustomer, registerCustomer } from "@/lib/customer";
 import { refreshSaves } from "@/lib/saves";
 import { useNavigate } from "@tanstack/react-router";
 
 export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const [mode, setMode] = useState<"signin" | "register">("signin");
+  // Purely a copy/title choice -- NEVER sent to Shopify, never read by
+  // signInCustomer/registerCustomer, never sets any pricing flag. Whether
+  // someone actually gets B2B pricing is determined entirely server-side
+  // after sign-in (see src/lib/b2b.functions.ts) from Shopify's real
+  // customer-company relationship -- picking "Company" here does not
+  // grant it.
+  const [entryType, setEntryType] = useState<"customer" | "company">("customer");
   const [busy, setBusy] = useState(false);
   const navigate = useNavigate();
 
@@ -56,14 +64,29 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{mode === "signin" ? "Sign in to your account" : "Create your account"}</DialogTitle>
+          <DialogTitle>
+            {entryType === "company"
+              ? mode === "signin" ? "Sign in to your business account" : "Create your business account"
+              : mode === "signin" ? "Sign in to your account" : "Create your account"}
+          </DialogTitle>
           <DialogDescription>
-            {mode === "signin"
-              ? "Sign in to see your orders and saved products."
-              : "Create an account to track your orders and keep a list of saved products."}
+            {entryType === "company"
+              ? mode === "signin"
+                ? "Sign in with your business email to see your orders and saved products."
+                : "Create a business account to track your orders and keep a list of saved products."
+              : mode === "signin"
+                ? "Sign in to see your orders and saved products."
+                : "Create an account to track your orders and keep a list of saved products."}
           </DialogDescription>
         </DialogHeader>
-        
+
+        <Tabs value={entryType} onValueChange={(v) => setEntryType(v as "customer" | "company")} className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="customer">Customer</TabsTrigger>
+            <TabsTrigger value="company">Company</TabsTrigger>
+          </TabsList>
+        </Tabs>
+
         <form onSubmit={handleSubmit} className="space-y-4 py-4">
           {mode === "register" ? (
             <div className="grid gap-4 sm:grid-cols-2">

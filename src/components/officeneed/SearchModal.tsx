@@ -9,6 +9,8 @@ import { cn } from "@/lib/utils";
 import { primaryNavCategories, navCategoryTarget, getLiveNavLabel } from "@/lib/navigation";
 
 import { useShopifyCatalogue, useShopifyCollections, shopifyCatalogueQueryOptions } from "@/lib/shopify-overlay";
+import { useBuyerContext } from "@/hooks/useBuyerContext";
+import { useB2BStore } from "@/stores/b2bStore";
 import { useQuery } from "@tanstack/react-query";
 import { searchProducts, getSearchSuggestion } from "@/lib/search";
 
@@ -54,7 +56,9 @@ export function SearchModal({ open, onOpenChange }: { open: boolean; onOpenChang
   }, [query]);
 
   // Read the query state from the same cache key used by useShopifyCatalogue
-  const { isLoading, isError } = useQuery(shopifyCatalogueQueryOptions);
+  const buyer = useBuyerContext();
+  const customerId = useB2BStore((s) => s.customerId);
+  const { isLoading, isError } = useQuery(shopifyCatalogueQueryOptions(buyer, customerId));
 
 
   useEffect(() => {

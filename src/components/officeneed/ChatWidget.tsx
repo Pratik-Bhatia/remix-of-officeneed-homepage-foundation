@@ -22,6 +22,8 @@ import {
 import { products as staticProducts } from "@/lib/products";
 import type { Product } from "@/lib/products";
 import { useShopifyCatalogue, useShopifyCollections, shopifyCatalogueQueryOptions } from "@/lib/shopify-overlay";
+import { useBuyerContext } from "@/hooks/useBuyerContext";
+import { useB2BStore } from "@/stores/b2bStore";
 import { getDisplayCategoryLabel, getOfficeGptContextCategory } from "@/lib/taxonomy";
 import { submitEnquiry } from "@/lib/enquiries.functions";
 import { rememberContactPhone } from "@/lib/contact-phone";
@@ -74,12 +76,14 @@ export function ChatWidget() {
   const [phase, setPhase] = useState<"qualification" | "refinement" | "enquiry" | "done" | "fragrance">("qualification");
   const catalogue = useShopifyCatalogue(staticProducts);
   const { collections } = useShopifyCollections();
+  const buyer = useBuyerContext();
+  const customerId = useB2BStore((s) => s.customerId);
   // Same query key as useShopifyCatalogue() above -- react-query dedupes
   // this to the shared cached request, no extra network call -- read here
   // only to know whether the catalogue is still loading or failed, so we
   // never present recommendations against an empty fallback catalogue as if
   // it were a real "no matches" result.
-  const { isLoading: catalogueLoading, isError: catalogueError } = useQuery(shopifyCatalogueQueryOptions);
+  const { isLoading: catalogueLoading, isError: catalogueError } = useQuery(shopifyCatalogueQueryOptions(buyer, customerId));
   /** Set right after qualification/refinement completes; resolved by the
    *  effect below once the catalogue has actually finished loading. */
   const [pendingRecommendation, setPendingRecommendation] = useState<{ answers: ChatAnswers; refinement?: string } | null>(null);

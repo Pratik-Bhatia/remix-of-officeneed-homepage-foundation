@@ -13,6 +13,7 @@ import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { Toaster } from "@/components/ui/sonner";
 import { useCartSync } from "@/hooks/useCartSync";
+import { useB2BSync } from "@/hooks/useB2BSync";
 import { ChatWidget } from "@/components/officeneed/ChatWidget";
 import { MetaPixel } from "@/components/officeneed/MetaPixel";
 import { META_PIXEL_ID } from "@/lib/meta-pixel";
@@ -137,6 +138,7 @@ function RootComponent() {
       <Outlet />
       <ChatWidget />
       <CartSync />
+      <B2BSync />
       <MetaPixel />
       <Toaster position="top-center" />
     </QueryClientProvider>
@@ -145,5 +147,10 @@ function RootComponent() {
 
 function CartSync() {
   useCartSync();
+  return null;
+}
+
+function B2BSync() {
+  useB2BSync();
   return null;
 }

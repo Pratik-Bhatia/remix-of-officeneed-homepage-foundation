@@ -13,7 +13,16 @@
  */
 import { createServerFn } from "@tanstack/react-start";
 
-const SHOPIFY_API_VERSION = "2025-07";
+// Verified live against this store on 2026-10-02: 2026-10 is Shopify's
+// current "Latest stable" Storefront API version. The previous value
+// (2025-07) was already "Unsupported" per Shopify's own versioning table --
+// confirmed live, Shopify was silently serving 2025-10 instead with an
+// x-shopify-api-version-warning header. Re-verify this date periodically
+// (shopify.dev/docs/api/usage/versioning) -- Shopify cuts a new stable
+// version every quarter. BuyerInput/CartBuyerIdentityInput/@inContext are
+// confirmed byte-identical between the old and new version, so this is a
+// pure version bump -- no query/behavior changes.
+const SHOPIFY_API_VERSION = "2026-10";
 const SHOPIFY_STORE_PERMANENT_DOMAIN = "har1k4-di.myshopify.com";
 const SHOPIFY_STOREFRONT_URL = `https://${SHOPIFY_STORE_PERMANENT_DOMAIN}/api/${SHOPIFY_API_VERSION}/graphql.json`;
 

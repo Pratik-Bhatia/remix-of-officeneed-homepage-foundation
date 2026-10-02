@@ -9,8 +9,16 @@ import { toast } from "sonner";
 import { proxyStorefrontRequest } from "@/lib/shopify.functions";
 import { REQUIRED_METAFIELD_IDENTIFIERS } from "@/lib/product-details-schema";
 
-export const SHOPIFY_API_VERSION = "2025-07";
+// Kept in sync with src/lib/shopify.functions.ts's SHOPIFY_API_VERSION --
+// see that file's comment for the live verification behind this value.
+export const SHOPIFY_API_VERSION = "2026-10";
 export const SHOPIFY_STORE_PERMANENT_DOMAIN = "har1k4-di.myshopify.com";
+
+/** The @inContext(buyer:...) argument -- when present on a query, Shopify
+ * returns that buyer's contextual (e.g. B2B catalog) pricing instead of
+ * the standard price. `companyLocationId` is resolved server-side only
+ * (see src/lib/b2b.functions.ts) -- never accept one from the browser. */
+export type BuyerContext = { customerAccessToken: string; companyLocationId?: string } | null | undefined;
 
 export interface ShopifyImage {
   id?: string | null;
@@ -117,6 +125,19 @@ export const STOREFRONT_QUERY = `
   }
 `;
 
+/** Identical to STOREFRONT_QUERY except for @inContext(buyer:...) -- used
+ * ONLY when a buyer context (customerAccessToken + optional
+ * companyLocationId) is actually known, so anonymous/B2C traffic keeps
+ * sending the exact unsuffixed query above, unchanged. */
+export const STOREFRONT_QUERY_BUYER = `
+  query GetProducts($first: Int!, $query: String, $after: String, $buyer: BuyerInput!) @inContext(buyer: $buyer) {
+    products(first: $first, query: $query, after: $after) {
+      edges { cursor node { ${PRODUCT_FIELDS} } }
+      pageInfo { hasNextPage }
+    }
+  }
+`;
+
 // Only the single-product PDP query fetches metafields -- the bulk catalogue
 // query (STOREFRONT_QUERY, used for the /products grid) deliberately doesn't,
 // since Product Details is only ever rendered on the PDP.
@@ -124,33 +145,29 @@ const METAFIELD_IDENTIFIERS_GQL = REQUIRED_METAFIELD_IDENTIFIERS
   .map((m) => `{namespace: "${m.namespace}", key: "${m.key}"}`)
   .join(", ");
 
-export const PRODUCT_BY_HANDLE_QUERY = `
-  query GetProduct($handle: String!) {
-    product(handle: $handle) {
-      ${PRODUCT_FIELDS}
-      metafields(identifiers: [${METAFIELD_IDENTIFIERS_GQL}]) {
-        namespace
-        key
-        value
-      }
-      giftSetComponents: metafield(namespace: "custom", key: "gift_set_components") {
-        references(first: 20) {
-          edges {
-            node {
-              ... on Metaobject {
-                id
-                fields {
-                  key
-                  value
-                  reference {
+const PRODUCT_BY_HANDLE_SELECTION = `
+  ${PRODUCT_FIELDS}
+  metafields(identifiers: [${METAFIELD_IDENTIFIERS_GQL}]) {
+    namespace
+    key
+    value
+  }
+  giftSetComponents: metafield(namespace: "custom", key: "gift_set_components") {
+    references(first: 20) {
+      edges {
+        node {
+          ... on Metaobject {
+            id
+            fields {
+              key
+              value
+              reference {
+                ... on MediaImage { image { url altText } }
+              }
+              references(first: 20) {
+                edges {
+                  node {
                     ... on MediaImage { image { url altText } }
-                  }
-                  references(first: 20) {
-                    edges {
-                      node {
-                        ... on MediaImage { image { url altText } }
-                      }
-                    }
                   }
                 }
               }
@@ -158,6 +175,25 @@ export const PRODUCT_BY_HANDLE_QUERY = `
           }
         }
       }
+    }
+  }
+`;
+
+export const PRODUCT_BY_HANDLE_QUERY = `
+  query GetProduct($handle: String!) {
+    product(handle: $handle) {
+      ${PRODUCT_BY_HANDLE_SELECTION}
+    }
+  }
+`;
+
+/** Identical to PRODUCT_BY_HANDLE_QUERY except for @inContext(buyer:...) --
+ * see STOREFRONT_QUERY_BUYER for why this stays a separate constant rather
+ * than making $buyer optional on the one query. */
+export const PRODUCT_BY_HANDLE_QUERY_BUYER = `
+  query GetProduct($handle: String!, $buyer: BuyerInput!) @inContext(buyer: $buyer) {
+    product(handle: $handle) {
+      ${PRODUCT_BY_HANDLE_SELECTION}
     }
   }
 `;
@@ -191,8 +227,10 @@ export async function storefrontApiRequest(query: string, variables: Record<stri
 }
 
 
-export async function fetchProducts(first = 100, query?: string): Promise<ShopifyProduct[]> {
-  const data = await storefrontApiRequest(STOREFRONT_QUERY, { first, query: query ?? null, after: null });
+export async function fetchProducts(first = 100, query?: string, buyer?: BuyerContext): Promise<ShopifyProduct[]> {
+  const variables: Record<string, unknown> = { first, query: query ?? null, after: null };
+  if (buyer) variables["buyer"] = buyer;
+  const data = await storefrontApiRequest(buyer ? STOREFRONT_QUERY_BUYER : STOREFRONT_QUERY, variables);
   return data?.data?.products?.edges ?? [];
 }
 
@@ -208,13 +246,15 @@ export async function fetchProducts(first = 100, query?: string): Promise<Shopif
  * every product has been fetched, so the site's catalogue always matches
  * Shopify's real count regardless of how large the store grows.
  */
-export async function fetchAllProducts(query?: string): Promise<ShopifyProduct[]> {
+export async function fetchAllProducts(query?: string, buyer?: BuyerContext): Promise<ShopifyProduct[]> {
   const all: ShopifyProduct[] = [];
   let after: string | null = null;
   // Sanity cap (40 * 250 = 10,000 products) so a pagination/API bug can
   // never spin forever rather than reflecting an unrealistic catalogue size.
   for (let page = 0; page < 40; page++) {
-    const data = await storefrontApiRequest(STOREFRONT_QUERY, { first: 250, query: query ?? null, after });
+    const variables: Record<string, unknown> = { first: 250, query: query ?? null, after };
+    if (buyer) variables["buyer"] = buyer;
+    const data = await storefrontApiRequest(buyer ? STOREFRONT_QUERY_BUYER : STOREFRONT_QUERY, variables);
     const products = data?.data?.products;
     const edges: Array<{ cursor: string; node: ShopifyProductNode }> = products?.edges ?? [];
     if (edges.length === 0) break;
@@ -225,8 +265,10 @@ export async function fetchAllProducts(query?: string): Promise<ShopifyProduct[]
   return all;
 }
 
-export async function fetchProductByHandle(handle: string): Promise<ShopifyProductNode | null> {
-  const data = await storefrontApiRequest(PRODUCT_BY_HANDLE_QUERY, { handle });
+export async function fetchProductByHandle(handle: string, buyer?: BuyerContext): Promise<ShopifyProductNode | null> {
+  const variables: Record<string, unknown> = { handle };
+  if (buyer) variables["buyer"] = buyer;
+  const data = await storefrontApiRequest(buyer ? PRODUCT_BY_HANDLE_QUERY_BUYER : PRODUCT_BY_HANDLE_QUERY, variables);
   return data?.data?.product ?? null;
 }
 
@@ -273,6 +315,7 @@ export async function fetchRelatedProducts(
   productType: string,
   collectionHandles: string[],
   limit = 4,
+  buyer?: BuyerContext,
 ): Promise<ShopifyProductNode[]> {
   const results: ShopifyProductNode[] = [];
   const seen = new Set<string>([currentHandle]);
@@ -287,9 +330,20 @@ export async function fetchRelatedProducts(
         }
       }
     `;
+    const COLLECTION_QUERY_BUYER = `
+      query GetCollectionProducts($handle: String!, $first: Int!, $buyer: BuyerInput!) @inContext(buyer: $buyer) {
+        collection(handle: $handle) {
+          products(first: $first) {
+            edges { node { ${RELATED_PRODUCTS_FIELDS} } }
+          }
+        }
+      }
+    `;
     for (const handle of collectionHandles.slice(0, 2)) {
       try {
-        const data = await storefrontApiRequest(COLLECTION_QUERY, { handle, first: limit + 2 });
+        const variables: Record<string, unknown> = { handle, first: limit + 2 };
+        if (buyer) variables["buyer"] = buyer;
+        const data = await storefrontApiRequest(buyer ? COLLECTION_QUERY_BUYER : COLLECTION_QUERY, variables);
         const edges = data?.data?.collection?.products?.edges ?? [];
         for (const edge of edges) {
           const node = edge.node;
@@ -313,7 +367,19 @@ export async function fetchRelatedProducts(
           }
         }
       `;
-      const data = await storefrontApiRequest(STOREFRONT_RELATED_QUERY, { first: limit + 4, query: typeQuery });
+      const STOREFRONT_RELATED_QUERY_BUYER = `
+        query GetProducts($first: Int!, $query: String, $buyer: BuyerInput!) @inContext(buyer: $buyer) {
+          products(first: $first, query: $query) {
+            edges { node { ${RELATED_PRODUCTS_FIELDS} } }
+          }
+        }
+      `;
+      const relatedVariables: Record<string, unknown> = { first: limit + 4, query: typeQuery };
+      if (buyer) relatedVariables["buyer"] = buyer;
+      const data = await storefrontApiRequest(
+        buyer ? STOREFRONT_RELATED_QUERY_BUYER : STOREFRONT_RELATED_QUERY,
+        relatedVariables,
+      );
       const edges = data?.data?.products?.edges ?? [];
       for (const edge of edges) {
         const node = edge.node;

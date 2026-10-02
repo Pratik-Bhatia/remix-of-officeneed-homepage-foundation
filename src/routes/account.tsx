@@ -1,16 +1,26 @@
 import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Package, Heart, Settings, LogOut } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { Package, Heart, Settings, LogOut, Building2 } from "lucide-react";
 import { toast } from "sonner";
 import { Navbar } from "@/components/officeneed/Navbar";
 import { Footer } from "@/components/officeneed/Footer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useCustomer, signInCustomer, registerCustomer, signOutCustomer } from "@/lib/customer";
 import { CustomerContext } from "@/lib/customer-context";
 import { clearSaves, refreshSaves } from "@/lib/saves";
 import { cn } from "@/lib/utils";
+import { useB2BStore } from "@/stores/b2bStore";
 
 export const Route = createFileRoute("/account")({
   head: () => ({
@@ -35,6 +45,10 @@ const navItems = [
 
 function SignInPanel({ onDone }: { onDone: () => Promise<void> }) {
   const [mode, setMode] = useState<"signin" | "register">("signin");
+  // Purely a copy/title choice -- see CustomerAuthModal.tsx's identical
+  // field for why this never reaches Shopify and never grants B2B pricing
+  // by itself.
+  const [entryType, setEntryType] = useState<"customer" | "company">("customer");
   const [busy, setBusy] = useState(false);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -68,13 +82,26 @@ function SignInPanel({ onDone }: { onDone: () => Promise<void> }) {
   return (
     <div className="mx-auto w-full max-w-md rounded-2xl border border-border p-6 sm:p-8">
       <h2 className="text-lg font-medium text-foreground">
-        {mode === "signin" ? "Sign in to your account" : "Create your account"}
+        {entryType === "company"
+          ? mode === "signin" ? "Sign in to your business account" : "Create your business account"
+          : mode === "signin" ? "Sign in to your account" : "Create your account"}
       </h2>
       <p className="mt-2 text-sm text-muted-foreground">
-        {mode === "signin"
-          ? "Use the email and password from your Officeneed store account to see your orders and saved products."
-          : "Create an account to track your orders and keep a list of saved products."}
+        {entryType === "company"
+          ? mode === "signin"
+            ? "Use your business email and password to see your orders and saved products."
+            : "Create a business account to track your orders and keep a list of saved products."
+          : mode === "signin"
+            ? "Use the email and password from your Officeneed store account to see your orders and saved products."
+            : "Create an account to track your orders and keep a list of saved products."}
       </p>
+
+      <Tabs value={entryType} onValueChange={(v) => setEntryType(v as "customer" | "company")} className="mt-5 w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="customer">Customer</TabsTrigger>
+          <TabsTrigger value="company">Company</TabsTrigger>
+        </TabsList>
+      </Tabs>
 
       <form onSubmit={handleSubmit} className="mt-6 space-y-4">
         {mode === "register" ? (
@@ -132,6 +159,79 @@ function SignInPanel({ onDone }: { onDone: () => Promise<void> }) {
   );
 }
 
+/** Read-only business-account indicator, plus the location picker when the
+ * signed-in customer is assigned to more than one company location.
+ * Purely informational -- status/locations/companyLocationId all come
+ * from the server-resolved b2bStore (see src/lib/b2b.functions.ts),
+ * never anything client-controlled. */
+function B2BAccountStatus() {
+  const b2bStatus = useB2BStore((s) => s.status);
+  const locations = useB2BStore((s) => s.locations);
+  const companyLocationId = useB2BStore((s) => s.companyLocationId);
+  const selectLocation = useB2BStore((s) => s.selectLocation);
+  const queryClient = useQueryClient();
+
+  if (b2bStatus !== "b2b" && b2bStatus !== "needs-location") return null;
+
+  return (
+    <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-border bg-muted/30 px-4 py-3 text-sm">
+      <Building2 className="size-4 shrink-0 text-muted-foreground" />
+      {b2bStatus === "needs-location" ? (
+        <>
+          <span className="text-muted-foreground">Select your business location to see your company pricing:</span>
+          <Select
+            onValueChange={(id) => {
+              selectLocation(id);
+              queryClient.invalidateQueries({ queryKey: ["shopify"] });
+            }}
+          >
+            <SelectTrigger className="h-8 w-auto min-w-[180px] rounded-lg">
+              <SelectValue placeholder="Choose a location" />
+            </SelectTrigger>
+            <SelectContent>
+              {locations.map((loc) => (
+                <SelectItem key={loc.id} value={loc.id}>
+                  {loc.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </>
+      ) : (
+        <span className="text-foreground">
+          Business account
+          {locations.length > 1 ? (
+            <>
+              {" "}
+              —{" "}
+              <Select
+                {...(companyLocationId ? { value: companyLocationId } : {})}
+                onValueChange={(id) => {
+                  selectLocation(id);
+                  queryClient.invalidateQueries({ queryKey: ["shopify"] });
+                }}
+              >
+                <SelectTrigger className="inline-flex h-7 w-auto min-w-[160px] rounded-lg">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {locations.map((loc) => (
+                    <SelectItem key={loc.id} value={loc.id}>
+                      {loc.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </>
+          ) : (
+            <span className="text-muted-foreground"> — {locations[0]?.name}</span>
+          )}
+        </span>
+      )}
+    </div>
+  );
+}
+
 function AccountLayout() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { customer, token, status, reload } = useCustomer();
@@ -167,6 +267,8 @@ function AccountLayout() {
             </Button>
           ) : null}
         </header>
+
+        {status === "in" ? <B2BAccountStatus /> : null}
 
         {status === "checking" ? (
           <div className="rounded-2xl border border-border p-10 text-center text-sm text-muted-foreground">

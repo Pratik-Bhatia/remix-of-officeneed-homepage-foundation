@@ -8,7 +8,9 @@
  * present in Shopify falls back to the existing static data.
  */
 import { useQuery } from "@tanstack/react-query";
-import { fetchProducts, fetchAllProducts, fetchCollections, formatMoney, type ShopifyProductNode, type ShopifyCollectionNode } from "@/lib/shopify";
+import { fetchProducts, fetchAllProducts, fetchCollections, formatMoney, type ShopifyProductNode, type ShopifyCollectionNode, type BuyerContext } from "@/lib/shopify";
+import { useBuyerContext } from "@/hooks/useBuyerContext";
+import { useB2BStore } from "@/stores/b2bStore";
 import type { Product } from "@/lib/products";
 import { MAIN_CATEGORIES, productBelongsToCategory, resolveSubcategoryFromHandles, type MainCategory } from "@/lib/taxonomy";
 import { deriveFilterAttributes } from "@/lib/filters";
@@ -453,22 +455,91 @@ export function shopifyNodeToProduct(node: ShopifyProductNode): Product {
 }
 
 /**
+ * Fast, synchronous, non-cryptographic string hash (FNV-1a, 32-bit, hex
+ * output). NOT used as a security boundary -- only as a brief transitional
+ * stand-in for the real customer GID (see buyerCacheConfig below) so the
+ * bearer token itself never has to appear in a React Query cache key even
+ * for the short window before resolveB2BSession's response (which carries
+ * the real GID) comes back. Good enough for that narrow purpose: low
+ * collision odds for the handful of concurrently-signed-in sessions this
+ * is ever comparing against, non-reversible to recover the input, and
+ * synchronous (unlike SubtleCrypto.digest) so it fits this hook's existing
+ * synchronous render contract without an extra async render pass.
+ */
+function fnv1aHex(input: string): string {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < input.length; i++) {
+    hash ^= input.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
+/**
+ * Shopify's own B2B headless guidance (shopify.dev/docs/storefronts/
+ * headless/bring-your-own-stack/b2b): "B2B queries contextualized with
+ * customerAccessToken and companyLocationId return personalized pricing
+ * and product data. If you cache these responses, other users could see
+ * another customer's B2B pricing. Make sure to disable caching on routes
+ * that return buyer-specific data." That is explicit: caching must be
+ * disabled for buyer-contextualized responses, full stop -- NOT merely
+ * scoped/shared by companyLocationId. Two different customers must never
+ * share a cache entry just because they resolved to the same company
+ * location, regardless of whether today's field selection happens to be
+ * identical for both of them. This function is the single place that
+ * decides the query key AND the cache lifetime together, so neither can
+ * drift out of sync with the other.
+ *
+ * The cache-key identity is `customerId` (the resolved Shopify customer
+ * GID from b2bStore, via resolveB2BSession -- an opaque, non-secret
+ * identifier) when known, falling back to a one-way hash of the bearer
+ * token (never the raw token itself) only for the brief window right
+ * after sign-in before that resolution has completed. The actual
+ * `customerAccessToken` is still passed to the Shopify fetch functions
+ * separately (via `buyer`) -- it's only kept out of the CACHE KEY, which
+ * is what React Query DevTools/debugging surfaces.
+ *
+ * Anonymous/plain-B2C (buyer === null) queries are UNAFFECTED -- they
+ * carry no personalized data, so the existing 5-minute staleTime for
+ * catalog/bestsellers stays exactly as it was.
+ */
+function buyerCacheConfig(
+  buyer: BuyerContext,
+  customerId: string | null,
+): { queryKeySuffix: string; staleTime: number; gcTime: number } {
+  if (!buyer) return { queryKeySuffix: "anon", staleTime: 5 * 60 * 1000, gcTime: 5 * 60 * 1000 };
+  const identity = customerId ?? `pending-${fnv1aHex(buyer.customerAccessToken)}`;
+  // Zero cache lifetime regardless: the query is effectively refetched
+  // every time it's used, and nothing persists for another render/mount/
+  // customer to ever read back -- the identity above only prevents two
+  // DIFFERENT customers' in-flight/observer-shared entries from colliding
+  // within that same instant, it isn't relied on for longer-lived sharing.
+  return { queryKeySuffix: identity, staleTime: 0, gcTime: 0 };
+}
+
+/**
  * Full catalogue: live Shopify products first, with any static product that has
  * no Shopify equivalent kept as a fallback. If Shopify is unavailable, the
  * static catalogue is returned untouched.
  */
-export const shopifyCatalogueQueryOptions = {
-  queryKey: ["shopify", "catalog"] as const,
-  queryFn: async () => {
-    const edges = await fetchAllProducts();
-    return edges.map((e) => e.node);
-  },
-  staleTime: 5 * 60 * 1000,
-  retry: 1,
-};
+export function shopifyCatalogueQueryOptions(buyer: BuyerContext, customerId: string | null) {
+  const { queryKeySuffix, staleTime, gcTime } = buyerCacheConfig(buyer, customerId);
+  return {
+    queryKey: ["shopify", "catalog", queryKeySuffix] as const,
+    queryFn: async () => {
+      const edges = await fetchAllProducts(undefined, buyer);
+      return edges.map((e) => e.node);
+    },
+    staleTime,
+    gcTime,
+    retry: 1,
+  };
+}
 
 export function useShopifyCatalogue(staticProducts: Product[]) {
-  const { data } = useQuery(shopifyCatalogueQueryOptions);
+  const buyer = useBuyerContext();
+  const customerId = useB2BStore((s) => s.customerId);
+  const { data } = useQuery(shopifyCatalogueQueryOptions(buyer, customerId));
 
 
   const nodes = data ?? [];
@@ -494,13 +565,17 @@ export function useShopifyCatalogue(staticProducts: Product[]) {
  * identical between the two.
  */
 export function useShopifyBestsellers(staticItems: Product[] = []): Product[] {
+  const buyer = useBuyerContext();
+  const customerId = useB2BStore((s) => s.customerId);
+  const { queryKeySuffix, staleTime, gcTime } = buyerCacheConfig(buyer, customerId);
   const { data } = useQuery({
-    queryKey: ["shopify", "bestsellers"],
+    queryKey: ["shopify", "bestsellers", queryKeySuffix],
     queryFn: async () => {
-      const edges = await fetchProducts(50);
+      const edges = await fetchProducts(50, undefined, buyer);
       return edges.map((e) => e.node);
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime,
+    gcTime,
     retry: 1,
   });
 

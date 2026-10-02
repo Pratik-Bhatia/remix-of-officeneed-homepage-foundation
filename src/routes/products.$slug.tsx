@@ -13,10 +13,14 @@ import { RichText } from "@/components/officeneed/RichText";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { getProductBySlug, getRelatedProducts } from "@/lib/products";
-import { fetchProductByHandle, fetchRelatedProducts, formatMoney, type ShopifyVariantNode } from "@/lib/shopify";
+import { fetchProductByHandle, fetchRelatedProducts, formatMoney, type ShopifyVariantNode, type BuyerContext } from "@/lib/shopify";
 import { mergeProduct, shopifyNodeToProduct, useShopifyCollections } from "@/lib/shopify-overlay";
 import { TAXONOMY, resolveLiveTitle } from "@/lib/taxonomy";
 import { useCartStore } from "@/stores/cartStore";
+import { useB2BStore } from "@/stores/b2bStore";
+import { getCustomerToken } from "@/lib/customer";
+import { createServerOnlyFn } from "@tanstack/react-start";
+import { setResponseHeader } from "@tanstack/react-start/server";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useProductBrowseAbandon } from "@/hooks/useProductBrowseAbandon";
@@ -31,15 +35,59 @@ function findVariant<T extends { id: string }>(variants: T[], param?: string): T
   return variants.find((v) => numericId(v.id) === target);
 }
 
+// createServerOnlyFn tree-shakes this (and its @tanstack/react-start/server
+// import) out of the client bundle entirely -- this file is a universal
+// route module that also ships to the browser, and that import is
+// otherwise build-rejected there (TanStack Start's import-protection
+// plugin). Calling the stub client-side would throw, which is fine: the
+// loader below only calls it when typeof window === "undefined" anyway.
+//
+// Defense-in-depth: if this loader ever renders buyer-aware data into an
+// actual server response (today it never does -- the customer token is
+// localStorage-only, so SSR always has buyer=null; this only matters if
+// auth ever becomes cookie/session-based), mark that response uncacheable
+// so a future CDN/edge cache rule for /products/** can never serve one
+// buyer's price to another. No live leak exists today (no such cache rule
+// is configured), this purely guards against one being added later
+// without this route being reconsidered.
+const setPrivateCacheHeader = createServerOnlyFn(() => {
+  setResponseHeader("Cache-Control", "private, no-store");
+});
+
 export const Route = createFileRoute("/products/$slug")({
   validateSearch: (search: Record<string, unknown>): { variant?: string } =>
     search["variant"] != null && String(search["variant"]) !== "" ? { variant: String(search["variant"]) } : {},
   loader: async ({ params }) => {
     const staticProduct = getProductBySlug(params.slug);
 
+    // getCustomerToken() returns null during SSR (no window/localStorage
+    // there) -- the first server-rendered response always uses anonymous
+    // pricing, which is correct and safe. On a client-side navigation, a
+    // signed-in buyer's token is available here.
+    const token = getCustomerToken();
+    let buyer: BuyerContext = null;
+    if (token) {
+      // Idempotent: resolve() no-ops if already resolved for this exact
+      // token (see src/stores/b2bStore.ts), so this is cheap on repeat
+      // navigations.
+      await useB2BStore.getState().resolve(token);
+      const { companyLocationId } = useB2BStore.getState();
+      buyer = companyLocationId ? { customerAccessToken: token, companyLocationId } : { customerAccessToken: token };
+    }
+
+    // See setPrivateCacheHeader's own comment above for why this matters
+    // and why it's gated + wrapped this way.
+    if (buyer && typeof window === "undefined") {
+      try {
+        setPrivateCacheHeader();
+      } catch {
+        // Never let a best-effort cache-safety header break the page.
+      }
+    }
+
     let node = null;
     try {
-      node = await fetchProductByHandle(params.slug);
+      node = await fetchProductByHandle(params.slug, buyer);
     } catch {
       node = null;
     }
@@ -56,7 +104,7 @@ export const Route = createFileRoute("/products/$slug")({
     if (node) {
       try {
         const collectionHandles = node.collections?.edges.map((e: any) => e.node.handle) ?? [];
-        const relatedNodes = await fetchRelatedProducts(node.handle, node.productType, collectionHandles, 4);
+        const relatedNodes = await fetchRelatedProducts(node.handle, node.productType, collectionHandles, 4, buyer);
         related = relatedNodes.map(shopifyNodeToProduct);
       } catch (e) {
         console.error("Failed to fetch related", e);
