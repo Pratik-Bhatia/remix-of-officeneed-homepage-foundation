@@ -13,17 +13,23 @@
  */
 import { createServerFn } from "@tanstack/react-start";
 import { resolveCustomerId } from "@/lib/saves.server";
+import { isValidGstin, normalizeGstin } from "@/lib/gst";
 
 export const saveBusinessRegistration = createServerFn({ method: "POST" })
-  .inputValidator((input: { token: string; companyName: string; gstNumber?: string }) => {
+  .inputValidator((input: { token: string; companyName: string; gstNumber: string }) => {
     if (!input?.token || typeof input.token !== "string") {
       throw new Error("Missing session token.");
     }
     const companyName = input.companyName?.trim();
     if (!companyName) throw new Error("Company name is required.");
     if (companyName.length > 200) throw new Error("Company name is too long.");
-    const gstNumber = input.gstNumber?.trim() || undefined;
-    if (gstNumber && gstNumber.length > 30) throw new Error("GST number is too long.");
+    // Required and format-validated server-side too -- the UI already
+    // blocks submission on a missing/invalid GSTIN, but never trust that
+    // alone (a client could call this function directly).
+    const gstNumberRaw = input.gstNumber?.trim() ?? "";
+    if (!gstNumberRaw) throw new Error("GST number is required.");
+    if (!isValidGstin(gstNumberRaw)) throw new Error("GST number is not a valid GSTIN.");
+    const gstNumber = normalizeGstin(gstNumberRaw);
     return { token: input.token, companyName, gstNumber };
   })
   .handler(async ({ data }): Promise<{ ok: true }> => {
@@ -34,7 +40,7 @@ export const saveBusinessRegistration = createServerFn({ method: "POST" })
     const { error } = await supabaseAdmin
       .from("business_account_requests")
       .upsert(
-        { shopify_customer_id: customerId, company_name: data.companyName, gst_number: data.gstNumber ?? null },
+        { shopify_customer_id: customerId, company_name: data.companyName, gst_number: data.gstNumber },
         { onConflict: "shopify_customer_id" },
       );
     if (error) throw new Error(error.message);

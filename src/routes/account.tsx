@@ -23,6 +23,7 @@ import { CustomerContext } from "@/lib/customer-context";
 import { clearSaves, refreshSaves } from "@/lib/saves";
 import { cn } from "@/lib/utils";
 import { useB2BStore } from "@/stores/b2bStore";
+import { isValidGstin } from "@/lib/gst";
 
 export const Route = createFileRoute("/account")({
   head: () => ({
@@ -53,6 +54,11 @@ function SignInPanel({ onDone }: { onDone: () => Promise<void> }) {
   // name/GST intake record; it never grants B2B pricing by itself.
   const [entryType, setEntryType] = useState<"customer" | "company">("customer");
   const [busy, setBusy] = useState(false);
+  // Inline, field-level -- not a generic toast -- per the GST requirement.
+  // Re-validated (and cleared) on every submit attempt, not on every
+  // keystroke, so the error doesn't flicker while the shopper is still
+  // mid-typing their GSTIN.
+  const [gstError, setGstError] = useState<string | null>(null);
   const isCompanyRegister = entryType === "company" && mode === "register";
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -60,6 +66,20 @@ function SignInPanel({ onDone }: { onDone: () => Promise<void> }) {
     const form = new FormData(event.currentTarget);
     const email = String(form.get("email") ?? "").trim();
     const password = String(form.get("password") ?? "");
+    setGstError(null);
+
+    if (isCompanyRegister) {
+      const gstNumberRaw = String(form.get("gstNumber") ?? "").trim();
+      if (!gstNumberRaw) {
+        setGstError("GST number is required.");
+        return;
+      }
+      if (!isValidGstin(gstNumberRaw)) {
+        setGstError("Enter a valid 15-character GSTIN (e.g. 22AAAAA0000A1Z5).");
+        return;
+      }
+    }
+
     setBusy(true);
     try {
       if (mode === "signin") {
@@ -82,7 +102,7 @@ function SignInPanel({ onDone }: { onDone: () => Promise<void> }) {
         const token = getCustomerToken();
         if (token) {
           try {
-            await saveBusinessRegistration({ data: { token, companyName, ...(gstNumber ? { gstNumber } : {}) } });
+            await saveBusinessRegistration({ data: { token, companyName, gstNumber } });
           } catch (saveErr) {
             console.error("Failed to save business registration details:", saveErr);
             toast.warning("Account created, but we couldn't save your company details. Please contact OfficeNeed.");
@@ -186,7 +206,7 @@ function SignInPanel({ onDone }: { onDone: () => Promise<void> }) {
             <Label htmlFor="phone" className="text-xs font-medium tracking-wide text-muted-foreground">
               Phone Number
             </Label>
-            <Input id="phone" name="phone" type="tel" className="rounded-xl" autoComplete="tel" placeholder="+91 98765 43210" />
+            <Input id="phone" name="phone" type="tel" required className="rounded-xl" autoComplete="tel" placeholder="+91 98765 43210" />
           </div>
         ) : null}
 
@@ -195,7 +215,17 @@ function SignInPanel({ onDone }: { onDone: () => Promise<void> }) {
             <Label htmlFor="gstNumber" className="text-xs font-medium tracking-wide text-muted-foreground">
               GST Number
             </Label>
-            <Input id="gstNumber" name="gstNumber" className="rounded-xl" autoComplete="off" placeholder="22AAAAA0000A1Z5" />
+            <Input
+              id="gstNumber"
+              name="gstNumber"
+              required
+              className="rounded-xl"
+              autoComplete="off"
+              placeholder="22AAAAA0000A1Z5"
+              aria-invalid={gstError ? true : undefined}
+              onChange={() => { if (gstError) setGstError(null); }}
+            />
+            {gstError ? <p className="text-sm text-destructive">{gstError}</p> : null}
           </div>
         ) : null}
 

@@ -17,9 +17,15 @@ import { saveBusinessRegistration } from "@/lib/business-registration.functions"
 import { refreshSaves } from "@/lib/saves";
 import { useNavigate } from "@tanstack/react-router";
 import { splitFullName } from "@/lib/name-utils";
+import { isValidGstin } from "@/lib/gst";
 
 export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const [mode, setMode] = useState<"signin" | "register">("signin");
+  // Inline, field-level -- not a generic toast -- per the GST requirement.
+  // Re-validated (and cleared) on every submit attempt, not on every
+  // keystroke, so the error doesn't flicker while the shopper is still
+  // mid-typing their GSTIN.
+  const [gstError, setGstError] = useState<string | null>(null);
   // Which tab is selected is PURELY a UI entry point -- it is NEVER sent to
   // Shopify, never read by signInCustomer/registerCustomer, and never sets
   // any pricing flag. Whether someone actually gets B2B pricing is
@@ -40,8 +46,21 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
     const form = new FormData(event.currentTarget);
     const email = String(form.get("email") ?? "").trim();
     const password = String(form.get("password") ?? "");
-    setBusy(true);
+    setGstError(null);
 
+    if (entryType === "company" && mode === "register") {
+      const gstNumberRaw = String(form.get("gstNumber") ?? "").trim();
+      if (!gstNumberRaw) {
+        setGstError("GST number is required.");
+        return;
+      }
+      if (!isValidGstin(gstNumberRaw)) {
+        setGstError("Enter a valid 15-character GSTIN (e.g. 22AAAAA0000A1Z5).");
+        return;
+      }
+    }
+
+    setBusy(true);
     try {
       if (mode === "signin") {
         await signInCustomer(email, password);
@@ -64,10 +83,13 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
         // The Shopify customer is already created and signed in at this
         // point -- a failure saving the company/GST intake record is
         // secondary and must not look like the whole registration failed.
+        // (GST itself was already required + format-validated above, so
+        // this call failing now would be a transient/infra issue, not a
+        // bad value -- still surfaced, never silently dropped.)
         const token = getCustomerToken();
         if (token) {
           try {
-            await saveBusinessRegistration({ data: { token, companyName, ...(gstNumber ? { gstNumber } : {}) } });
+            await saveBusinessRegistration({ data: { token, companyName, gstNumber } });
           } catch (saveErr) {
             console.error("Failed to save business registration details:", saveErr);
             toast.warning("Account created, but we couldn't save your company details. Please contact OfficeNeed.");
@@ -169,14 +191,23 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
           {isCompanyRegister ? (
             <div className="space-y-2">
               <Label htmlFor="phone">Phone Number</Label>
-              <Input id="phone" name="phone" type="tel" autoComplete="tel" placeholder="+91 98765 43210" />
+              <Input id="phone" name="phone" type="tel" required autoComplete="tel" placeholder="+91 98765 43210" />
             </div>
           ) : null}
 
           {isCompanyRegister ? (
             <div className="space-y-2">
               <Label htmlFor="gstNumber">GST Number</Label>
-              <Input id="gstNumber" name="gstNumber" autoComplete="off" placeholder="22AAAAA0000A1Z5" />
+              <Input
+                id="gstNumber"
+                name="gstNumber"
+                required
+                autoComplete="off"
+                placeholder="22AAAAA0000A1Z5"
+                aria-invalid={gstError ? true : undefined}
+                onChange={() => { if (gstError) setGstError(null); }}
+              />
+              {gstError ? <p className="text-sm text-destructive">{gstError}</p> : null}
             </div>
           ) : null}
 

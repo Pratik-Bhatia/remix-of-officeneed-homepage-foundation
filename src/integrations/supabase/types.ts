@@ -18,7 +18,7 @@ export type Database = {
         Row: {
           company_name: string
           created_at: string
-          gst_number: string | null
+          gst_number: string
           id: string
           shopify_customer_id: string
           updated_at: string
@@ -26,7 +26,7 @@ export type Database = {
         Insert: {
           company_name: string
           created_at?: string
-          gst_number?: string | null
+          gst_number: string
           id?: string
           shopify_customer_id: string
           updated_at?: string
@@ -34,7 +34,7 @@ export type Database = {
         Update: {
           company_name?: string
           created_at?: string
-          gst_number?: string | null
+          gst_number?: string
           id?: string
           shopify_customer_id?: string
           updated_at?: string
