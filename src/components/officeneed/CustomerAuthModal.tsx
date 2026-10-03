@@ -271,187 +271,215 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
   };
 
   const isCompanyRegister = entryType === "company" && mode === "register";
+  // Remount the form whenever the mode/tab changes so no field value
+  // (notably email/password) is carried between Sign in, Customer
+  // register and Company register -- same-position inputs were
+  // otherwise reused by React and kept their typed/autofilled values.
+  const formKey = `${entryType}-${mode}`;
+
+  const sectionLabel = (text: string) => (
+    <div className="flex items-center gap-3 pt-2">
+      <span className="text-[0.7rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">{text}</span>
+      <span className="h-px flex-1 bg-border" />
+    </div>
+  );
+
+  const passwordField = mode === "forgot" ? null : (
+    <div className="space-y-2">
+      <Label htmlFor="password">Password</Label>
+      <PasswordInput
+        id="password"
+        name="password"
+        required
+        minLength={5}
+        defaultValue=""
+        autoComplete={mode === "signin" ? "current-password" : "new-password"}
+      />
+      {mode === "signin" ? (
+        <div className="text-right">
+          <button
+            type="button"
+            className="text-sm text-primary hover:underline"
+            onClick={() => {
+              setRecoverySent(false);
+              setMode("forgot");
+            }}
+          >
+            Forgot your password?
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>
-            {mode === "forgot"
-              ? "Reset your password"
-              : entryType === "company"
-                ? mode === "signin" ? "Sign in to your business account" : "Create your business account"
-                : mode === "signin" ? "Sign in to your account" : "Create your account"}
-          </DialogTitle>
-          <DialogDescription>
-            {mode === "forgot"
-              ? recoverySent
-                ? "Check your email for the next step."
-                : "Enter your email and we'll send you a link to reset your password."
-              : entryType === "company"
-                ? mode === "signin"
-                  ? "Sign in with your business email to see your orders and saved products."
-                  : "Register your business. B2B pricing is enabled separately once OfficeNeed sets up your company account in Shopify."
-                : mode === "signin"
-                  ? "Sign in to see your orders and saved products."
-                  : "Create an account to track your orders and keep a list of saved products."}
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent
+        className={
+          "flex max-h-[calc(100dvh-1.5rem)] w-[calc(100vw-1.5rem)] flex-col gap-0 overflow-hidden p-0 " +
+          (isCompanyRegister ? "sm:max-w-[580px]" : "sm:max-w-md")
+        }
+      >
+        <div className="shrink-0 space-y-4 px-5 pb-4 pt-6 sm:px-6">
+          <DialogHeader>
+            <DialogTitle>
+              {mode === "forgot"
+                ? "Reset your password"
+                : entryType === "company"
+                  ? mode === "signin" ? "Sign in to your business account" : "Create your business account"
+                  : mode === "signin" ? "Sign in to your account" : "Create your account"}
+            </DialogTitle>
+            <DialogDescription>
+              {mode === "forgot"
+                ? recoverySent
+                  ? "Check your email for the next step."
+                  : "Enter your email and we'll send you a link to reset your password."
+                : entryType === "company"
+                  ? mode === "signin"
+                    ? "Sign in with your business email to see your orders and saved products."
+                    : "Register your business. B2B pricing is enabled separately once OfficeNeed sets up your company account in Shopify."
+                  : mode === "signin"
+                    ? "Sign in to see your orders and saved products."
+                    : "Create an account to track your orders and keep a list of saved products."}
+            </DialogDescription>
+          </DialogHeader>
 
-        {mode === "forgot" ? null : (
-          <Tabs
-            value={entryType}
-            onValueChange={(v) => {
-              setEntryType(v as "customer" | "company");
-              setMode("signin");
-              setGstError(null);
-            }}
-            className="w-full"
-          >
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="customer">Customer</TabsTrigger>
-              <TabsTrigger value="company">Company</TabsTrigger>
-            </TabsList>
-          </Tabs>
-        )}
+          {mode === "forgot" ? null : (
+            <Tabs
+              value={entryType}
+              onValueChange={(v) => {
+                setEntryType(v as "customer" | "company");
+                setMode("signin");
+                setGstError(null);
+              }}
+              className="w-full"
+            >
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="customer">Customer</TabsTrigger>
+                <TabsTrigger value="company">Company</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          )}
+        </div>
 
         {mode === "forgot" && recoverySent ? (
-          <p className="py-4 text-sm text-foreground">
+          <p className="px-5 py-4 text-sm text-foreground sm:px-6">
             We've sent a password reset link if an account exists for this email.
           </p>
         ) : (
-          <form onSubmit={handleSubmit} className="space-y-4 py-4">
-            {isCompanyRegister ? (
-              <>
-                <div className="space-y-2">
-                  <Label htmlFor="fullName">Full Name</Label>
-                  <Input id="fullName" name="fullName" autoComplete="name" required />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="companyName">Company Name</Label>
-                  <Input id="companyName" name="companyName" autoComplete="organization" required />
-                </div>
-              </>
-            ) : mode === "register" ? (
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="firstName">First Name</Label>
-                  <Input id="firstName" name="firstName" autoComplete="given-name" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="lastName">Last Name</Label>
-                  <Input id="lastName" name="lastName" autoComplete="family-name" />
-                </div>
-              </div>
-            ) : null}
+          <form key={formKey} onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col" autoComplete="on">
+            <div
+              className={
+                "min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-5 pb-4 sm:px-6 " +
+                (isCompanyRegister ? "border-t border-border pt-4" : "pt-1")
+              }
+              data-scrollable="true"
+            >
+              {isCompanyRegister ? (
+                <>
+                  {sectionLabel("Business information")}
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="fullName">Full Name</Label>
+                      <Input id="fullName" name="fullName" autoComplete="name" required />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="companyName">Company Name</Label>
+                      <Input id="companyName" name="companyName" autoComplete="organization" required />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="email">Email</Label>
+                      <Input id="email" name="email" type="email" required autoComplete="email" defaultValue="" placeholder="you@company.com" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="phone">Phone Number</Label>
+                      <Input id="phone" name="phone" type="tel" required autoComplete="tel" placeholder="+91 98765 43210" />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="gstNumber">GST Number</Label>
+                    <Input
+                      id="gstNumber"
+                      name="gstNumber"
+                      required
+                      autoComplete="off"
+                      placeholder="22AAAAA0000A1Z5"
+                      aria-invalid={gstError ? true : undefined}
+                      onChange={() => { if (gstError) setGstError(null); }}
+                    />
+                    {gstError ? <p className="text-sm text-destructive">{gstError}</p> : null}
+                  </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input id="email" name="email" type="email" required autoComplete="email" placeholder="you@example.com" />
+                  {sectionLabel("Business address")}
+                  <div className="space-y-2">
+                    <Label htmlFor="addressLine1">Address Line 1</Label>
+                    <Input id="addressLine1" name="addressLine1" required autoComplete="address-line1" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="addressLine2">Address Line 2 (optional)</Label>
+                    <Input id="addressLine2" name="addressLine2" autoComplete="address-line2" />
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="city">City</Label>
+                      <Input id="city" name="city" required autoComplete="address-level2" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="state">State</Label>
+                      <Input id="state" name="state" required autoComplete="address-level1" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="pin">PIN / Postal Code</Label>
+                      <Input id="pin" name="pin" required autoComplete="postal-code" inputMode="numeric" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="country">Country</Label>
+                      <Input id="country" name="country" required autoComplete="country-name" defaultValue="India" />
+                    </div>
+                  </div>
+
+                  {sectionLabel("Account security")}
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    {passwordField}
+                    <div className="space-y-2">
+                      <Label htmlFor="confirmPassword">Confirm Password</Label>
+                      <PasswordInput id="confirmPassword" name="confirmPassword" required minLength={5} defaultValue="" autoComplete="new-password" />
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {mode === "register" ? (
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="firstName">First Name</Label>
+                        <Input id="firstName" name="firstName" autoComplete="given-name" />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="lastName">Last Name</Label>
+                        <Input id="lastName" name="lastName" autoComplete="family-name" />
+                      </div>
+                    </div>
+                  ) : null}
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email</Label>
+                    <Input id="email" name="email" type="email" required autoComplete={mode === "signin" ? "username" : "email"} defaultValue="" placeholder="you@example.com" />
+                  </div>
+                  {passwordField}
+                </>
+              )}
             </div>
 
-            {isCompanyRegister ? (
-              <div className="space-y-2">
-                <Label htmlFor="phone">Phone Number</Label>
-                <Input id="phone" name="phone" type="tel" required autoComplete="tel" placeholder="+91 98765 43210" />
-              </div>
-            ) : null}
-
-            {isCompanyRegister ? (
-              <div className="space-y-2">
-                <Label htmlFor="gstNumber">GST Number</Label>
-                <Input
-                  id="gstNumber"
-                  name="gstNumber"
-                  required
-                  autoComplete="off"
-                  placeholder="22AAAAA0000A1Z5"
-                  aria-invalid={gstError ? true : undefined}
-                  onChange={() => { if (gstError) setGstError(null); }}
-                />
-                {gstError ? <p className="text-sm text-destructive">{gstError}</p> : null}
-              </div>
-            ) : null}
-
-            {isCompanyRegister ? (
-              <>
-                <div className="space-y-2">
-                  <Label htmlFor="addressLine1">Address Line 1</Label>
-                  <Input id="addressLine1" name="addressLine1" required autoComplete="address-line1" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="addressLine2">Address Line 2 (optional)</Label>
-                  <Input id="addressLine2" name="addressLine2" autoComplete="address-line2" />
-                </div>
-                <div className="grid gap-4 sm:grid-cols-3">
-                  <div className="space-y-2">
-                    <Label htmlFor="city">City</Label>
-                    <Input id="city" name="city" required autoComplete="address-level2" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="state">State</Label>
-                    <Input id="state" name="state" required autoComplete="address-level1" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="pin">PIN / Postal Code</Label>
-                    <Input id="pin" name="pin" required autoComplete="postal-code" />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="country">Country</Label>
-                  <Input id="country" name="country" required autoComplete="country-name" defaultValue="India" />
-                </div>
-              </>
-            ) : null}
-
-            {mode === "forgot" ? null : (
-              <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
-                <PasswordInput
-                  id="password"
-                  name="password"
-                  required
-                  minLength={5}
-                  autoComplete={mode === "signin" ? "current-password" : "new-password"}
-                />
-                {mode === "signin" ? (
-                  <div className="text-right">
-                    <button
-                      type="button"
-                      className="text-sm text-primary hover:underline"
-                      onClick={() => {
-                        setRecoverySent(false);
-                        setMode("forgot");
-                      }}
-                    >
-                      Forgot your password?
-                    </button>
-                  </div>
-                ) : null}
-              </div>
-            )}
-
-            {isCompanyRegister ? (
-              <div className="space-y-2">
-                <Label htmlFor="confirmPassword">Confirm Password</Label>
-                <PasswordInput
-                  id="confirmPassword"
-                  name="confirmPassword"
-                  required
-                  minLength={5}
-                  autoComplete="new-password"
-                />
-              </div>
-            ) : null}
-
-            <Button type="submit" className="w-full" disabled={busy}>
-              {busy ? <Loader2 className="size-4 animate-spin mr-2" /> : null}
-              {mode === "forgot" ? "Send Reset Link" : mode === "signin" ? "Sign In" : isCompanyRegister ? "Create Business Account" : "Create Account"}
-            </Button>
+            <div className={"shrink-0 px-5 pb-5 pt-3 sm:px-6 " + (isCompanyRegister ? "border-t border-border bg-background" : "")}>
+              <Button type="submit" className="w-full" disabled={busy}>
+                {busy ? <Loader2 className="size-4 animate-spin mr-2" /> : null}
+                {mode === "forgot" ? "Send Reset Link" : mode === "signin" ? "Sign In" : isCompanyRegister ? "Create Business Account" : "Create Account"}
+              </Button>
+            </div>
           </form>
         )}
 
-        <div className="text-center text-sm text-muted-foreground mt-2">
+        <div className="shrink-0 px-5 pb-5 text-center text-sm text-muted-foreground sm:px-6">
           <button
             type="button"
             className="text-primary hover:underline font-medium"
