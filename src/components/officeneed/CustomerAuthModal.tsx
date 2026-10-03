@@ -51,6 +51,10 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
   // -- it does NOT itself grant B2B pricing or create a Shopify Company.
   const [entryType, setEntryType] = useState<"customer" | "company">("customer");
   const [busy, setBusy] = useState(false);
+  // Opened while already signed in = a B2C customer upgrading their OWN
+  // account to business (from the account page). Identity comes only from
+  // the existing session token, so no email/password fields are shown.
+  const [upgrade, setUpgrade] = useState(false);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
@@ -79,8 +83,10 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
   const wasOpen = useRef(open);
   useEffect(() => {
     if (open && !wasOpen.current) {
-      setMode("signin");
-      setEntryType("customer");
+      const signedIn = !!getCustomerToken();
+      setUpgrade(signedIn);
+      setMode(signedIn ? "register" : "signin");
+      setEntryType(signedIn ? "company" : "customer");
       setGstError(null);
       setRecoverySent(false);
     }
@@ -122,7 +128,7 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
     // icon only open it when status === "out") -- but never silently
     // reuse/overwrite an existing session's data for a second
     // registration if this is ever reached anyway.
-    if (mode === "register" && getCustomerToken()) {
+    if (mode === "register" && getCustomerToken() && !upgrade) {
       toast.error("You're already signed in. Please sign out first to create a different account.");
       return;
     }
@@ -167,7 +173,7 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
         }
       } else if (entryType === "company") {
         const confirmPassword = String(form.get("confirmPassword") ?? "");
-        if (password !== confirmPassword) throw new Error("Passwords don't match.");
+        if (!upgrade && password !== confirmPassword) throw new Error("Passwords don't match.");
         const fullName = String(form.get("fullName") ?? "").trim();
         const companyName = String(form.get("companyName") ?? "").trim();
         const phone = String(form.get("phone") ?? "").trim();
@@ -179,13 +185,15 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
         const pin = String(form.get("pin") ?? "").trim();
         const country = String(form.get("country") ?? "").trim();
         const { firstName, lastName } = splitFullName(fullName);
-        await registerCustomer({
-          email,
-          password,
-          ...(firstName ? { firstName } : {}),
-          ...(lastName ? { lastName } : {}),
-          ...(phone ? { phone } : {}),
-        });
+        if (!upgrade) {
+          await registerCustomer({
+            email,
+            password,
+            ...(firstName ? { firstName } : {}),
+            ...(lastName ? { lastName } : {}),
+            ...(phone ? { phone } : {}),
+          });
+        }
         // The Shopify customer is already created and signed in at this
         // point -- a failure saving the company/GST intake record is
         // secondary and must not look like the whole registration failed.
@@ -364,7 +372,7 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
             </DialogDescription>
           </DialogHeader>
 
-          {mode === "forgot" ? null : (
+          {mode === "forgot" || upgrade ? null : (
             <Tabs
               value={entryType}
               onValueChange={(v) => {
@@ -407,10 +415,12 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
                       <Label htmlFor="companyName">Company Name</Label>
                       <Input id="companyName" name="companyName" autoComplete="organization" required />
                     </div>
+                    {upgrade ? null : (
                     <div className="space-y-2">
                       <Label htmlFor="email">Email</Label>
                       <Input id="email" name="email" type="email" required autoComplete="email" defaultValue="" placeholder="you@company.com" {...noAutofill} />
                     </div>
+                    )}
                     <div className="space-y-2">
                       <Label htmlFor="phone">Phone Number</Label>
                       <Input id="phone" name="phone" type="tel" required autoComplete="tel" defaultValue="+91 " placeholder="+91 98765 43210" />
@@ -458,6 +468,7 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
                     </div>
                   </div>
 
+                  {upgrade ? null : (<>
                   {sectionLabel("Account security")}
                   <div className="grid gap-4 sm:grid-cols-2">
                     {passwordField}
@@ -466,6 +477,7 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
                       <PasswordInput id="confirmPassword" name="confirmPassword" required minLength={5} defaultValue="" autoComplete="new-password" {...noAutofill} />
                     </div>
                   </div>
+                  </>)}
                 </>
               ) : (
                 <>
@@ -499,6 +511,7 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
           </form>
         )}
 
+        {upgrade ? null : (
         <div className="shrink-0 px-5 pb-5 text-center text-sm text-muted-foreground sm:px-6">
           <button
             type="button"
@@ -520,6 +533,7 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
                 : "Already have an account? Sign in"}
           </button>
         </div>
+        )}
       </DialogContent>
     </Dialog>
   );
