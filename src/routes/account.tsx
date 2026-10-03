@@ -7,6 +7,7 @@ import { Navbar } from "@/components/officeneed/Navbar";
 import { Footer } from "@/components/officeneed/Footer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -84,6 +85,19 @@ function SignInPanel({ onDone }: { onDone: () => Promise<void> }) {
     try {
       if (mode === "signin") {
         await signInCustomer(email, password);
+        // See CustomerAuthModal.tsx's identical check for the full
+        // reasoning -- signing in via the Company tab never grants B2B
+        // pricing by itself; this only surfaces whether this customer
+        // actually has a real Shopify company/location relationship.
+        if (entryType === "company") {
+          const signedInToken = getCustomerToken();
+          if (signedInToken) await useB2BStore.getState().resolve(signedInToken);
+          if (useB2BStore.getState().status === "b2c") {
+            toast.warning(
+              "Your account is not currently linked to a business account. Please contact OfficeNeed to complete your business setup.",
+            );
+          }
+        }
       } else if (isCompanyRegister) {
         const confirmPassword = String(form.get("confirmPassword") ?? "");
         if (password !== confirmPassword) throw new Error("Passwords don't match.");
@@ -124,7 +138,12 @@ function SignInPanel({ onDone }: { onDone: () => Promise<void> }) {
       if (error instanceof CustomerAuthError && error.code === "TAKEN") {
         setMode("signin");
       }
-      toast.error(error instanceof Error ? error.message : "Something went wrong. Please try again.");
+      if (mode === "signin" && !(error instanceof CustomerAuthError)) {
+        console.error("Sign-in failed:", error);
+        toast.error("We couldn't sign you in right now. Please try again in a moment.");
+      } else {
+        toast.error(error instanceof Error ? error.message : "Something went wrong. Please try again.");
+      }
     } finally {
       setBusy(false);
     }
@@ -233,10 +252,9 @@ function SignInPanel({ onDone }: { onDone: () => Promise<void> }) {
           <Label htmlFor="password" className="text-xs font-medium tracking-wide text-muted-foreground">
             Password
           </Label>
-          <Input
+          <PasswordInput
             id="password"
             name="password"
-            type="password"
             required
             minLength={5}
             className="rounded-xl"
@@ -249,10 +267,9 @@ function SignInPanel({ onDone }: { onDone: () => Promise<void> }) {
             <Label htmlFor="confirmPassword" className="text-xs font-medium tracking-wide text-muted-foreground">
               Confirm Password
             </Label>
-            <Input
+            <PasswordInput
               id="confirmPassword"
               name="confirmPassword"
-              type="password"
               required
               minLength={5}
               className="rounded-xl"

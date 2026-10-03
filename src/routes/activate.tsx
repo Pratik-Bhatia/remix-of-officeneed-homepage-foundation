@@ -4,7 +4,7 @@ import { Loader2 } from "lucide-react";
 import { Navbar } from "@/components/officeneed/Navbar";
 import { Footer } from "@/components/officeneed/Footer";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { activateCustomer } from "@/lib/customer";
 import { refreshSaves } from "@/lib/saves";
@@ -104,10 +104,9 @@ function ActivatePage() {
                 <Label htmlFor="password" className="text-xs font-medium tracking-wide text-muted-foreground">
                   New Password
                 </Label>
-                <Input
+                <PasswordInput
                   id="password"
                   name="password"
-                  type="password"
                   required
                   minLength={5}
                   className="rounded-xl"
@@ -121,10 +120,9 @@ function ActivatePage() {
                 <Label htmlFor="confirmPassword" className="text-xs font-medium tracking-wide text-muted-foreground">
                   Confirm Password
                 </Label>
-                <Input
+                <PasswordInput
                   id="confirmPassword"
                   name="confirmPassword"
-                  type="password"
                   required
                   minLength={5}
                   className="rounded-xl"

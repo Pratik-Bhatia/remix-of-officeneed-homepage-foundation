@@ -250,6 +250,32 @@ export class CustomerAuthError extends Error {
   }
 }
 
+/**
+ * Maps customerAccessTokenCreate's customerUserErrors to shopper-facing
+ * text -- never Shopify's own wording (e.g. the literal message for
+ * UNIDENTIFIED_CUSTOMER is "Unidentified customer.", confirmed live via
+ * Storefront API schema introspection on this store, 2026-10).
+ *
+ * UNIDENTIFIED_CUSTOMER is deliberately Shopify's ONE code for both "wrong
+ * password" and "no account with this email" -- it does not distinguish
+ * them (this prevents account-enumeration: an attacker probing emails
+ * would otherwise learn which ones exist). There is no other Storefront
+ * API signal that safely tells the two apart, so both get the same
+ * message rather than guessing/inventing a distinction Shopify doesn't
+ * actually provide.
+ */
+function signInErrorMessage(code: string | null): string {
+  switch (code) {
+    case "CUSTOMER_DISABLED":
+      return "Your account hasn't been activated yet. Please check your email for the activation link.";
+    default:
+      // UNIDENTIFIED_CUSTOMER and every other validation code
+      // (BLANK/INVALID/TOO_SHORT/etc., or no code at all) all land here --
+      // the one message that's true regardless of which was actually hit.
+      return "Incorrect email or password. Please check your credentials and try again.";
+  }
+}
+
 export async function signInCustomer(email: string, password: string): Promise<void> {
   const resp = await storefrontApiRequest(
     `mutation Login($input: CustomerAccessTokenCreateInput!) {
@@ -268,13 +294,8 @@ export async function signInCustomer(email: string, password: string): Promise<v
   }).customerAccessTokenCreate;
   if (!result.customerAccessToken) {
     const err = result.customerUserErrors[0];
-    if (err?.code === "CUSTOMER_DISABLED") {
-      throw new CustomerAuthError(
-        "This account hasn't been activated yet. Check your email for the activation link from OfficeNeed.",
-        err.code,
-      );
-    }
-    throw new CustomerAuthError(err?.message ?? "Incorrect email or password.", err?.code ?? null);
+    const code = err?.code ?? null;
+    throw new CustomerAuthError(signInErrorMessage(code), code);
   }
   setCustomerToken(result.customerAccessToken);
 }

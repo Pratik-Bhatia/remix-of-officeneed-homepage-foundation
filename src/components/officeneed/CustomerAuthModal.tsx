@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { signInCustomer, registerCustomer, getCustomerToken, CustomerAuthError } from "@/lib/customer";
@@ -18,6 +19,7 @@ import { refreshSaves } from "@/lib/saves";
 import { useNavigate } from "@tanstack/react-router";
 import { splitFullName } from "@/lib/name-utils";
 import { isValidGstin } from "@/lib/gst";
+import { useB2BStore } from "@/stores/b2bStore";
 
 export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const [mode, setMode] = useState<"signin" | "register">("signin");
@@ -64,7 +66,28 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
     try {
       if (mode === "signin") {
         await signInCustomer(email, password);
-        toast.success("Successfully logged in");
+        // Signing in via the Company tab never grants B2B pricing by
+        // itself (see the comment on entryType above) -- but if this
+        // signed-in customer genuinely has no Shopify company/location
+        // relationship, say so plainly instead of a silent "Successfully
+        // logged in" that implies they got business pricing when they
+        // didn't. B2B eligibility is still resolved exclusively from
+        // Shopify's real Customer -> Company Contact -> Role Assignment ->
+        // Company Location chain (src/lib/b2b.functions.ts) -- this only
+        // reads that result, never grants anything itself.
+        if (entryType === "company") {
+          const signedInToken = getCustomerToken();
+          if (signedInToken) await useB2BStore.getState().resolve(signedInToken);
+          if (useB2BStore.getState().status === "b2c") {
+            toast.warning(
+              "Your account is not currently linked to a business account. Please contact OfficeNeed to complete your business setup.",
+            );
+          } else {
+            toast.success("Successfully logged in");
+          }
+        } else {
+          toast.success("Successfully logged in");
+        }
       } else if (entryType === "company") {
         const confirmPassword = String(form.get("confirmPassword") ?? "");
         if (password !== confirmPassword) throw new Error("Passwords don't match.");
@@ -116,7 +139,15 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
       if (error instanceof CustomerAuthError && error.code === "TAKEN") {
         setMode("signin");
       }
-      toast.error(error instanceof Error ? error.message : "Something went wrong. Please try again.");
+      if (mode === "signin" && !(error instanceof CustomerAuthError)) {
+        // Not a Shopify-identified auth failure (those are already mapped
+        // to friendly text in signInCustomer) -- a network/proxy/infra
+        // failure instead. Never show its raw message.
+        console.error("Sign-in failed:", error);
+        toast.error("We couldn't sign you in right now. Please try again in a moment.");
+      } else {
+        toast.error(error instanceof Error ? error.message : "Something went wrong. Please try again.");
+      }
     } finally {
       setBusy(false);
     }
@@ -213,10 +244,9 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
 
           <div className="space-y-2">
             <Label htmlFor="password">Password</Label>
-            <Input
+            <PasswordInput
               id="password"
               name="password"
-              type="password"
               required
               minLength={5}
               autoComplete={mode === "signin" ? "current-password" : "new-password"}
@@ -226,10 +256,9 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
           {isCompanyRegister ? (
             <div className="space-y-2">
               <Label htmlFor="confirmPassword">Confirm Password</Label>
-              <Input
+              <PasswordInput
                 id="confirmPassword"
                 name="confirmPassword"
-                type="password"
                 required
                 minLength={5}
                 autoComplete="new-password"
