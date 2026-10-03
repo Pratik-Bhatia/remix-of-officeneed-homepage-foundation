@@ -471,9 +471,10 @@ export const setupB2BCompany = createServerFn({ method: "POST" })
         } catch (e) {
           console.error("[B2B setup] Failed to record pending review request:", e);
         }
-        console.warn("[B2B setup] GST matched an existing company; join held for manual review.");
+        console.warn(`[B2B setup] branch=existing-pending customer=${customerId} gst=${data.gstNumber} company=${existing.id}`);
         return { status: "pending_review" };
       }
+      console.log(`[B2B setup] branch=existing-member customer=${customerId} gst=${data.gstNumber} company=${existing.id}`);
       companyId = existing.id;
       orderingOnlyRoleId = resolveOrderingOnlyRoleId(existing.contactRoles);
       const existingLocation = existing.locations.edges[0]?.node ?? null;
@@ -528,6 +529,7 @@ export const setupB2BCompany = createServerFn({ method: "POST" })
         await assignCompanyLocationAddress(companyLocationId, data.address, data.contactName, data.phone, "COMPANY_LOCATION_CREATE_FAILED");
       }
     } else {
+      console.log(`[B2B setup] branch=create customer=${customerId} gst=${data.gstNumber}`);
       const createResult = await adminGraphQLRequest<{
         companyCreate: { company: CompanyRef | null; userErrors: Array<{ message: string; field: string[] | null }> };
       }>(COMPANY_CREATE_MUTATION, {
