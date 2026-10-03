@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/select";
 import { useCustomer, signInCustomer, registerCustomer, requestPasswordRecovery, signOutCustomer, getCustomerToken, CustomerAuthError } from "@/lib/customer";
 import { saveBusinessRegistration } from "@/lib/business-registration.functions";
+import { setupB2BCompany } from "@/lib/b2b-company-setup.functions";
 import { splitFullName } from "@/lib/name-utils";
 import { CustomerContext } from "@/lib/customer-context";
 import { clearSaves, refreshSaves } from "@/lib/saves";
@@ -48,6 +49,7 @@ const navItems = [
 ] as const;
 
 function SignInPanel({ onDone }: { onDone: () => Promise<void> }) {
+  const queryClient = useQueryClient();
   const [mode, setMode] = useState<"signin" | "register" | "forgot">("signin");
   // See CustomerAuthModal.tsx's identical field for the full reasoning.
   const [recoverySent, setRecoverySent] = useState(false);
@@ -146,6 +148,24 @@ function SignInPanel({ onDone }: { onDone: () => Promise<void> }) {
           } catch (saveErr) {
             console.error("Failed to save business registration details:", saveErr);
             toast.warning("Account created, but we couldn't save your company details. Please contact OfficeNeed.");
+          }
+        }
+
+        // Automatic Shopify B2B setup -- see CustomerAuthModal.tsx's
+        // identical block and src/lib/b2b-company-setup.functions.ts for
+        // the full mutation chain and failure-safety reasoning.
+        if (token) {
+          try {
+            await setupB2BCompany({ data: { customerAccessToken: token, companyName, gstNumber } });
+            useB2BStore.getState().reset();
+            await useB2BStore.getState().resolve(token);
+            queryClient.invalidateQueries({ queryKey: ["shopify"] });
+            toast.success("Your business account has been created successfully.");
+          } catch (b2bErr) {
+            console.error("[B2B setup] Automatic company setup failed:", b2bErr);
+            toast.error(
+              "Your account was created, but we couldn't finish setting up your business pricing automatically. Please contact OfficeNeed so we can complete this for you.",
+            );
           }
         }
       } else {

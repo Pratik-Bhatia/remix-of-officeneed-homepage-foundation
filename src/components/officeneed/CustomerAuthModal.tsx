@@ -15,8 +15,10 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { signInCustomer, registerCustomer, requestPasswordRecovery, getCustomerToken, CustomerAuthError } from "@/lib/customer";
 import { saveBusinessRegistration } from "@/lib/business-registration.functions";
+import { setupB2BCompany } from "@/lib/b2b-company-setup.functions";
 import { refreshSaves } from "@/lib/saves";
 import { useNavigate } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { splitFullName } from "@/lib/name-utils";
 import { isValidGstin } from "@/lib/gst";
 import { useB2BStore } from "@/stores/b2bStore";
@@ -47,6 +49,7 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
   const [entryType, setEntryType] = useState<"customer" | "company">("customer");
   const [busy, setBusy] = useState(false);
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   // ROOT CAUSE of stale mode/tab/error state surviving a close+reopen:
   // Navbar.tsx renders <CustomerAuthModal open={authOpen} .../> unconditionally
@@ -189,7 +192,35 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
             toast.warning("Account created, but we couldn't save your company details. Please contact OfficeNeed.");
           }
         }
-        toast.success("Account created successfully");
+
+        // Automatic Shopify B2B setup -- the actual thing that makes
+        // Corporate Pricing available, not just an intake record (see
+        // src/lib/b2b-company-setup.functions.ts for the full mutation
+        // chain). "Business account created" is only ever shown once this
+        // genuinely succeeds -- a failure here must never look like B2B
+        // is active when it isn't.
+        if (token) {
+          try {
+            await setupB2BCompany({ data: { customerAccessToken: token, companyName, gstNumber } });
+            // The existing B2BSync-driven resolve() for this exact token
+            // already ran (and found no company) the moment signInCustomer
+            // fired officeneed-customer-token above -- resolve() no-ops on
+            // a repeat call for the same token (see b2bStore.ts), so this
+            // store must be reset first to force a genuinely fresh lookup
+            // against the relationship that was *just* created.
+            useB2BStore.getState().reset();
+            await useB2BStore.getState().resolve(token);
+            queryClient.invalidateQueries({ queryKey: ["shopify"] });
+            toast.success("Your business account has been created successfully.");
+          } catch (b2bErr) {
+            console.error("[B2B setup] Automatic company setup failed:", b2bErr);
+            toast.error(
+              "Your account was created, but we couldn't finish setting up your business pricing automatically. Please contact OfficeNeed so we can complete this for you.",
+            );
+          }
+        } else {
+          toast.success("Account created successfully");
+        }
       } else {
         const firstName = String(form.get("firstName") ?? "").trim();
         const lastName = String(form.get("lastName") ?? "").trim();
