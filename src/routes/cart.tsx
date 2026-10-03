@@ -3,12 +3,15 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { ShoppingBag, Loader2 } from "lucide-react";
 import { Navbar } from "@/components/officeneed/Navbar";
 import { Footer } from "@/components/officeneed/Footer";
+import { toast } from "sonner";
 import { useCartStore } from "@/stores/cartStore";
+import { useB2BStore } from "@/stores/b2bStore";
 import { trackInitiateCheckout } from "@/lib/meta-pixel";
 import { formatMoney } from "@/lib/shopify";
 import { CartLineItem } from "@/components/officeneed/CartLineItem";
 import { CartProfileLinks } from "@/components/officeneed/CartProfileLinks";
 import { DiscountCodeInput } from "@/components/officeneed/DiscountCodeInput";
+import { B2BDeliveryAddress } from "@/components/officeneed/B2BDeliveryAddress";
 
 export const Route = createFileRoute("/cart")({
   head: () => ({
@@ -35,6 +38,8 @@ function CartPage() {
   const updateQuantity = useCartStore((s) => s.updateQuantity);
   const removeItem = useCartStore((s) => s.removeItem);
   const prepareCheckout = useCartStore((s) => s.prepareCheckout);
+  const deliveryAddress = useCartStore((s) => s.deliveryAddress);
+  const b2bStatus = useB2BStore((s) => s.status);
   const [preparing, setPreparing] = useState(false);
 
   const cost = useCartStore((s) => s.cost);
@@ -48,6 +53,12 @@ function CartPage() {
   const discount = Math.max(0, totalPrice - subtotal);
 
   const handleCheckout = async () => {
+    // B2B buyers must choose where this order ships before checkout -- the
+    // Company Location's registered address is never used as a fallback.
+    if (b2bStatus === "b2b" && !deliveryAddress) {
+      toast.error("Please add a delivery address for this order first.");
+      return;
+    }
     // Open the tab synchronously so popup blockers allow it, then point it
     // at the checkout URL once the signed-in customer is attached.
     const win = window.open("", "_blank");
@@ -111,7 +122,9 @@ function CartPage() {
                 </Link>
               </div>
 
-              <div className="w-full shrink-0 lg:w-80">
+              <div className="w-full shrink-0 lg:w-80 space-y-6">
+                {b2bStatus === "b2b" ? <B2BDeliveryAddress /> : null}
+
                 <div className="rounded-2xl border border-border p-6 space-y-5">
                   <DiscountCodeInput />
                   <div className="flex items-center justify-between">
@@ -128,14 +141,14 @@ function CartPage() {
                   ) : null}
                   <button
                     onClick={handleCheckout}
-                    disabled={isLoading || isSyncing || preparing}
+                    disabled={isLoading || isSyncing || preparing || (b2bStatus === "b2b" && !deliveryAddress)}
                     className="flex w-full items-center justify-center gap-2 rounded-full bg-foreground py-3.5 text-[15px] font-medium text-background transition-colors hover:bg-foreground/90 disabled:opacity-50"
                   >
                     {isLoading || isSyncing || preparing ? <Loader2 className="size-4 animate-spin" /> : "Checkout"}
                   </button>
                 </div>
 
-                <div className="mt-8 border-t border-border pt-8">
+                <div className="border-t border-border pt-8">
                   <CartProfileLinks />
                 </div>
               </div>

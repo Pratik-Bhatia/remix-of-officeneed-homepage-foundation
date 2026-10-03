@@ -8,7 +8,7 @@ const CUSTOMER_TOKEN_EVENT = "officeneed-customer-token";
 
 /** Lightweight reactive read of just the token (no customer profile/orders
  * fetch -- unlike useCustomer(), safe to call from many components at once). */
-function useReactiveCustomerToken(): string | null {
+export function useReactiveCustomerToken(): string | null {
   const [token, setToken] = useState<string | null>(() => getCustomerToken());
   useEffect(() => {
     const sync = () => setToken(getCustomerToken());

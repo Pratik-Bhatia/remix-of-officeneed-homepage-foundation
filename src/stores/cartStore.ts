@@ -28,6 +28,54 @@ export interface CartCost {
   total: { amount: string; currencyCode: string } | null;
 }
 
+/** A one-time delivery address set on the cart for this order only (via
+ * cartDeliveryAddressesReplace) -- independent of the B2B Company
+ * Location's registered business address, which this never reads from or
+ * writes to. See B2BDeliveryAddress.tsx for the UI that collects this. */
+export interface CartDeliveryAddress {
+  firstName: string | null;
+  lastName: string | null;
+  address1: string | null;
+  address2: string | null;
+  city: string | null;
+  provinceCode: string | null;
+  zip: string | null;
+  phone: string | null;
+}
+
+export interface DeliveryAddressInput {
+  firstName: string;
+  lastName: string;
+  address1: string;
+  address2?: string;
+  city: string;
+  province: string;
+  zip: string;
+  phone?: string;
+}
+
+const DELIVERY_FIELDS = `
+  delivery {
+    addresses {
+      selected
+      oneTimeUse
+      address {
+        __typename
+        ... on CartDeliveryAddress {
+          firstName
+          lastName
+          address1
+          address2
+          city
+          provinceCode
+          zip
+          phone
+        }
+      }
+    }
+  }
+`;
+
 const FULL_CART_FIELDS = `
   id
   checkoutUrl
@@ -37,6 +85,7 @@ const FULL_CART_FIELDS = `
     subtotalAmount { amount currencyCode }
     totalAmount { amount currencyCode }
   }
+  ${DELIVERY_FIELDS}
   lines(first: 100) {
     edges {
       node {
@@ -99,6 +148,15 @@ const CART_DISCOUNT_CODES_UPDATE_MUTATION = `
 const CART_BUYER_IDENTITY_UPDATE_MUTATION = `
   mutation cartBuyerIdentityUpdate($cartId: ID!, $buyerIdentity: CartBuyerIdentityInput!) {
     cartBuyerIdentityUpdate(cartId: $cartId, buyerIdentity: $buyerIdentity) {
+      cart { ${FULL_CART_FIELDS} }
+      userErrors { field message code }
+    }
+  }
+`;
+
+const CART_DELIVERY_ADDRESSES_REPLACE_MUTATION = `
+  mutation cartDeliveryAddressesReplace($cartId: ID!, $addresses: [CartSelectableAddressInput!]!) {
+    cartDeliveryAddressesReplace(cartId: $cartId, addresses: $addresses) {
       cart { ${FULL_CART_FIELDS} }
       userErrors { field message code }
     }
@@ -296,6 +354,23 @@ function extractCost(cart: any): CartCost {
   };
 }
 
+function extractDeliveryAddress(cart: any): CartDeliveryAddress | null {
+  const addresses = cart?.delivery?.addresses ?? [];
+  const selected = addresses.find((a: any) => a?.selected && a?.address?.__typename === "CartDeliveryAddress");
+  if (!selected) return null;
+  const a = selected.address;
+  return {
+    firstName: a.firstName ?? null,
+    lastName: a.lastName ?? null,
+    address1: a.address1 ?? null,
+    address2: a.address2 ?? null,
+    city: a.city ?? null,
+    provinceCode: a.provinceCode ?? null,
+    zip: a.zip ?? null,
+    phone: a.phone ?? null,
+  };
+}
+
 /**
  * Merge Shopify-confirmed line data (lineId, quantity) into local CartItem array.
  * Items missing from Shopify are dropped; quantities are updated to match Shopify.
@@ -326,6 +401,10 @@ interface CartStore {
   checkoutUrl: string | null;
   discountCodes: CartDiscountCode[];
   cost: CartCost;
+  /** This order's delivery address -- a one-time cart address (see
+   * DeliveryAddressInput), never the B2B Company Location's registered
+   * business address. Null until setDeliveryAddress() is called. */
+  deliveryAddress: CartDeliveryAddress | null;
   isLoading: boolean;
   isSyncing: boolean;
   addItem: (item: Omit<CartItem, "lineId">) => Promise<void>;
@@ -340,6 +419,11 @@ interface CartStore {
   removeDiscountCode: (code: string) => Promise<void>;
   /** Attach the signed-in customer to the cart, then return a fresh checkout URL. */
   prepareCheckout: () => Promise<string | null>;
+  /** Sets (or replaces) this order's one-time delivery address via
+   * cartDeliveryAddressesReplace. Independent of buyerIdentity/B2B pricing
+   * and of the Company Location's registered address -- see
+   * B2BDeliveryAddress.tsx for the UI that calls this. */
+  setDeliveryAddress: (address: DeliveryAddressInput) => Promise<boolean>;
 }
 
 export const useCartStore = create<CartStore>()(
@@ -354,6 +438,7 @@ export const useCartStore = create<CartStore>()(
           items,
           discountCodes: cart?.discountCodes ?? get().discountCodes,
           cost: extractCost(cart),
+          deliveryAddress: extractDeliveryAddress(cart),
           ...(cart?.checkoutUrl ? { checkoutUrl: formatCheckoutUrl(cart.checkoutUrl) } : {}),
         });
         return { orphaned, dropped: before - items.length };
@@ -379,6 +464,7 @@ export const useCartStore = create<CartStore>()(
         checkoutUrl: null,
         discountCodes: [],
         cost: { subtotal: null, total: null },
+        deliveryAddress: null,
         isLoading: false,
         isSyncing: false,
 
@@ -554,6 +640,7 @@ export const useCartStore = create<CartStore>()(
             checkoutUrl: null,
             discountCodes: [],
             cost: { subtotal: null, total: null },
+            deliveryAddress: null,
           }),
         getCheckoutUrl: () => get().checkoutUrl,
 
@@ -652,6 +739,53 @@ export const useCartStore = create<CartStore>()(
           } catch (error) {
             console.error("Failed to attach customer to cart:", error);
             return checkoutUrl;
+          }
+        },
+
+        setDeliveryAddress: async (address) => {
+          const { cartId } = get();
+          if (!cartId) return false;
+          set({ isLoading: true });
+          try {
+            const data = await storefrontApiRequest(CART_DELIVERY_ADDRESSES_REPLACE_MUTATION, {
+              cartId,
+              addresses: [
+                {
+                  address: {
+                    deliveryAddress: {
+                      firstName: address.firstName,
+                      lastName: address.lastName,
+                      address1: address.address1,
+                      ...(address.address2 ? { address2: address.address2 } : {}),
+                      city: address.city,
+                      provinceCode: address.province,
+                      zip: address.zip,
+                      countryCode: "IN",
+                      ...(address.phone ? { phone: address.phone } : {}),
+                    },
+                  },
+                  selected: true,
+                  oneTimeUse: true,
+                },
+              ],
+            });
+            const payload = data?.data?.cartDeliveryAddressesReplace;
+            const errors: UserError[] = payload?.userErrors ?? [];
+            if (isCartNotFoundError(errors)) {
+              get().clearCart();
+              return false;
+            }
+            if (reportProblems(errors)) return false;
+            const cart = payload?.cart;
+            if (!cart) return false;
+            applyCart(cart);
+            return true;
+          } catch (error) {
+            console.error("Failed to set delivery address:", error);
+            toast.error("Couldn't save this delivery address. Please try again.");
+            return false;
+          } finally {
+            set({ isLoading: false });
           }
         },
 
@@ -759,6 +893,7 @@ export const useCartStore = create<CartStore>()(
         checkoutUrl: state.checkoutUrl,
         discountCodes: state.discountCodes,
         cost: state.cost,
+        deliveryAddress: state.deliveryAddress,
       }),
     },
   ),
