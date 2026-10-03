@@ -439,9 +439,12 @@ export const setupB2BCompany = createServerFn({ method: "POST" })
     };
   })
   .handler(async ({ data }): Promise<B2BCompanySetupResult> => {
+    let traceCustomerId: string | null = null;
+    try {
     // 1. Trusted identity -- same rule as every other B2B server function.
     const customerId = await resolveCustomerIdFromToken(data.customerAccessToken);
     if (!customerId) throw stagePlainError("CUSTOMER_RESOLUTION_FAILED", "Could not verify the signed-in customer.");
+    traceCustomerId = customerId;
 
     // 2 / 3. Find-or-create the Company, keyed on GST.
     let companyId: string;
@@ -558,5 +561,13 @@ export const setupB2BCompany = createServerFn({ method: "POST" })
     // 4/5/6, fully idempotent -- see ensureContactAndRole's doc comment.
     await ensureContactAndRole(customerId, companyId, companyLocationId, orderingOnlyRoleId);
 
+    console.log(`[B2B setup] SUCCESS customer=${customerId} gst=${data.gstNumber} company=${companyId}`);
     return { status: "created", companyId, companyLocationId };
+    } catch (err) {
+      // Server-side trace of the exact failing stage. Never logs tokens.
+      const msg = err instanceof Error ? err.message : String(err);
+      const stage = /^\[([A-Z_:,]+)\]/.exec(msg)?.[1] ?? "UNTAGGED";
+      console.error(`[B2B setup] FAILED stage=${stage} customer=${traceCustomerId ?? "unresolved"} gst=${data.gstNumber} msg=${msg}`);
+      throw err;
+    }
   });
