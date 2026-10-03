@@ -277,6 +277,16 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
   // otherwise reused by React and kept their typed/autofilled values.
   const formKey = `${entryType}-${mode}`;
 
+  // Browsers (Chrome's password manager) silently fill saved credentials
+  // into editable email/password fields the moment they appear. Starting
+  // read-only and unlocking on first focus stops that silent fill while
+  // still letting the shopper pick a saved login from the dropdown.
+  const noAutofill = {
+    readOnly: true,
+    onFocus: (e: React.FocusEvent<HTMLInputElement>) => e.currentTarget.removeAttribute("readonly"),
+    onPointerDown: (e: React.PointerEvent<HTMLInputElement>) => e.currentTarget.removeAttribute("readonly"),
+  };
+
   const sectionLabel = (text: string) => (
     <div className="flex items-center gap-3 pt-2">
       <span className="text-[0.7rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">{text}</span>
@@ -294,6 +304,7 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
         minLength={5}
         defaultValue=""
         autoComplete={mode === "signin" ? "current-password" : "new-password"}
+        {...noAutofill}
       />
       {mode === "signin" ? (
         <div className="text-right">
@@ -389,7 +400,7 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="email">Email</Label>
-                      <Input id="email" name="email" type="email" required autoComplete="email" defaultValue="" placeholder="you@company.com" />
+                      <Input id="email" name="email" type="email" required autoComplete="email" defaultValue="" placeholder="you@company.com" {...noAutofill} />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="phone">Phone Number</Label>
@@ -443,7 +454,7 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
                     {passwordField}
                     <div className="space-y-2">
                       <Label htmlFor="confirmPassword">Confirm Password</Label>
-                      <PasswordInput id="confirmPassword" name="confirmPassword" required minLength={5} defaultValue="" autoComplete="new-password" />
+                      <PasswordInput id="confirmPassword" name="confirmPassword" required minLength={5} defaultValue="" autoComplete="new-password" {...noAutofill} />
                     </div>
                   </div>
                 </>
@@ -463,7 +474,7 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
                   ) : null}
                   <div className="space-y-2">
                     <Label htmlFor="email">Email</Label>
-                    <Input id="email" name="email" type="email" required autoComplete={mode === "signin" ? "username" : "email"} defaultValue="" placeholder="you@example.com" />
+                    <Input id="email" name="email" type="email" required autoComplete={mode === "signin" ? "username" : "email"} defaultValue="" placeholder="you@example.com" {...noAutofill} />
                   </div>
                   {passwordField}
                 </>
