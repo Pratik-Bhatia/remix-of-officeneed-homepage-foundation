@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import {
@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { signInCustomer, registerCustomer, getCustomerToken, CustomerAuthError } from "@/lib/customer";
+import { signInCustomer, registerCustomer, requestPasswordRecovery, getCustomerToken, CustomerAuthError } from "@/lib/customer";
 import { saveBusinessRegistration } from "@/lib/business-registration.functions";
 import { refreshSaves } from "@/lib/saves";
 import { useNavigate } from "@tanstack/react-router";
@@ -22,7 +22,12 @@ import { isValidGstin } from "@/lib/gst";
 import { useB2BStore } from "@/stores/b2bStore";
 
 export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
-  const [mode, setMode] = useState<"signin" | "register">("signin");
+  const [mode, setMode] = useState<"signin" | "register" | "forgot">("signin");
+  // Whether the neutral "we've sent a link" confirmation is showing, in
+  // place of the forgot-password email form. Reset to false every time
+  // "forgot" mode is (re-)entered so a second attempt shows the form
+  // again, not a stale confirmation.
+  const [recoverySent, setRecoverySent] = useState(false);
   // Inline, field-level -- not a generic toast -- per the GST requirement.
   // Re-validated (and cleared) on every submit attempt, not on every
   // keystroke, so the error doesn't flicker while the shopper is still
@@ -43,12 +48,78 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
   const [busy, setBusy] = useState(false);
   const navigate = useNavigate();
 
+  // ROOT CAUSE of stale mode/tab/error state surviving a close+reopen:
+  // Navbar.tsx renders <CustomerAuthModal open={authOpen} .../> unconditionally
+  // (not `{authOpen && <CustomerAuthModal/>}`), so this component instance --
+  // and every one of its useState calls above -- lives for the entire page
+  // session. Only Radix's <DialogContent> (its child) actually
+  // mounts/unmounts with `open`; this wrapping component never does. So
+  // without this effect, closing the dialog mid-registration (or while
+  // showing the "forgot password" confirmation) and reopening it later
+  // resumed exactly where it left off -- wrong tab, wrong mode, a stale
+  // GST error, or the old recovery confirmation screen. This is a React
+  // component-state bug (not localStorage/sessionStorage/Zustand/browser
+  // autofill/Supabase -- none of those store this data; confirmed by
+  // reading every candidate store in this codebase). Native form field
+  // VALUES (email/name/phone/GST/password) are a separate, likely cause:
+  // DialogContent itself does unmount on close, so those uncontrolled
+  // <input> DOM nodes are destroyed -- any value reappearing there is the
+  // browser's own autocomplete history for that field's autoComplete
+  // token, not anything this app stores or restores.
+  //
+  // Resets only this modal's own UI/form-mode state -- never the actual
+  // customerAccessToken (customer.ts's setCustomerToken/getCustomerToken)
+  // and never cart/shopping data, neither of which this component touches.
+  const wasOpen = useRef(open);
+  useEffect(() => {
+    if (open && !wasOpen.current) {
+      setMode("signin");
+      setEntryType("customer");
+      setGstError(null);
+      setRecoverySent(false);
+    }
+    wasOpen.current = open;
+  }, [open]);
+
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const email = String(form.get("email") ?? "").trim();
+
+    if (mode === "forgot") {
+      setBusy(true);
+      try {
+        await requestPasswordRecovery(email);
+        // Success here deliberately does NOT mean "this email has an
+        // account" -- see requestPasswordRecovery's doc comment. The
+        // confirmation below is shown identically whether or not one
+        // exists, which is the whole point.
+        setRecoverySent(true);
+      } catch (error) {
+        // Only a genuine transport/infra failure reaches here (never a
+        // "this email doesn't exist" case) -- safe to show a distinct
+        // message without leaking account existence either way.
+        console.error("Password recovery request failed:", error);
+        toast.error("We couldn't process your request right now. Please try again in a moment.");
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+
     const password = String(form.get("password") ?? "");
     setGstError(null);
+
+    // Defensive, not just reactive: in normal use the modal is never
+    // opened while already signed in (both window.dispatchEvent(new
+    // CustomEvent("open-auth-modal")) call sites and the Navbar account
+    // icon only open it when status === "out") -- but never silently
+    // reuse/overwrite an existing session's data for a second
+    // registration if this is ever reached anyway.
+    if (mode === "register" && getCustomerToken()) {
+      toast.error("You're already signed in. Please sign out first to create a different account.");
+      return;
+    }
 
     if (entryType === "company" && mode === "register") {
       const gstNumberRaw = String(form.get("gstNumber") ?? "").trim();
@@ -160,127 +231,168 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>
-            {entryType === "company"
-              ? mode === "signin" ? "Sign in to your business account" : "Create your business account"
-              : mode === "signin" ? "Sign in to your account" : "Create your account"}
+            {mode === "forgot"
+              ? "Reset your password"
+              : entryType === "company"
+                ? mode === "signin" ? "Sign in to your business account" : "Create your business account"
+                : mode === "signin" ? "Sign in to your account" : "Create your account"}
           </DialogTitle>
           <DialogDescription>
-            {entryType === "company"
-              ? mode === "signin"
-                ? "Sign in with your business email to see your orders and saved products."
-                : "Register your business. B2B pricing is enabled separately once OfficeNeed sets up your company account in Shopify."
-              : mode === "signin"
-                ? "Sign in to see your orders and saved products."
-                : "Create an account to track your orders and keep a list of saved products."}
+            {mode === "forgot"
+              ? recoverySent
+                ? "Check your email for the next step."
+                : "Enter your email and we'll send you a link to reset your password."
+              : entryType === "company"
+                ? mode === "signin"
+                  ? "Sign in with your business email to see your orders and saved products."
+                  : "Register your business. B2B pricing is enabled separately once OfficeNeed sets up your company account in Shopify."
+                : mode === "signin"
+                  ? "Sign in to see your orders and saved products."
+                  : "Create an account to track your orders and keep a list of saved products."}
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs
-          value={entryType}
-          onValueChange={(v) => {
-            setEntryType(v as "customer" | "company");
-            setMode("signin");
-          }}
-          className="w-full"
-        >
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="customer">Customer</TabsTrigger>
-            <TabsTrigger value="company">Company</TabsTrigger>
-          </TabsList>
-        </Tabs>
+        {mode === "forgot" ? null : (
+          <Tabs
+            value={entryType}
+            onValueChange={(v) => {
+              setEntryType(v as "customer" | "company");
+              setMode("signin");
+              setGstError(null);
+            }}
+            className="w-full"
+          >
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="customer">Customer</TabsTrigger>
+              <TabsTrigger value="company">Company</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        )}
 
-        <form onSubmit={handleSubmit} className="space-y-4 py-4">
-          {isCompanyRegister ? (
-            <>
-              <div className="space-y-2">
-                <Label htmlFor="fullName">Full Name</Label>
-                <Input id="fullName" name="fullName" autoComplete="name" required />
+        {mode === "forgot" && recoverySent ? (
+          <p className="py-4 text-sm text-foreground">
+            We've sent a password reset link if an account exists for this email.
+          </p>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-4 py-4">
+            {isCompanyRegister ? (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="fullName">Full Name</Label>
+                  <Input id="fullName" name="fullName" autoComplete="name" required />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="companyName">Company Name</Label>
+                  <Input id="companyName" name="companyName" autoComplete="organization" required />
+                </div>
+              </>
+            ) : mode === "register" ? (
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="firstName">First Name</Label>
+                  <Input id="firstName" name="firstName" autoComplete="given-name" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="lastName">Last Name</Label>
+                  <Input id="lastName" name="lastName" autoComplete="family-name" />
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="companyName">Company Name</Label>
-                <Input id="companyName" name="companyName" autoComplete="organization" required />
-              </div>
-            </>
-          ) : mode === "register" ? (
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="firstName">First Name</Label>
-                <Input id="firstName" name="firstName" autoComplete="given-name" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="lastName">Last Name</Label>
-                <Input id="lastName" name="lastName" autoComplete="family-name" />
-              </div>
-            </div>
-          ) : null}
+            ) : null}
 
-          <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
-            <Input id="email" name="email" type="email" required autoComplete="email" placeholder="you@example.com" />
-          </div>
-
-          {isCompanyRegister ? (
             <div className="space-y-2">
-              <Label htmlFor="phone">Phone Number</Label>
-              <Input id="phone" name="phone" type="tel" required autoComplete="tel" placeholder="+91 98765 43210" />
+              <Label htmlFor="email">Email</Label>
+              <Input id="email" name="email" type="email" required autoComplete="email" placeholder="you@example.com" />
             </div>
-          ) : null}
 
-          {isCompanyRegister ? (
-            <div className="space-y-2">
-              <Label htmlFor="gstNumber">GST Number</Label>
-              <Input
-                id="gstNumber"
-                name="gstNumber"
-                required
-                autoComplete="off"
-                placeholder="22AAAAA0000A1Z5"
-                aria-invalid={gstError ? true : undefined}
-                onChange={() => { if (gstError) setGstError(null); }}
-              />
-              {gstError ? <p className="text-sm text-destructive">{gstError}</p> : null}
-            </div>
-          ) : null}
+            {isCompanyRegister ? (
+              <div className="space-y-2">
+                <Label htmlFor="phone">Phone Number</Label>
+                <Input id="phone" name="phone" type="tel" required autoComplete="tel" placeholder="+91 98765 43210" />
+              </div>
+            ) : null}
 
-          <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
-            <PasswordInput
-              id="password"
-              name="password"
-              required
-              minLength={5}
-              autoComplete={mode === "signin" ? "current-password" : "new-password"}
-            />
-          </div>
+            {isCompanyRegister ? (
+              <div className="space-y-2">
+                <Label htmlFor="gstNumber">GST Number</Label>
+                <Input
+                  id="gstNumber"
+                  name="gstNumber"
+                  required
+                  autoComplete="off"
+                  placeholder="22AAAAA0000A1Z5"
+                  aria-invalid={gstError ? true : undefined}
+                  onChange={() => { if (gstError) setGstError(null); }}
+                />
+                {gstError ? <p className="text-sm text-destructive">{gstError}</p> : null}
+              </div>
+            ) : null}
 
-          {isCompanyRegister ? (
-            <div className="space-y-2">
-              <Label htmlFor="confirmPassword">Confirm Password</Label>
-              <PasswordInput
-                id="confirmPassword"
-                name="confirmPassword"
-                required
-                minLength={5}
-                autoComplete="new-password"
-              />
-            </div>
-          ) : null}
+            {mode === "forgot" ? null : (
+              <div className="space-y-2">
+                <Label htmlFor="password">Password</Label>
+                <PasswordInput
+                  id="password"
+                  name="password"
+                  required
+                  minLength={5}
+                  autoComplete={mode === "signin" ? "current-password" : "new-password"}
+                />
+                {mode === "signin" ? (
+                  <div className="text-right">
+                    <button
+                      type="button"
+                      className="text-sm text-primary hover:underline"
+                      onClick={() => {
+                        setRecoverySent(false);
+                        setMode("forgot");
+                      }}
+                    >
+                      Forgot your password?
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            )}
 
-          <Button type="submit" className="w-full" disabled={busy}>
-            {busy ? <Loader2 className="size-4 animate-spin mr-2" /> : null}
-            {mode === "signin" ? "Sign In" : isCompanyRegister ? "Create Business Account" : "Create Account"}
-          </Button>
-        </form>
+            {isCompanyRegister ? (
+              <div className="space-y-2">
+                <Label htmlFor="confirmPassword">Confirm Password</Label>
+                <PasswordInput
+                  id="confirmPassword"
+                  name="confirmPassword"
+                  required
+                  minLength={5}
+                  autoComplete="new-password"
+                />
+              </div>
+            ) : null}
+
+            <Button type="submit" className="w-full" disabled={busy}>
+              {busy ? <Loader2 className="size-4 animate-spin mr-2" /> : null}
+              {mode === "forgot" ? "Send Reset Link" : mode === "signin" ? "Sign In" : isCompanyRegister ? "Create Business Account" : "Create Account"}
+            </Button>
+          </form>
+        )}
 
         <div className="text-center text-sm text-muted-foreground mt-2">
           <button
             type="button"
             className="text-primary hover:underline font-medium"
-            onClick={() => setMode(mode === "signin" ? "register" : "signin")}
+            onClick={() => {
+              setGstError(null);
+              if (mode === "forgot") {
+                setRecoverySent(false);
+                setMode("signin");
+              } else {
+                setMode(mode === "signin" ? "register" : "signin");
+              }
+            }}
           >
-            {mode === "signin"
-              ? entryType === "company" ? "New business? Create a business account" : "New here? Create an account"
-              : "Already have an account? Sign in"}
+            {mode === "forgot"
+              ? "Back to sign in"
+              : mode === "signin"
+                ? entryType === "company" ? "New business? Create a business account" : "New here? Create an account"
+                : "Already have an account? Sign in"}
           </button>
         </div>
       </DialogContent>

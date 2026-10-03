@@ -387,6 +387,83 @@ export async function activateCustomer(activationUrl: string, password: string):
   setCustomerToken(result.customerAccessToken);
 }
 
+/**
+ * Classic Shopify "forgot password" (shopify.dev customerRecover mutation)
+ * -- triggers Shopify's own password-reset email for this address, same
+ * account/password system as everywhere else in this file.
+ *
+ * SECURITY: confirmed live against this store that customerRecover's
+ * customerUserErrors DOES distinguish a real account (empty errors) from
+ * a nonexistent one (UNIDENTIFIED_CUSTOMER / "Could not find customer") --
+ * surfacing that would be exactly the account-enumeration leak the
+ * business requirement forbids. So this function deliberately NEVER
+ * inspects or surfaces customerUserErrors: as long as the request itself
+ * reaches Shopify, it resolves normally either way. It only throws on a
+ * genuine transport/infra failure (storefrontApiRequest itself throwing),
+ * which the caller can tell apart from "request processed" -- but never
+ * from "that email doesn't exist".
+ */
+export async function requestPasswordRecovery(email: string): Promise<void> {
+  await storefrontApiRequest(
+    `mutation Recover($email: String!) {
+       customerRecover(email: $email) { customerUserErrors { code message } }
+     }`,
+    { email },
+  );
+}
+
+/**
+ * Completes a classic Shopify password reset -- the reset email links to
+ * OUR storefront with Shopify's own account_reset_url carried through
+ * verbatim as a query param (see src/routes/password-reset.tsx), exactly
+ * the same pattern activateCustomer/customerActivateByUrl above uses for
+ * activation. customerResetByUrl is Shopify's own documented mutation for
+ * this. On success it returns a real customerAccessToken for the SAME
+ * customer, stored via the existing setCustomerToken() -- same event,
+ * same path as every other sign-in in this file.
+ */
+export async function resetPasswordByUrl(resetUrl: string, password: string): Promise<void> {
+  let resp: Awaited<ReturnType<typeof storefrontApiRequest>>;
+  try {
+    resp = await storefrontApiRequest(
+      `mutation ResetByUrl($resetUrl: URL!, $password: String!) {
+         customerResetByUrl(resetUrl: $resetUrl, password: $password) {
+           customerAccessToken { accessToken expiresAt }
+           customerUserErrors { code message }
+         }
+       }`,
+      { resetUrl, password },
+    );
+  } catch {
+    // Confirmed live: a reset URL whose customer id doesn't resolve at all
+    // fails as a top-level GraphQL error (Shopify's raw "Unidentified
+    // customer"), not a customerUserErrors entry -- same user-facing
+    // outcome as an invalid/expired link either way, never Shopify's
+    // internal wording.
+    throw new CustomerAuthError("This password reset link is invalid or has expired. Please request a new one.", null);
+  }
+  const result = (resp?.data as {
+    customerResetByUrl: {
+      customerAccessToken: { accessToken: string; expiresAt: string } | null;
+      customerUserErrors: Array<{ code: string | null; message: string }>;
+    };
+  }).customerResetByUrl;
+  if (!result.customerAccessToken) {
+    const err = result.customerUserErrors[0];
+    const code = err?.code ?? null;
+    // INVALID is the code Shopify returns for a real-customer reset URL
+    // whose token portion is wrong/expired/already used (confirmed live,
+    // message "Invalid reset url"); TOKEN_INVALID/NOT_FOUND cover the
+    // same family of failure as the activation flow above. Nothing here
+    // ever passes Shopify's own err.message through.
+    if (code === "INVALID" || code === "TOKEN_INVALID" || code === "NOT_FOUND") {
+      throw new CustomerAuthError("This password reset link is invalid or has expired. Please request a new one.", code);
+    }
+    throw new CustomerAuthError("Could not reset your password. Please try again.", code);
+  }
+  setCustomerToken(result.customerAccessToken);
+}
+
 export async function updateCustomer(
   token: string,
   input: { firstName?: string; lastName?: string; phone?: string },

@@ -20,6 +20,7 @@ import { Route as CartRouteImport } from './routes/cart'
 import { Route as ClientsRouteImport } from './routes/clients'
 import { Route as ContactUsRouteImport } from './routes/contact-us'
 import { Route as FaqsRouteImport } from './routes/faqs'
+import { Route as PasswordResetRouteImport } from './routes/password-reset'
 import { Route as PrivacyPolicyRouteImport } from './routes/privacy-policy'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as ReturnsRefundsRouteImport } from './routes/returns-refunds'
@@ -90,6 +91,11 @@ const ContactUsRoute = ContactUsRouteImport.update({
 const FaqsRoute = FaqsRouteImport.update({
   id: '/faqs',
   path: '/faqs',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PasswordResetRoute = PasswordResetRouteImport.update({
+  id: '/password-reset',
+  path: '/password-reset',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PrivacyPolicyRoute = PrivacyPolicyRouteImport.update({
@@ -185,6 +191,7 @@ export interface FileRoutesByFullPath {
   '/clients': typeof ClientsRoute
   '/contact-us': typeof ContactUsRoute
   '/faqs': typeof FaqsRoute
+  '/password-reset': typeof PasswordResetRoute
   '/privacy-policy': typeof PrivacyPolicyRoute
   '/reset-password': typeof ResetPasswordRoute
   '/returns-refunds': typeof ReturnsRefundsRoute
@@ -213,6 +220,7 @@ export interface FileRoutesByTo {
   '/clients': typeof ClientsRoute
   '/contact-us': typeof ContactUsRoute
   '/faqs': typeof FaqsRoute
+  '/password-reset': typeof PasswordResetRoute
   '/privacy-policy': typeof PrivacyPolicyRoute
   '/reset-password': typeof ResetPasswordRoute
   '/returns-refunds': typeof ReturnsRefundsRoute
@@ -243,6 +251,7 @@ export interface FileRoutesById {
   '/clients': typeof ClientsRoute
   '/contact-us': typeof ContactUsRoute
   '/faqs': typeof FaqsRoute
+  '/password-reset': typeof PasswordResetRoute
   '/privacy-policy': typeof PrivacyPolicyRoute
   '/reset-password': typeof ResetPasswordRoute
   '/returns-refunds': typeof ReturnsRefundsRoute
@@ -274,6 +283,7 @@ export interface FileRouteTypes {
     | '/clients'
     | '/contact-us'
     | '/faqs'
+    | '/password-reset'
     | '/privacy-policy'
     | '/reset-password'
     | '/returns-refunds'
@@ -302,6 +312,7 @@ export interface FileRouteTypes {
     | '/clients'
     | '/contact-us'
     | '/faqs'
+    | '/password-reset'
     | '/privacy-policy'
     | '/reset-password'
     | '/returns-refunds'
@@ -331,6 +342,7 @@ export interface FileRouteTypes {
     | '/clients'
     | '/contact-us'
     | '/faqs'
+    | '/password-reset'
     | '/privacy-policy'
     | '/reset-password'
     | '/returns-refunds'
@@ -361,6 +373,7 @@ export interface RootRouteChildren {
   ClientsRoute: typeof ClientsRoute
   ContactUsRoute: typeof ContactUsRoute
   FaqsRoute: typeof FaqsRoute
+  PasswordResetRoute: typeof PasswordResetRoute
   PrivacyPolicyRoute: typeof PrivacyPolicyRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   ReturnsRefundsRoute: typeof ReturnsRefundsRoute
@@ -451,6 +464,13 @@ declare module '@tanstack/react-router' {
       path: '/faqs'
       fullPath: '/faqs'
       preLoaderRoute: typeof FaqsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/password-reset': {
+      id: '/password-reset'
+      path: '/password-reset'
+      fullPath: '/password-reset'
+      preLoaderRoute: typeof PasswordResetRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/privacy-policy': {
@@ -607,6 +627,7 @@ const rootRouteChildren: RootRouteChildren = {
   ClientsRoute: ClientsRoute,
   ContactUsRoute: ContactUsRoute,
   FaqsRoute: FaqsRoute,
+  PasswordResetRoute: PasswordResetRoute,
   PrivacyPolicyRoute: PrivacyPolicyRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   ReturnsRefundsRoute: ReturnsRefundsRoute,

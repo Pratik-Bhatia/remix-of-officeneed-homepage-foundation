@@ -17,7 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useCustomer, signInCustomer, registerCustomer, signOutCustomer, getCustomerToken, CustomerAuthError } from "@/lib/customer";
+import { useCustomer, signInCustomer, registerCustomer, requestPasswordRecovery, signOutCustomer, getCustomerToken, CustomerAuthError } from "@/lib/customer";
 import { saveBusinessRegistration } from "@/lib/business-registration.functions";
 import { splitFullName } from "@/lib/name-utils";
 import { CustomerContext } from "@/lib/customer-context";
@@ -48,7 +48,9 @@ const navItems = [
 ] as const;
 
 function SignInPanel({ onDone }: { onDone: () => Promise<void> }) {
-  const [mode, setMode] = useState<"signin" | "register">("signin");
+  const [mode, setMode] = useState<"signin" | "register" | "forgot">("signin");
+  // See CustomerAuthModal.tsx's identical field for the full reasoning.
+  const [recoverySent, setRecoverySent] = useState(false);
   // See CustomerAuthModal.tsx's identical field for the full reasoning --
   // the Company tab's registration form creates an ordinary Shopify
   // customer through the SAME registerCustomer() as B2C, plus a company
@@ -66,8 +68,32 @@ function SignInPanel({ onDone }: { onDone: () => Promise<void> }) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const email = String(form.get("email") ?? "").trim();
+
+    if (mode === "forgot") {
+      setBusy(true);
+      try {
+        await requestPasswordRecovery(email);
+        setRecoverySent(true);
+      } catch (error) {
+        console.error("Password recovery request failed:", error);
+        toast.error("We couldn't process your request right now. Please try again in a moment.");
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+
     const password = String(form.get("password") ?? "");
     setGstError(null);
+
+    // Defensive, not just reactive: SignInPanel only renders when
+    // useCustomer()'s status is "out" (see AccountLayout below) -- but
+    // never silently reuse/overwrite an existing session's data for a
+    // second registration if this is somehow reached anyway.
+    if (mode === "register" && getCustomerToken()) {
+      toast.error("You're already signed in. Please sign out first to create a different account.");
+      return;
+    }
 
     if (isCompanyRegister) {
       const gstNumberRaw = String(form.get("gstNumber") ?? "").trim();
@@ -152,34 +178,48 @@ function SignInPanel({ onDone }: { onDone: () => Promise<void> }) {
   return (
     <div className="mx-auto w-full max-w-md rounded-2xl border border-border p-6 sm:p-8">
       <h2 className="text-lg font-medium text-foreground">
-        {entryType === "company"
-          ? mode === "signin" ? "Sign in to your business account" : "Create your business account"
-          : mode === "signin" ? "Sign in to your account" : "Create your account"}
+        {mode === "forgot"
+          ? "Reset your password"
+          : entryType === "company"
+            ? mode === "signin" ? "Sign in to your business account" : "Create your business account"
+            : mode === "signin" ? "Sign in to your account" : "Create your account"}
       </h2>
       <p className="mt-2 text-sm text-muted-foreground">
-        {entryType === "company"
-          ? mode === "signin"
-            ? "Use your business email and password to see your orders and saved products."
-            : "Register your business. B2B pricing is enabled separately once OfficeNeed sets up your company account in Shopify."
-          : mode === "signin"
-            ? "Use the email and password from your Officeneed store account to see your orders and saved products."
-            : "Create an account to track your orders and keep a list of saved products."}
+        {mode === "forgot"
+          ? recoverySent
+            ? "Check your email for the next step."
+            : "Enter your email and we'll send you a link to reset your password."
+          : entryType === "company"
+            ? mode === "signin"
+              ? "Use your business email and password to see your orders and saved products."
+              : "Register your business. B2B pricing is enabled separately once OfficeNeed sets up your company account in Shopify."
+            : mode === "signin"
+              ? "Use the email and password from your Officeneed store account to see your orders and saved products."
+              : "Create an account to track your orders and keep a list of saved products."}
       </p>
 
-      <Tabs
-        value={entryType}
-        onValueChange={(v) => {
-          setEntryType(v as "customer" | "company");
-          setMode("signin");
-        }}
-        className="mt-5 w-full"
-      >
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="customer">Customer</TabsTrigger>
-          <TabsTrigger value="company">Company</TabsTrigger>
-        </TabsList>
-      </Tabs>
+      {mode === "forgot" ? null : (
+        <Tabs
+          value={entryType}
+          onValueChange={(v) => {
+            setEntryType(v as "customer" | "company");
+            setMode("signin");
+            setGstError(null);
+          }}
+          className="mt-5 w-full"
+        >
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="customer">Customer</TabsTrigger>
+            <TabsTrigger value="company">Company</TabsTrigger>
+          </TabsList>
+        </Tabs>
+      )}
 
+      {mode === "forgot" && recoverySent ? (
+        <p className="mt-6 text-sm text-foreground">
+          We've sent a password reset link if an account exists for this email.
+        </p>
+      ) : (
       <form onSubmit={handleSubmit} className="mt-6 space-y-4">
         {isCompanyRegister ? (
           <>
@@ -248,19 +288,35 @@ function SignInPanel({ onDone }: { onDone: () => Promise<void> }) {
           </div>
         ) : null}
 
-        <div className="space-y-2">
-          <Label htmlFor="password" className="text-xs font-medium tracking-wide text-muted-foreground">
-            Password
-          </Label>
-          <PasswordInput
-            id="password"
-            name="password"
-            required
-            minLength={5}
-            className="rounded-xl"
-            autoComplete={mode === "signin" ? "current-password" : "new-password"}
-          />
-        </div>
+        {mode === "forgot" ? null : (
+          <div className="space-y-2">
+            <Label htmlFor="password" className="text-xs font-medium tracking-wide text-muted-foreground">
+              Password
+            </Label>
+            <PasswordInput
+              id="password"
+              name="password"
+              required
+              minLength={5}
+              className="rounded-xl"
+              autoComplete={mode === "signin" ? "current-password" : "new-password"}
+            />
+            {mode === "signin" ? (
+              <div className="text-right">
+                <button
+                  type="button"
+                  className="text-sm text-primary hover:underline"
+                  onClick={() => {
+                    setRecoverySent(false);
+                    setMode("forgot");
+                  }}
+                >
+                  Forgot your password?
+                </button>
+              </div>
+            ) : null}
+          </div>
+        )}
 
         {isCompanyRegister ? (
           <div className="space-y-2">
@@ -279,18 +335,37 @@ function SignInPanel({ onDone }: { onDone: () => Promise<void> }) {
         ) : null}
 
         <Button type="submit" disabled={busy} className="w-full rounded-full">
-          {busy ? "Please wait…" : mode === "signin" ? "Sign in" : isCompanyRegister ? "Create Business Account" : "Create account"}
+          {busy
+            ? "Please wait…"
+            : mode === "forgot"
+              ? "Send Reset Link"
+              : mode === "signin"
+                ? "Sign in"
+                : isCompanyRegister
+                  ? "Create Business Account"
+                  : "Create account"}
         </Button>
       </form>
+      )}
 
       <button
         type="button"
-        onClick={() => setMode(mode === "signin" ? "register" : "signin")}
+        onClick={() => {
+          setGstError(null);
+          if (mode === "forgot") {
+            setRecoverySent(false);
+            setMode("signin");
+          } else {
+            setMode(mode === "signin" ? "register" : "signin");
+          }
+        }}
         className="mt-5 w-full text-sm text-muted-foreground underline underline-offset-4 transition-colors hover:text-foreground"
       >
-        {mode === "signin"
-          ? entryType === "company" ? "New business? Create a business account" : "New here? Create an account"
-          : "Already have an account? Sign in"}
+        {mode === "forgot"
+          ? "Back to sign in"
+          : mode === "signin"
+            ? entryType === "company" ? "New business? Create a business account" : "New here? Create an account"
+            : "Already have an account? Sign in"}
       </button>
     </div>
   );
