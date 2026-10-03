@@ -271,7 +271,6 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
   };
 
   const isCompanyRegister = entryType === "company" && mode === "register";
-  const isCompanyRegister = entryType === "company" && mode === "register";
   // Remount the form whenever the mode/tab changes so no field value
   // (notably email/password) is carried between Sign in, Customer
   // register and Company register -- same-position inputs were
