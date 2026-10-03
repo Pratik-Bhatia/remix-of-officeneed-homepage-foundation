@@ -481,6 +481,89 @@ export async function updateCustomer(
   if (errors.length) throw new Error(errors[0]?.message ?? "Could not save your details.");
 }
 
+/* --------------------------------- addresses --------------------------------- */
+// Classic Shopify customer Address Book -- MailingAddressInput, confirmed live
+// against this store's Storefront API 2026-10 schema: address1, address2,
+// city, company, country (plain string, not an ISO code), firstName,
+// lastName, phone, province, zip. Shopify itself is the only store for this
+// data -- no local/Supabase address table exists or is introduced here.
+export type CustomerAddressInput = Omit<CustomerAddress, "id">;
+
+const ADDRESS_FIELDS_GQL = "id firstName lastName company address1 address2 city province zip country phone";
+
+export async function createCustomerAddress(token: string, address: CustomerAddressInput): Promise<CustomerAddress> {
+  const resp = await storefrontApiRequest(
+    `mutation CreateAddress($token: String!, $address: MailingAddressInput!) {
+       customerAddressCreate(customerAccessToken: $token, address: $address) {
+         customerAddress { ${ADDRESS_FIELDS_GQL} }
+         customerUserErrors { message }
+       }
+     }`,
+    { token, address },
+  );
+  const result = (resp?.data as {
+    customerAddressCreate: { customerAddress: CustomerAddress | null; customerUserErrors: Array<{ message: string }> };
+  }).customerAddressCreate;
+  if (result.customerUserErrors.length) {
+    throw new Error(result.customerUserErrors[0]?.message ?? "Could not save this address.");
+  }
+  if (!result.customerAddress) throw new Error("Could not save this address.");
+  return result.customerAddress;
+}
+
+export async function updateCustomerAddress(
+  token: string,
+  addressId: string,
+  address: CustomerAddressInput,
+): Promise<CustomerAddress> {
+  const resp = await storefrontApiRequest(
+    `mutation UpdateAddress($token: String!, $id: ID!, $address: MailingAddressInput!) {
+       customerAddressUpdate(customerAccessToken: $token, id: $id, address: $address) {
+         customerAddress { ${ADDRESS_FIELDS_GQL} }
+         customerUserErrors { message }
+       }
+     }`,
+    { token, id: addressId, address },
+  );
+  const result = (resp?.data as {
+    customerAddressUpdate: { customerAddress: CustomerAddress | null; customerUserErrors: Array<{ message: string }> };
+  }).customerAddressUpdate;
+  if (result.customerUserErrors.length) {
+    throw new Error(result.customerUserErrors[0]?.message ?? "Could not update this address.");
+  }
+  if (!result.customerAddress) throw new Error("Could not update this address.");
+  return result.customerAddress;
+}
+
+export async function deleteCustomerAddress(token: string, addressId: string): Promise<void> {
+  const resp = await storefrontApiRequest(
+    `mutation DeleteAddress($token: String!, $id: ID!) {
+       customerAddressDelete(customerAccessToken: $token, id: $id) {
+         deletedCustomerAddressId
+         customerUserErrors { message }
+       }
+     }`,
+    { token, id: addressId },
+  );
+  const errors = (resp?.data as { customerAddressDelete: { customerUserErrors: Array<{ message: string }> } })
+    .customerAddressDelete.customerUserErrors;
+  if (errors.length) throw new Error(errors[0]?.message ?? "Could not delete this address.");
+}
+
+export async function setDefaultCustomerAddress(token: string, addressId: string): Promise<void> {
+  const resp = await storefrontApiRequest(
+    `mutation SetDefaultAddress($token: String!, $addressId: ID!) {
+       customerDefaultAddressUpdate(customerAccessToken: $token, addressId: $addressId) {
+         customerUserErrors { message }
+       }
+     }`,
+    { token, addressId },
+  );
+  const errors = (resp?.data as { customerDefaultAddressUpdate: { customerUserErrors: Array<{ message: string }> } })
+    .customerDefaultAddressUpdate.customerUserErrors;
+  if (errors.length) throw new Error(errors[0]?.message ?? "Could not set this as your default address.");
+}
+
 export async function signOutCustomer(): Promise<void> {
   const token = getCustomerToken();
   setCustomerToken(null);

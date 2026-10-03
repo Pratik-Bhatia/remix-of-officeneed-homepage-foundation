@@ -16,9 +16,22 @@
  *      matches client-side.
  *   3a. Found: reuse it, fully idempotently (see ensureContactAndRole
  *       below) -- never blindly re-assign a contact/role that already
- *       exists, and self-heal a company left with zero usable locations
- *       (e.g. from a prior partial failure) by creating one rather than
- *       failing outright.
+ *       exists. Two partial-failure states are self-healed rather than
+ *       left stuck:
+ *         (A) zero usable locations (companyCreate itself never
+ *             finished) -- a location is created now.
+ *         (B) a location exists but has no address (companyCreate
+ *             finished but a later companyLocationAssignAddress call
+ *             failed) -- the address is assigned now. This is ONLY ever
+ *             reached for a company whose externalId matched the
+ *             submitted GST -- externalId is a field exclusively
+ *             populated by this flow's own companyCreate call (confirmed
+ *             live: a merchant-configured company like OfficeNeed Test
+ *             Company has externalId: null, so it's never matched here),
+ *             so finding one this way reliably means it's our own
+ *             incomplete setup, not a third party's established
+ *             business. A location that already has ANY address is
+ *             never touched -- that's what "established" means here.
  *   3b. Not found: companyCreate with company{name, externalId: gst} and
  *       companyLocation{name, taxRegistrationId: gst} in ONE call.
  *       Deliberately NEVER passes `companyContact` -- CompanyContactInput
@@ -87,12 +100,88 @@ function stagePlainError(stage: string, message: string): Error {
 
 const ORDERING_ONLY_ROLE_NAME = "Ordering only";
 
+// Business address, collected on the Company registration form and stored
+// directly on the Shopify Company Location -- confirmed live against this
+// store's Admin API 2026-10 schema: CompanyAddressInput has no `province`/
+// `country` enum like the Storefront API's MailingAddressInput does; it's
+// `zoneCode` (a free-text string, e.g. "Maharashtra" -- NOT a strict ISO
+// region code, confirmed via schema introspection) and `countryCode` (a
+// strict CountryCode enum). GST only applies to India, so country is fixed
+// to "IN" here rather than attempting a full country-name-to-ISO mapping
+// this app has no other use for.
+export type B2BAddressInput = {
+  addressLine1: string;
+  addressLine2?: string;
+  city: string;
+  state: string;
+  pin: string;
+  country: string;
+};
+
+function toCompanyAddressInput(address: B2BAddressInput, recipient: string, phone?: string) {
+  return {
+    address1: address.addressLine1,
+    ...(address.addressLine2 ? { address2: address.addressLine2 } : {}),
+    city: address.city,
+    zoneCode: address.state,
+    zip: address.pin,
+    countryCode: "IN",
+    recipient,
+    ...(phone ? { phone } : {}),
+  };
+}
+
+const ASSIGN_ADDRESS_MUTATION = `
+  mutation AssignCompanyLocationAddress($locationId: ID!, $address: CompanyAddressInput!, $addressTypes: [CompanyAddressType!]!) {
+    companyLocationAssignAddress(locationId: $locationId, address: $address, addressTypes: $addressTypes) {
+      companyAddress { id }
+      userErrors { message field }
+    }
+  }
+`;
+
+/** Sets the Company Location's business address as BOTH billing and
+ * shipping -- this is what makes checkout show a real address instead of
+ * "(No address)" (confirmed live: a location with no address has nothing
+ * for Shopify to show at checkout). Only ever called right after creating
+ * a location (fresh company, or self-healing one with none) -- never
+ * overwrites an existing location's address found via the GST dedup path,
+ * so a second person registering under the same GST can't silently change
+ * the company's real business address with their own form input. */
+async function assignCompanyLocationAddress(
+  companyLocationId: string,
+  address: B2BAddressInput,
+  recipient: string,
+  phone: string | undefined,
+  stage: string,
+): Promise<void> {
+  const result = await adminGraphQLRequest<{
+    companyLocationAssignAddress: {
+      companyAddress: { id: string } | null;
+      userErrors: Array<{ message: string; field: string[] | null }>;
+    };
+  }>(ASSIGN_ADDRESS_MUTATION, {
+    locationId: companyLocationId,
+    address: toCompanyAddressInput(address, recipient, phone),
+    addressTypes: ["BILLING", "SHIPPING"],
+  });
+  if (result.errors?.length) {
+    throw stageGraphQLError(stage, result.errors, "companyLocationAssignAddress failed");
+  }
+  const errors = result.data?.companyLocationAssignAddress.userErrors ?? [];
+  if (errors.length) {
+    throw stageGraphQLError(stage, errors, "companyLocationAssignAddress rejected");
+  }
+}
+
 type ContactRole = { id: string; name: string };
 type CompanyRef = {
   id: string;
   externalId: string | null;
   contactRoles: { edges: Array<{ node: ContactRole }> };
-  locations: { edges: Array<{ node: { id: string } }> };
+  locations: {
+    edges: Array<{ node: { id: string; billingAddress?: { address1: string | null } | null } }>;
+  };
 };
 
 /** Resolves "Ordering only" strictly by name from THIS company's own
@@ -117,7 +206,14 @@ const FIND_COMPANIES_PAGE_QUERY = `
           id
           externalId
           contactRoles(first: 50) { edges { node { id name } } }
-          locations(first: 10) { edges { node { id } } }
+          locations(first: 10) {
+            edges {
+              node {
+                id
+                billingAddress { address1 }
+              }
+            }
+          }
         }
       }
       pageInfo { hasNextPage }
@@ -292,7 +388,14 @@ async function ensureContactAndRole(
 }
 
 export const setupB2BCompany = createServerFn({ method: "POST" })
-  .inputValidator((input: { customerAccessToken: string; companyName: string; gstNumber: string }) => {
+  .inputValidator((input: {
+    customerAccessToken: string;
+    companyName: string;
+    gstNumber: string;
+    contactName: string;
+    phone?: string;
+    address: B2BAddressInput;
+  }) => {
     if (!input?.customerAccessToken || typeof input.customerAccessToken !== "string") {
       throw new Error("Missing session token.");
     }
@@ -301,7 +404,35 @@ export const setupB2BCompany = createServerFn({ method: "POST" })
     const gstNumberRaw = input.gstNumber?.trim() ?? "";
     if (!gstNumberRaw) throw new Error("GST number is required.");
     if (!isValidGstin(gstNumberRaw)) throw new Error("GST number is not a valid GSTIN.");
-    return { customerAccessToken: input.customerAccessToken, companyName, gstNumber: normalizeGstin(gstNumberRaw) };
+    const contactName = input.contactName?.trim() || companyName;
+    const phone = input.phone?.trim() || undefined;
+
+    const addressLine1 = input.address?.addressLine1?.trim() ?? "";
+    const addressLine2 = input.address?.addressLine2?.trim() || undefined;
+    const city = input.address?.city?.trim() ?? "";
+    const state = input.address?.state?.trim() ?? "";
+    const pin = input.address?.pin?.trim() ?? "";
+    const country = input.address?.country?.trim() ?? "";
+    if (!addressLine1) throw new Error("Address Line 1 is required.");
+    if (!city) throw new Error("City is required.");
+    if (!state) throw new Error("State is required.");
+    if (!pin) throw new Error("PIN / Postal Code is required.");
+    if (!country) throw new Error("Country is required.");
+    // GST (the dedup key and the taxRegistrationId this address is stored
+    // against) only applies to India -- see the B2BAddressInput comment
+    // for why this is a fixed check rather than a general country mapping.
+    if (country.trim().toLowerCase() !== "india") {
+      throw new Error("Only India is currently supported for Company registration addresses.");
+    }
+
+    return {
+      customerAccessToken: input.customerAccessToken,
+      companyName,
+      gstNumber: normalizeGstin(gstNumberRaw),
+      contactName,
+      ...(phone ? { phone } : {}),
+      address: { addressLine1, ...(addressLine2 ? { addressLine2 } : {}), city, state, pin, country },
+    };
   })
   .handler(async ({ data }): Promise<B2BCompanySetupResult> => {
     // 1. Trusted identity -- same rule as every other B2B server function.
@@ -317,13 +448,12 @@ export const setupB2BCompany = createServerFn({ method: "POST" })
     if (existing) {
       companyId = existing.id;
       orderingOnlyRoleId = resolveOrderingOnlyRoleId(existing.contactRoles);
-      companyLocationId = existing.locations.edges[0]?.node.id ?? null;
+      const existingLocation = existing.locations.edges[0]?.node ?? null;
+      companyLocationId = existingLocation?.id ?? null;
 
-      // Self-heal rather than fail: a company can legitimately have zero
-      // usable locations (e.g. left over from a prior partial failure
-      // that created the Company but never its Location). Ensure one
-      // exists instead of blindly trusting -- or blindly rejecting --
-      // whatever locations() happened to return.
+      // Self-heal case A: the company exists but has zero usable
+      // locations at all (e.g. left over from a prior partial failure
+      // that created the Company but never its Location).
       if (!companyLocationId) {
         const locationResult = await adminGraphQLRequest<{
           companyLocationCreate: {
@@ -332,7 +462,11 @@ export const setupB2BCompany = createServerFn({ method: "POST" })
           };
         }>(COMPANY_LOCATION_CREATE_MUTATION, {
           companyId,
-          input: { name: `${data.companyName} - Head Office`, taxRegistrationId: data.gstNumber },
+          input: {
+            name: `${data.companyName} - Head Office`,
+            taxRegistrationId: data.gstNumber,
+            buyerExperienceConfiguration: { editableShippingAddress: false },
+          },
         });
         if (locationResult.errors?.length) {
           throw stageGraphQLError("COMPANY_LOCATION_CREATE_FAILED", locationResult.errors, "companyLocationCreate failed");
@@ -345,6 +479,25 @@ export const setupB2BCompany = createServerFn({ method: "POST" })
         if (!companyLocationId) {
           throw stagePlainError("COMPANY_LOCATION_CREATE_FAILED", "companyLocationCreate did not return a usable location.");
         }
+        // Freshly created (self-heal path) -- no existing address to
+        // protect, so always assign the one just collected.
+        await assignCompanyLocationAddress(companyLocationId, data.address, data.contactName, data.phone, "COMPANY_LOCATION_CREATE_FAILED");
+      } else if (!existingLocation?.billingAddress?.address1) {
+        // Self-heal case B: the location exists but has no address --
+        // exactly the state left behind by companyCreate succeeding and a
+        // later companyLocationAssignAddress call failing (confirmed this
+        // is possible: nothing currently retries that step). Only ever
+        // reached for a company whose externalId matched this submitted
+        // GST -- externalId is a field ONLY this flow's companyCreate
+        // ever populates (confirmed live: the merchant's own manually
+        // configured OfficeNeed Test Company has externalId: null, so it
+        // can never be matched or reached here), so a company found this
+        // way is reliably one this automated flow itself created. A
+        // location that already HAS any address is never touched by this
+        // branch -- that's the actual "don't overwrite an established
+        // business address" guard: an established location, by
+        // definition, already has one.
+        await assignCompanyLocationAddress(companyLocationId, data.address, data.contactName, data.phone, "COMPANY_LOCATION_CREATE_FAILED");
       }
     } else {
       const createResult = await adminGraphQLRequest<{
@@ -352,7 +505,11 @@ export const setupB2BCompany = createServerFn({ method: "POST" })
       }>(COMPANY_CREATE_MUTATION, {
         input: {
           company: { name: data.companyName, externalId: data.gstNumber },
-          companyLocation: { name: `${data.companyName} - Head Office`, taxRegistrationId: data.gstNumber },
+          companyLocation: {
+            name: `${data.companyName} - Head Office`,
+            taxRegistrationId: data.gstNumber,
+            buyerExperienceConfiguration: { editableShippingAddress: false },
+          },
         },
       });
       if (createResult.errors?.length) {
@@ -368,6 +525,9 @@ export const setupB2BCompany = createServerFn({ method: "POST" })
       orderingOnlyRoleId = resolveOrderingOnlyRoleId(company.contactRoles);
       companyLocationId = company.locations.edges[0]?.node.id ?? null;
       if (!companyLocationId) throw stagePlainError("COMPANY_CREATE_FAILED", "companyCreate did not create a usable location.");
+      // Brand-new company/location -- always assign the address collected
+      // on the registration form.
+      await assignCompanyLocationAddress(companyLocationId, data.address, data.contactName, data.phone, "COMPANY_CREATE_FAILED");
     }
 
     // 4/5/6, fully idempotent -- see ensureContactAndRole's doc comment.

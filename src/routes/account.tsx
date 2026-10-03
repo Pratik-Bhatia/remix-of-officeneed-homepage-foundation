@@ -133,6 +133,12 @@ function SignInPanel({ onDone }: { onDone: () => Promise<void> }) {
         const companyName = String(form.get("companyName") ?? "").trim();
         const phone = String(form.get("phone") ?? "").trim();
         const gstNumber = String(form.get("gstNumber") ?? "").trim();
+        const addressLine1 = String(form.get("addressLine1") ?? "").trim();
+        const addressLine2 = String(form.get("addressLine2") ?? "").trim();
+        const city = String(form.get("city") ?? "").trim();
+        const state = String(form.get("state") ?? "").trim();
+        const pin = String(form.get("pin") ?? "").trim();
+        const country = String(form.get("country") ?? "").trim();
         const { firstName, lastName } = splitFullName(fullName);
         await registerCustomer({
           email,
@@ -156,7 +162,16 @@ function SignInPanel({ onDone }: { onDone: () => Promise<void> }) {
         // the full mutation chain and failure-safety reasoning.
         if (token) {
           try {
-            await setupB2BCompany({ data: { customerAccessToken: token, companyName, gstNumber } });
+            await setupB2BCompany({
+              data: {
+                customerAccessToken: token,
+                companyName,
+                gstNumber,
+                contactName: fullName,
+                ...(phone ? { phone } : {}),
+                address: { addressLine1, ...(addressLine2 ? { addressLine2 } : {}), city, state, pin, country },
+              },
+            });
             useB2BStore.getState().reset();
             await useB2BStore.getState().resolve(token);
             queryClient.invalidateQueries({ queryKey: ["shopify"] });
@@ -306,6 +321,49 @@ function SignInPanel({ onDone }: { onDone: () => Promise<void> }) {
             />
             {gstError ? <p className="text-sm text-destructive">{gstError}</p> : null}
           </div>
+        ) : null}
+
+        {isCompanyRegister ? (
+          <>
+            <div className="space-y-2">
+              <Label htmlFor="addressLine1" className="text-xs font-medium tracking-wide text-muted-foreground">
+                Address Line 1
+              </Label>
+              <Input id="addressLine1" name="addressLine1" required className="rounded-xl" autoComplete="address-line1" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="addressLine2" className="text-xs font-medium tracking-wide text-muted-foreground">
+                Address Line 2 (optional)
+              </Label>
+              <Input id="addressLine2" name="addressLine2" className="rounded-xl" autoComplete="address-line2" />
+            </div>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div className="space-y-2">
+                <Label htmlFor="city" className="text-xs font-medium tracking-wide text-muted-foreground">
+                  City
+                </Label>
+                <Input id="city" name="city" required className="rounded-xl" autoComplete="address-level2" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="state" className="text-xs font-medium tracking-wide text-muted-foreground">
+                  State
+                </Label>
+                <Input id="state" name="state" required className="rounded-xl" autoComplete="address-level1" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="pin" className="text-xs font-medium tracking-wide text-muted-foreground">
+                  PIN / Postal Code
+                </Label>
+                <Input id="pin" name="pin" required className="rounded-xl" autoComplete="postal-code" />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="country" className="text-xs font-medium tracking-wide text-muted-foreground">
+                Country
+              </Label>
+              <Input id="country" name="country" required className="rounded-xl" autoComplete="country-name" defaultValue="India" />
+            </div>
+          </>
         ) : null}
 
         {mode === "forgot" ? null : (

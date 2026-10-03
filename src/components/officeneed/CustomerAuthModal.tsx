@@ -169,6 +169,12 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
         const companyName = String(form.get("companyName") ?? "").trim();
         const phone = String(form.get("phone") ?? "").trim();
         const gstNumber = String(form.get("gstNumber") ?? "").trim();
+        const addressLine1 = String(form.get("addressLine1") ?? "").trim();
+        const addressLine2 = String(form.get("addressLine2") ?? "").trim();
+        const city = String(form.get("city") ?? "").trim();
+        const state = String(form.get("state") ?? "").trim();
+        const pin = String(form.get("pin") ?? "").trim();
+        const country = String(form.get("country") ?? "").trim();
         const { firstName, lastName } = splitFullName(fullName);
         await registerCustomer({
           email,
@@ -201,7 +207,16 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
         // is active when it isn't.
         if (token) {
           try {
-            await setupB2BCompany({ data: { customerAccessToken: token, companyName, gstNumber } });
+            await setupB2BCompany({
+              data: {
+                customerAccessToken: token,
+                companyName,
+                gstNumber,
+                contactName: fullName,
+                ...(phone ? { phone } : {}),
+                address: { addressLine1, ...(addressLine2 ? { addressLine2 } : {}), city, state, pin, country },
+              },
+            });
             // The existing B2BSync-driven resolve() for this exact token
             // already ran (and found no company) the moment signInCustomer
             // fired officeneed-customer-token above -- resolve() no-ops on
@@ -356,6 +371,37 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
                 />
                 {gstError ? <p className="text-sm text-destructive">{gstError}</p> : null}
               </div>
+            ) : null}
+
+            {isCompanyRegister ? (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="addressLine1">Address Line 1</Label>
+                  <Input id="addressLine1" name="addressLine1" required autoComplete="address-line1" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="addressLine2">Address Line 2 (optional)</Label>
+                  <Input id="addressLine2" name="addressLine2" autoComplete="address-line2" />
+                </div>
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="city">City</Label>
+                    <Input id="city" name="city" required autoComplete="address-level2" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="state">State</Label>
+                    <Input id="state" name="state" required autoComplete="address-level1" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="pin">PIN / Postal Code</Label>
+                    <Input id="pin" name="pin" required autoComplete="postal-code" />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="country">Country</Label>
+                  <Input id="country" name="country" required autoComplete="country-name" defaultValue="India" />
+                </div>
+              </>
             ) : null}
 
             {mode === "forgot" ? null : (
