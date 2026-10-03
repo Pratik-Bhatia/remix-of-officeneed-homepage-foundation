@@ -19,6 +19,8 @@ import { TAXONOMY, resolveLiveTitle } from "@/lib/taxonomy";
 import { useCartStore } from "@/stores/cartStore";
 import { useB2BStore } from "@/stores/b2bStore";
 import { getCustomerToken } from "@/lib/customer";
+import { getB2BPriceOverlay } from "@/lib/b2b-pricing.functions";
+import { applyB2BPriceOverlay } from "@/lib/b2b-pricing";
 import { createServerOnlyFn } from "@tanstack/react-start";
 import { setResponseHeader } from "@tanstack/react-start/server";
 import { toast } from "sonner";
@@ -64,20 +66,38 @@ export const Route = createFileRoute("/products/$slug")({
     // there) -- the first server-rendered response always uses anonymous
     // pricing, which is correct and safe. On a client-side navigation, a
     // signed-in buyer's token is available here.
+    //
+    // buyer stays null even when a token IS present: Shopify's BuyerInput
+    // (what @inContext(buyer:...) takes) mandatorily requires
+    // customerAccessToken to be a Customer Account API (OAuth) token --
+    // confirmed live via schema introspection and a freshly-issued classic
+    // token being unconditionally rejected. This app only has classic
+    // customerAccessTokenCreate tokens (src/lib/customer.ts), which Shopify
+    // never accepts there, for ANY customer. Sending one anyway is what
+    // broke fetchProductByHandle/fetchRelatedProducts below for every
+    // signed-in visitor (see src/hooks/useBuyerContext.ts for the full
+    // writeup -- same root cause, same fix, independent call site).
     const token = getCustomerToken();
-    let buyer: BuyerContext = null;
+    const buyer: BuyerContext = null;
+    let companyLocationId: string | null = null;
     if (token) {
       // Idempotent: resolve() no-ops if already resolved for this exact
       // token (see src/stores/b2bStore.ts), so this is cheap on repeat
-      // navigations.
+      // client-side navigations. Only client-side navigations ever reach
+      // here with a non-null token -- getCustomerToken() is always null
+      // during the actual server-rendered SSR response (see comment
+      // above), so useB2BStore's module-level state is always this one
+      // browser's own, never shared across unrelated requests.
       await useB2BStore.getState().resolve(token);
-      const { companyLocationId } = useB2BStore.getState();
-      buyer = companyLocationId ? { customerAccessToken: token, companyLocationId } : { customerAccessToken: token };
+      companyLocationId = useB2BStore.getState().companyLocationId;
     }
 
     // See setPrivateCacheHeader's own comment above for why this matters
-    // and why it's gated + wrapped this way.
-    if (buyer && typeof window === "undefined") {
+    // and why it's gated + wrapped this way. Guards on companyLocationId
+    // now, not `buyer` (always null -- see above): the B2B price overlay
+    // below is the buyer-specific data that could leak into a future CDN
+    // cache rule, same risk @inContext used to carry.
+    if (companyLocationId && typeof window === "undefined") {
       try {
         setPrivateCacheHeader();
       } catch {
@@ -92,6 +112,37 @@ export const Route = createFileRoute("/products/$slug")({
       node = null;
     }
 
+    let related: any[] = [];
+    let relatedNodes: Awaited<ReturnType<typeof fetchRelatedProducts>> = [];
+    if (node) {
+      try {
+        const collectionHandles = node.collections?.edges.map((e: any) => e.node.handle) ?? [];
+        relatedNodes = await fetchRelatedProducts(node.handle, node.productType, collectionHandles, 4, buyer);
+      } catch (e) {
+        console.error("Failed to fetch related", e);
+      }
+    }
+
+    // B2B catalog price overlay (Admin API contextualPricing) -- see
+    // src/lib/b2b-pricing.functions.ts. companyLocationId here was
+    // resolved server-side above from the token, never accepted from the
+    // browser as-is; getB2BPriceOverlay re-verifies it against the
+    // customer's actual assigned locations again before using it. Any
+    // failure/empty result just means node/relatedNodes keep their normal
+    // Storefront prices -- never blocks rendering.
+    if (node && companyLocationId && token) {
+      try {
+        const variantIds = [node, ...relatedNodes].flatMap((n) => n.variants.edges.map((e: any) => e.node.id));
+        const overlay = await getB2BPriceOverlay({ data: { customerAccessToken: token, companyLocationId, variantIds } });
+        if (Object.keys(overlay).length > 0) {
+          node = applyB2BPriceOverlay(node, overlay);
+          relatedNodes = relatedNodes.map((n) => applyB2BPriceOverlay(n, overlay));
+        }
+      } catch (err) {
+        console.error("[B2B pricing] PDP overlay failed, falling back to normal pricing:", err);
+      }
+    }
+
     const product = staticProduct
       ? mergeProduct(staticProduct, node ?? undefined)
       : node
@@ -100,16 +151,7 @@ export const Route = createFileRoute("/products/$slug")({
 
     if (!product) throw notFound();
 
-    let related: any[] = [];
-    if (node) {
-      try {
-        const collectionHandles = node.collections?.edges.map((e: any) => e.node.handle) ?? [];
-        const relatedNodes = await fetchRelatedProducts(node.handle, node.productType, collectionHandles, 4, buyer);
-        related = relatedNodes.map(shopifyNodeToProduct);
-      } catch (e) {
-        console.error("Failed to fetch related", e);
-      }
-    }
+    related = relatedNodes.map(shopifyNodeToProduct);
 
     return { product, node, related };
   },

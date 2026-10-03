@@ -11,6 +11,8 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchProducts, fetchAllProducts, fetchCollections, formatMoney, type ShopifyProductNode, type ShopifyCollectionNode, type BuyerContext } from "@/lib/shopify";
 import { useBuyerContext } from "@/hooks/useBuyerContext";
 import { useB2BStore } from "@/stores/b2bStore";
+import { getB2BPriceOverlay, type B2BPriceOverlayMap } from "@/lib/b2b-pricing.functions";
+import { applyB2BPriceOverlayToAll } from "@/lib/b2b-pricing";
 import type { Product } from "@/lib/products";
 import { MAIN_CATEGORIES, productBelongsToCategory, resolveSubcategoryFromHandles, type MainCategory } from "@/lib/taxonomy";
 import { deriveFilterAttributes } from "@/lib/filters";
@@ -518,6 +520,42 @@ function buyerCacheConfig(
 }
 
 /**
+ * B2B catalog price overlay (Admin API contextualPricing, not
+ * @inContext(buyer:) -- see src/lib/b2b-pricing.functions.ts). Only ever
+ * fires when b2bStore has actually resolved a real company location for
+ * the signed-in customer; the companyLocationId/token sent are read from
+ * that server-resolved state, never from anything else client-controlled.
+ * A separate, short-lived React Query entry from the catalog/bestsellers
+ * query itself -- keeps the (now always-anonymous, safely shared) base
+ * product fetch cacheable while this overlay stays scoped to exactly the
+ * resolved company location, never bleeding into another buyer's cache.
+ */
+function useB2BPriceOverlayMap(variantIds: string[]) {
+  const status = useB2BStore((s) => s.status);
+  const companyLocationId = useB2BStore((s) => s.companyLocationId);
+  const token = useB2BStore((s) => s.resolvedForToken);
+  const ids = [...new Set(variantIds)].sort();
+  const enabled = status === "b2b" && !!companyLocationId && !!token && ids.length > 0;
+  const { data } = useQuery({
+    queryKey: ["shopify", "b2b-price-overlay", companyLocationId ?? "none", ids.join(",")],
+    queryFn: async (): Promise<B2BPriceOverlayMap> => {
+      if (!token || !companyLocationId) return {};
+      try {
+        return await getB2BPriceOverlay({ data: { customerAccessToken: token, companyLocationId, variantIds: ids } });
+      } catch (err) {
+        console.error("[B2B pricing] overlay fetch failed, falling back to normal pricing:", err instanceof Error ? err.message : err);
+        return {};
+      }
+    },
+    enabled,
+    staleTime: 0,
+    gcTime: 0,
+    retry: 1,
+  });
+  return data ?? {};
+}
+
+/**
  * Full catalogue: live Shopify products first, with any static product that has
  * no Shopify equivalent kept as a fallback. If Shopify is unavailable, the
  * static catalogue is returned untouched.
@@ -541,8 +579,10 @@ export function useShopifyCatalogue(staticProducts: Product[]) {
   const customerId = useB2BStore((s) => s.customerId);
   const { data } = useQuery(shopifyCatalogueQueryOptions(buyer, customerId));
 
-
-  const nodes = data ?? [];
+  const baseNodes = data ?? [];
+  const variantIds = baseNodes.flatMap((n) => n.variants.edges.map((e) => e.node.id));
+  const priceOverlay = useB2BPriceOverlayMap(variantIds);
+  const nodes = applyB2BPriceOverlayToAll(baseNodes, priceOverlay);
   if (nodes.length === 0) return staticProducts;
 
   const index = buildShopifyIndex(nodes);
@@ -579,7 +619,10 @@ export function useShopifyBestsellers(staticItems: Product[] = []): Product[] {
     retry: 1,
   });
 
-  const nodes = data ?? [];
+  const baseNodes = data ?? [];
+  const variantIds = baseNodes.flatMap((n) => n.variants.edges.map((e) => e.node.id));
+  const priceOverlay = useB2BPriceOverlayMap(variantIds);
+  const nodes = applyB2BPriceOverlayToAll(baseNodes, priceOverlay);
   if (nodes.length === 0) return staticItems;
 
   const live = nodes.map((node) => ({ ...shopifyNodeToProduct(node), badge: "Bestseller" as const }));
