@@ -14,33 +14,6 @@ export type Database = {
   }
   public: {
     Tables: {
-      business_account_requests: {
-        Row: {
-          company_name: string
-          created_at: string
-          gst_number: string
-          id: string
-          shopify_customer_id: string
-          updated_at: string
-        }
-        Insert: {
-          company_name: string
-          created_at?: string
-          gst_number: string
-          id?: string
-          shopify_customer_id: string
-          updated_at?: string
-        }
-        Update: {
-          company_name?: string
-          created_at?: string
-          gst_number?: string
-          id?: string
-          shopify_customer_id?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
       corporate_quote_requests: {
         Row: {
           additional_requirements: string | null
