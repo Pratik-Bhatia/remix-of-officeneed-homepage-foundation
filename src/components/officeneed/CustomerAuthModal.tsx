@@ -23,6 +23,9 @@ import { splitFullName } from "@/lib/name-utils";
 import { isValidGstin } from "@/lib/gst";
 import { useB2BStore } from "@/stores/b2bStore";
 
+/** Thrown internally when business setup is held for manual review. */
+class PendingReview extends Error {}
+
 export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const [mode, setMode] = useState<"signin" | "register" | "forgot">("signin");
   // Whether the neutral "we've sent a link" confirmation is showing, in
@@ -207,7 +210,7 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
         // is active when it isn't.
         if (token) {
           try {
-            await setupB2BCompany({
+            const setupResult = await setupB2BCompany({
               data: {
                 customerAccessToken: token,
                 companyName,
@@ -223,15 +226,21 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
             // a repeat call for the same token (see b2bStore.ts), so this
             // store must be reset first to force a genuinely fresh lookup
             // against the relationship that was *just* created.
+            if (setupResult.status === "pending_review") {
+              toast.info("This business is already registered. Our team will verify and add you to it shortly.");
+              throw new PendingReview();
+            }
             useB2BStore.getState().reset();
             await useB2BStore.getState().resolve(token);
             queryClient.invalidateQueries({ queryKey: ["shopify"] });
             toast.success("Your business account has been created successfully.");
           } catch (b2bErr) {
+            if (b2bErr instanceof PendingReview) { /* already told the shopper */ } else {
             console.error("[B2B setup] Automatic company setup failed:", b2bErr);
             toast.error(
               "Your account was created, but we couldn't finish setting up your business pricing automatically. Please contact OfficeNeed so we can complete this for you.",
             );
+            }
           }
         } else {
           toast.success("Account created successfully");
