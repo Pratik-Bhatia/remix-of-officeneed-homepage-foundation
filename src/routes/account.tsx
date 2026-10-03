@@ -470,6 +470,21 @@ function B2BAccountStatus() {
   const selectLocation = useB2BStore((s) => s.selectLocation);
   const queryClient = useQueryClient();
 
+  if (b2bStatus === "b2c") {
+    return (
+      <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-border bg-muted/30 px-4 py-3 text-sm">
+        <Building2 className="size-4 shrink-0 text-muted-foreground" />
+        <span className="text-muted-foreground">Buying for a company?</span>
+        <button
+          type="button"
+          className="font-medium text-primary hover:underline"
+          onClick={() => window.dispatchEvent(new Event("open-auth-modal"))}
+        >
+          Register my business
+        </button>
+      </div>
+    );
+  }
   if (b2bStatus !== "b2b" && b2bStatus !== "needs-location") return null;
 
   return (

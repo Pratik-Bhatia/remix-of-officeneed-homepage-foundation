@@ -354,7 +354,7 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
               {mode === "forgot"
                 ? "Reset your password"
                 : entryType === "company"
-                  ? mode === "signin" ? "Sign in to your business account" : "Create your business account"
+                  ? mode === "signin" ? "Sign in to your business account" : upgrade ? "Register your business" : "Create your business account"
                   : mode === "signin" ? "Sign in to your account" : "Create your account"}
             </DialogTitle>
             <DialogDescription>
@@ -505,7 +505,7 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
             <div className={"shrink-0 px-5 pb-5 pt-3 sm:px-6 " + (isCompanyRegister ? "border-t border-border bg-background" : "")}>
               <Button type="submit" className="w-full" disabled={busy}>
                 {busy ? <Loader2 className="size-4 animate-spin mr-2" /> : null}
-                {mode === "forgot" ? "Send Reset Link" : mode === "signin" ? "Sign In" : isCompanyRegister ? "Create Business Account" : "Create Account"}
+                {mode === "forgot" ? "Send Reset Link" : mode === "signin" ? "Sign In" : isCompanyRegister ? (upgrade ? "Register My Business" : "Create Business Account") : "Create Account"}
               </Button>
             </div>
           </form>
