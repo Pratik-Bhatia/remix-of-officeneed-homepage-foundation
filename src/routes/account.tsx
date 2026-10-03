@@ -27,6 +27,9 @@ import { cn } from "@/lib/utils";
 import { useB2BStore } from "@/stores/b2bStore";
 import { isValidGstin } from "@/lib/gst";
 
+/** Thrown internally when business setup is held for manual review. */
+class PendingReview extends Error {}
+
 export const Route = createFileRoute("/account")({
   head: () => ({
     meta: [
@@ -162,7 +165,7 @@ function SignInPanel({ onDone }: { onDone: () => Promise<void> }) {
         // the full mutation chain and failure-safety reasoning.
         if (token) {
           try {
-            await setupB2BCompany({
+            const setupResult = await setupB2BCompany({
               data: {
                 customerAccessToken: token,
                 companyName,
@@ -172,15 +175,21 @@ function SignInPanel({ onDone }: { onDone: () => Promise<void> }) {
                 address: { addressLine1, ...(addressLine2 ? { addressLine2 } : {}), city, state, pin, country },
               },
             });
+            if (setupResult.status === "pending_review") {
+              toast.info("This business is already registered. Our team will verify and add you to it shortly.");
+              throw new PendingReview();
+            }
             useB2BStore.getState().reset();
             await useB2BStore.getState().resolve(token);
             queryClient.invalidateQueries({ queryKey: ["shopify"] });
             toast.success("Your business account has been created successfully.");
           } catch (b2bErr) {
+            if (b2bErr instanceof PendingReview) { /* already told the shopper */ } else {
             console.error("[B2B setup] Automatic company setup failed:", b2bErr);
             toast.error(
               "Your account was created, but we couldn't finish setting up your business pricing automatically. Please contact OfficeNeed so we can complete this for you.",
             );
+            }
           }
         }
       } else {
@@ -461,6 +470,21 @@ function B2BAccountStatus() {
   const selectLocation = useB2BStore((s) => s.selectLocation);
   const queryClient = useQueryClient();
 
+  if (b2bStatus === "b2c") {
+    return (
+      <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-border bg-muted/30 px-4 py-3 text-sm">
+        <Building2 className="size-4 shrink-0 text-muted-foreground" />
+        <span className="text-muted-foreground">Buying for a company?</span>
+        <button
+          type="button"
+          className="font-medium text-primary hover:underline"
+          onClick={() => window.dispatchEvent(new Event("open-auth-modal"))}
+        >
+          Register my business
+        </button>
+      </div>
+    );
+  }
   if (b2bStatus !== "b2b" && b2bStatus !== "needs-location") return null;
 
   return (

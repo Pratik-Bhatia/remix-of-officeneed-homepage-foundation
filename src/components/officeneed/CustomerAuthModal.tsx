@@ -23,6 +23,9 @@ import { splitFullName } from "@/lib/name-utils";
 import { isValidGstin } from "@/lib/gst";
 import { useB2BStore } from "@/stores/b2bStore";
 
+/** Thrown internally when business setup is held for manual review. */
+class PendingReview extends Error {}
+
 export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const [mode, setMode] = useState<"signin" | "register" | "forgot">("signin");
   // Whether the neutral "we've sent a link" confirmation is showing, in
@@ -48,6 +51,10 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
   // -- it does NOT itself grant B2B pricing or create a Shopify Company.
   const [entryType, setEntryType] = useState<"customer" | "company">("customer");
   const [busy, setBusy] = useState(false);
+  // Opened while already signed in = a B2C customer upgrading their OWN
+  // account to business (from the account page). Identity comes only from
+  // the existing session token, so no email/password fields are shown.
+  const [upgrade, setUpgrade] = useState(false);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
@@ -76,8 +83,10 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
   const wasOpen = useRef(open);
   useEffect(() => {
     if (open && !wasOpen.current) {
-      setMode("signin");
-      setEntryType("customer");
+      const signedIn = !!getCustomerToken();
+      setUpgrade(signedIn);
+      setMode(signedIn ? "register" : "signin");
+      setEntryType(signedIn ? "company" : "customer");
       setGstError(null);
       setRecoverySent(false);
     }
@@ -119,7 +128,7 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
     // icon only open it when status === "out") -- but never silently
     // reuse/overwrite an existing session's data for a second
     // registration if this is ever reached anyway.
-    if (mode === "register" && getCustomerToken()) {
+    if (mode === "register" && getCustomerToken() && !upgrade) {
       toast.error("You're already signed in. Please sign out first to create a different account.");
       return;
     }
@@ -164,7 +173,7 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
         }
       } else if (entryType === "company") {
         const confirmPassword = String(form.get("confirmPassword") ?? "");
-        if (password !== confirmPassword) throw new Error("Passwords don't match.");
+        if (!upgrade && password !== confirmPassword) throw new Error("Passwords don't match.");
         const fullName = String(form.get("fullName") ?? "").trim();
         const companyName = String(form.get("companyName") ?? "").trim();
         const phone = String(form.get("phone") ?? "").trim();
@@ -176,13 +185,15 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
         const pin = String(form.get("pin") ?? "").trim();
         const country = String(form.get("country") ?? "").trim();
         const { firstName, lastName } = splitFullName(fullName);
-        await registerCustomer({
-          email,
-          password,
-          ...(firstName ? { firstName } : {}),
-          ...(lastName ? { lastName } : {}),
-          ...(phone ? { phone } : {}),
-        });
+        if (!upgrade) {
+          await registerCustomer({
+            email,
+            password,
+            ...(firstName ? { firstName } : {}),
+            ...(lastName ? { lastName } : {}),
+            ...(phone ? { phone } : {}),
+          });
+        }
         // The Shopify customer is already created and signed in at this
         // point -- a failure saving the company/GST intake record is
         // secondary and must not look like the whole registration failed.
@@ -207,7 +218,7 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
         // is active when it isn't.
         if (token) {
           try {
-            await setupB2BCompany({
+            const setupResult = await setupB2BCompany({
               data: {
                 customerAccessToken: token,
                 companyName,
@@ -223,15 +234,21 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
             // a repeat call for the same token (see b2bStore.ts), so this
             // store must be reset first to force a genuinely fresh lookup
             // against the relationship that was *just* created.
+            if (setupResult.status === "pending_review") {
+              toast.info("This business is already registered. Our team will verify and add you to it shortly.");
+              throw new PendingReview();
+            }
             useB2BStore.getState().reset();
             await useB2BStore.getState().resolve(token);
             queryClient.invalidateQueries({ queryKey: ["shopify"] });
             toast.success("Your business account has been created successfully.");
           } catch (b2bErr) {
+            if (b2bErr instanceof PendingReview) { /* already told the shopper */ } else {
             console.error("[B2B setup] Automatic company setup failed:", b2bErr);
             toast.error(
               "Your account was created, but we couldn't finish setting up your business pricing automatically. Please contact OfficeNeed so we can complete this for you.",
             );
+            }
           }
         } else {
           toast.success("Account created successfully");
@@ -337,7 +354,7 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
               {mode === "forgot"
                 ? "Reset your password"
                 : entryType === "company"
-                  ? mode === "signin" ? "Sign in to your business account" : "Create your business account"
+                  ? mode === "signin" ? "Sign in to your business account" : upgrade ? "Register your business" : "Create your business account"
                   : mode === "signin" ? "Sign in to your account" : "Create your account"}
             </DialogTitle>
             <DialogDescription>
@@ -355,7 +372,7 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
             </DialogDescription>
           </DialogHeader>
 
-          {mode === "forgot" ? null : (
+          {mode === "forgot" || upgrade ? null : (
             <Tabs
               value={entryType}
               onValueChange={(v) => {
@@ -398,10 +415,12 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
                       <Label htmlFor="companyName">Company Name</Label>
                       <Input id="companyName" name="companyName" autoComplete="organization" required />
                     </div>
+                    {upgrade ? null : (
                     <div className="space-y-2">
                       <Label htmlFor="email">Email</Label>
                       <Input id="email" name="email" type="email" required autoComplete="email" defaultValue="" placeholder="you@company.com" {...noAutofill} />
                     </div>
+                    )}
                     <div className="space-y-2">
                       <Label htmlFor="phone">Phone Number</Label>
                       <Input id="phone" name="phone" type="tel" required autoComplete="tel" defaultValue="+91 " placeholder="+91 98765 43210" />
@@ -449,6 +468,7 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
                     </div>
                   </div>
 
+                  {upgrade ? null : (<>
                   {sectionLabel("Account security")}
                   <div className="grid gap-4 sm:grid-cols-2">
                     {passwordField}
@@ -457,6 +477,7 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
                       <PasswordInput id="confirmPassword" name="confirmPassword" required minLength={5} defaultValue="" autoComplete="new-password" {...noAutofill} />
                     </div>
                   </div>
+                  </>)}
                 </>
               ) : (
                 <>
@@ -484,12 +505,13 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
             <div className={"shrink-0 px-5 pb-5 pt-3 sm:px-6 " + (isCompanyRegister ? "border-t border-border bg-background" : "")}>
               <Button type="submit" className="w-full" disabled={busy}>
                 {busy ? <Loader2 className="size-4 animate-spin mr-2" /> : null}
-                {mode === "forgot" ? "Send Reset Link" : mode === "signin" ? "Sign In" : isCompanyRegister ? "Create Business Account" : "Create Account"}
+                {mode === "forgot" ? "Send Reset Link" : mode === "signin" ? "Sign In" : isCompanyRegister ? (upgrade ? "Register My Business" : "Create Business Account") : "Create Account"}
               </Button>
             </div>
           </form>
         )}
 
+        {upgrade ? null : (
         <div className="shrink-0 px-5 pb-5 text-center text-sm text-muted-foreground sm:px-6">
           <button
             type="button"
@@ -511,6 +533,7 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
                 : "Already have an account? Sign in"}
           </button>
         </div>
+        )}
       </DialogContent>
     </Dialog>
   );

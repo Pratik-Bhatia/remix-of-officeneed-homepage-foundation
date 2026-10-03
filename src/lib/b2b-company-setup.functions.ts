@@ -72,7 +72,11 @@ import { adminGraphQLRequest } from "@/lib/shopify-admin.server";
 import { resolveCustomerIdFromToken } from "@/lib/b2b.functions";
 import { isValidGstin, normalizeGstin } from "@/lib/gst";
 
-export type B2BCompanySetupResult = { companyId: string; companyLocationId: string };
+export type B2BCompanySetupResult =
+  | { status: "created"; companyId: string; companyLocationId: string }
+  /** GST already belongs to a company this customer is not a member of.
+   * Never auto-joined: GSTINs are public, so knowing one proves nothing. */
+  | { status: "pending_review" };
 
 // TEMPORARY DIAGNOSTIC: every throw point below is tagged with a safe,
 // stable stage identifier -- added to pin down exactly which step of the
@@ -446,6 +450,27 @@ export const setupB2BCompany = createServerFn({ method: "POST" })
 
     const existing = await findCompanyByExternalId(data.gstNumber);
     if (existing) {
+      // SECURITY: a GST match alone must never add someone to an existing
+      // company (GSTINs are public -- printed on invoices, searchable on
+      // the GST portal). Only a customer who is ALREADY a contact of this
+      // company may continue (retry/self-heal of their own setup);
+      // everyone else is recorded for manual OfficeNeed review instead.
+      const membership = await findExistingContact(customerId, existing.id);
+      if (!membership) {
+        try {
+          const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+          await supabaseAdmin
+            .from("business_account_requests")
+            .upsert(
+              { shopify_customer_id: customerId, company_name: data.companyName, gst_number: data.gstNumber },
+              { onConflict: "shopify_customer_id" },
+            );
+        } catch (e) {
+          console.error("[B2B setup] Failed to record pending review request:", e);
+        }
+        console.warn("[B2B setup] GST matched an existing company; join held for manual review.");
+        return { status: "pending_review" };
+      }
       companyId = existing.id;
       orderingOnlyRoleId = resolveOrderingOnlyRoleId(existing.contactRoles);
       const existingLocation = existing.locations.edges[0]?.node ?? null;
@@ -533,5 +558,5 @@ export const setupB2BCompany = createServerFn({ method: "POST" })
     // 4/5/6, fully idempotent -- see ensureContactAndRole's doc comment.
     await ensureContactAndRole(customerId, companyId, companyLocationId, orderingOnlyRoleId);
 
-    return { companyId, companyLocationId };
+    return { status: "created", companyId, companyLocationId };
   });
