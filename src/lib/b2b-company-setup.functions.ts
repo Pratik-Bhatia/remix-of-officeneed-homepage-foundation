@@ -61,6 +61,30 @@ import { isValidGstin, normalizeGstin } from "@/lib/gst";
 
 export type B2BCompanySetupResult = { companyId: string; companyLocationId: string };
 
+// TEMPORARY DIAGNOSTIC: every throw point below is tagged with a safe,
+// stable stage identifier -- added to pin down exactly which step of the
+// automatic B2B setup is failing in production (confirmed: customer
+// creation succeeds, but no Company is ever created, so the failure is
+// somewhere between here and companyCreate). Never includes a token,
+// secret, or Authorization header -- only Shopify's own error text, which
+// never contains those. Remove once the production root cause is
+// confirmed and fixed.
+type AdminErrorLike = { message: string; extensions?: { code?: string } };
+
+/** Stage-tagged error for a GraphQL-level failure (top-level `errors` or a
+ * mutation's own `userErrors`) -- distinguishes an ACCESS_DENIED scope
+ * failure from any other kind of GraphQL error within the same stage. */
+function stageGraphQLError(stage: string, errors: Array<AdminErrorLike>, label: string): Error {
+  const kind = errors.some((e) => e.extensions?.code === "ACCESS_DENIED") ? "ADMIN_GRAPHQL_ACCESS_DENIED" : "ADMIN_GRAPHQL_ERROR";
+  return new Error(`[${stage}:${kind}] ${label}: ${errors.map((e) => e.message).join("; ")}`);
+}
+
+/** Stage-tagged error for a failure that isn't itself a GraphQL error list
+ * (e.g. "the mutation succeeded but returned no usable result"). */
+function stagePlainError(stage: string, message: string): Error {
+  return new Error(`[${stage}] ${message}`);
+}
+
 const ORDERING_ONLY_ROLE_NAME = "Ordering only";
 
 type ContactRole = { id: string; name: string };
@@ -76,8 +100,9 @@ type CompanyRef = {
 function resolveOrderingOnlyRoleId(contactRoles: { edges: Array<{ node: ContactRole }> }): string {
   const role = contactRoles.edges.find((e) => e.node.name === ORDERING_ONLY_ROLE_NAME)?.node;
   if (!role) {
-    throw new Error(
-      `[B2B setup] Could not resolve the "${ORDERING_ONLY_ROLE_NAME}" contact role for this company -- refusing to fall back to a different role.`,
+    throw stagePlainError(
+      "ROLE_RESOLUTION_FAILED",
+      `Could not resolve the "${ORDERING_ONLY_ROLE_NAME}" contact role for this company -- refusing to fall back to a different role.`,
     );
   }
   return role.id;
@@ -111,10 +136,10 @@ type FindCompaniesPageData = {
 async function findCompanyByExternalId(externalId: string): Promise<CompanyRef | null> {
   let after: string | null = null;
   for (let page = 0; page < MAX_COMPANY_LOOKUP_PAGES; page++) {
-    const result: { data: FindCompaniesPageData | null; errors: Array<{ message: string }> } =
+    const result: { data: FindCompaniesPageData | null; errors: Array<AdminErrorLike> } =
       await adminGraphQLRequest<FindCompaniesPageData>(FIND_COMPANIES_PAGE_QUERY, { after });
     if (result.errors?.length) {
-      throw new Error(`[B2B setup] Company lookup failed: ${result.errors.map((e: { message: string }) => e.message).join("; ")}`);
+      throw stageGraphQLError("GST_LOOKUP_FAILED", result.errors, "Company lookup failed");
     }
     const edges: Array<{ cursor: string; node: CompanyRef }> = result.data?.companies.edges ?? [];
     const match = edges.find((e: { cursor: string; node: CompanyRef }) => e.node.externalId === externalId);
@@ -205,7 +230,7 @@ async function findExistingContact(
 ): Promise<{ companyContactId: string; hasRoleAtLocation: (roleId: string, locationId: string) => boolean } | null> {
   const result = await adminGraphQLRequest<CustomerMembershipData>(CUSTOMER_COMPANY_MEMBERSHIP_QUERY, { customerId });
   if (result.errors?.length) {
-    throw new Error(`[B2B setup] Membership lookup failed: ${result.errors.map((e) => e.message).join("; ")}`);
+    throw stageGraphQLError("MEMBERSHIP_LOOKUP_FAILED", result.errors, "Membership lookup failed");
   }
   const profile = (result.data?.customer?.companyContactProfiles ?? []).find((p) => p.company.id === companyId);
   if (!profile) return null;
@@ -238,18 +263,14 @@ async function ensureContactAndRole(
       };
     }>(ASSIGN_CONTACT_MUTATION, { companyId, customerId });
     if (assignResult.errors?.length) {
-      throw new Error(
-        `[B2B setup] companyAssignCustomerAsContact failed: ${assignResult.errors.map((e) => e.message).join("; ")}`,
-      );
+      throw stageGraphQLError("ASSIGN_CONTACT_FAILED", assignResult.errors, "companyAssignCustomerAsContact failed");
     }
     const assignErrors = assignResult.data?.companyAssignCustomerAsContact.userErrors ?? [];
     if (assignErrors.length) {
-      throw new Error(
-        `[B2B setup] companyAssignCustomerAsContact rejected: ${assignErrors.map((e) => e.message).join("; ")}`,
-      );
+      throw stageGraphQLError("ASSIGN_CONTACT_FAILED", assignErrors, "companyAssignCustomerAsContact rejected");
     }
     companyContactId = assignResult.data?.companyAssignCustomerAsContact.companyContact?.id ?? null;
-    if (!companyContactId) throw new Error("[B2B setup] No company contact was returned after assignment.");
+    if (!companyContactId) throw stagePlainError("ASSIGN_CONTACT_FAILED", "No company contact was returned after assignment.");
   }
 
   const alreadyHasRole = existingMembership?.hasRoleAtLocation(orderingOnlyRoleId, companyLocationId) ?? false;
@@ -261,11 +282,11 @@ async function ensureContactAndRole(
       };
     }>(ASSIGN_ROLE_MUTATION, { companyContactId, companyContactRoleId: orderingOnlyRoleId, companyLocationId });
     if (roleResult.errors?.length) {
-      throw new Error(`[B2B setup] companyContactAssignRole failed: ${roleResult.errors.map((e) => e.message).join("; ")}`);
+      throw stageGraphQLError("ASSIGN_ROLE_FAILED", roleResult.errors, "companyContactAssignRole failed");
     }
     const roleErrors = roleResult.data?.companyContactAssignRole.userErrors ?? [];
     if (roleErrors.length) {
-      throw new Error(`[B2B setup] companyContactAssignRole rejected: ${roleErrors.map((e) => e.message).join("; ")}`);
+      throw stageGraphQLError("ASSIGN_ROLE_FAILED", roleErrors, "companyContactAssignRole rejected");
     }
   }
 }
@@ -285,7 +306,7 @@ export const setupB2BCompany = createServerFn({ method: "POST" })
   .handler(async ({ data }): Promise<B2BCompanySetupResult> => {
     // 1. Trusted identity -- same rule as every other B2B server function.
     const customerId = await resolveCustomerIdFromToken(data.customerAccessToken);
-    if (!customerId) throw new Error("[B2B setup] Could not verify the signed-in customer.");
+    if (!customerId) throw stagePlainError("CUSTOMER_RESOLUTION_FAILED", "Could not verify the signed-in customer.");
 
     // 2 / 3. Find-or-create the Company, keyed on GST.
     let companyId: string;
@@ -314,14 +335,16 @@ export const setupB2BCompany = createServerFn({ method: "POST" })
           input: { name: `${data.companyName} - Head Office`, taxRegistrationId: data.gstNumber },
         });
         if (locationResult.errors?.length) {
-          throw new Error(`[B2B setup] companyLocationCreate failed: ${locationResult.errors.map((e) => e.message).join("; ")}`);
+          throw stageGraphQLError("COMPANY_LOCATION_CREATE_FAILED", locationResult.errors, "companyLocationCreate failed");
         }
         const locationErrors = locationResult.data?.companyLocationCreate.userErrors ?? [];
         if (locationErrors.length) {
-          throw new Error(`[B2B setup] companyLocationCreate rejected: ${locationErrors.map((e) => e.message).join("; ")}`);
+          throw stageGraphQLError("COMPANY_LOCATION_CREATE_FAILED", locationErrors, "companyLocationCreate rejected");
         }
         companyLocationId = locationResult.data?.companyLocationCreate.companyLocation?.id ?? null;
-        if (!companyLocationId) throw new Error("[B2B setup] companyLocationCreate did not return a usable location.");
+        if (!companyLocationId) {
+          throw stagePlainError("COMPANY_LOCATION_CREATE_FAILED", "companyLocationCreate did not return a usable location.");
+        }
       }
     } else {
       const createResult = await adminGraphQLRequest<{
@@ -333,18 +356,18 @@ export const setupB2BCompany = createServerFn({ method: "POST" })
         },
       });
       if (createResult.errors?.length) {
-        throw new Error(`[B2B setup] companyCreate failed: ${createResult.errors.map((e) => e.message).join("; ")}`);
+        throw stageGraphQLError("COMPANY_CREATE_FAILED", createResult.errors, "companyCreate failed");
       }
       const userErrors = createResult.data?.companyCreate.userErrors ?? [];
       if (userErrors.length) {
-        throw new Error(`[B2B setup] companyCreate rejected: ${userErrors.map((e) => e.message).join("; ")}`);
+        throw stageGraphQLError("COMPANY_CREATE_FAILED", userErrors, "companyCreate rejected");
       }
       const company = createResult.data?.companyCreate.company;
-      if (!company) throw new Error("[B2B setup] companyCreate returned no company.");
+      if (!company) throw stagePlainError("COMPANY_CREATE_FAILED", "companyCreate returned no company.");
       companyId = company.id;
       orderingOnlyRoleId = resolveOrderingOnlyRoleId(company.contactRoles);
       companyLocationId = company.locations.edges[0]?.node.id ?? null;
-      if (!companyLocationId) throw new Error("[B2B setup] companyCreate did not create a usable location.");
+      if (!companyLocationId) throw stagePlainError("COMPANY_CREATE_FAILED", "companyCreate did not create a usable location.");
     }
 
     // 4/5/6, fully idempotent -- see ensureContactAndRole's doc comment.

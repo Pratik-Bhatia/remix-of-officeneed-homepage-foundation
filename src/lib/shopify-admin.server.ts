@@ -33,9 +33,17 @@
 // periodically -- Shopify cuts a new stable version every quarter.
 const SHOPIFY_ADMIN_API_VERSION = "2026-10";
 
+// TEMPORARY DIAGNOSTIC (see this file's error messages below): every
+// throw point here is prefixed with a bracketed stage tag -- a safe,
+// stable identifier for WHICH Admin API initialization stage failed,
+// added to pin down the exact production failure without exposing any
+// secret, token, or Authorization header. Never logs SHOPIFY_CLIENT_ID/
+// SHOPIFY_CLIENT_SECRET values, only whether each is present. Remove
+// once the production root cause is confirmed and fixed.
+
 function getShopDomain() {
   const shop = process.env["SHOPIFY_SHOP"];
-  if (!shop) throw new Error("SHOPIFY_SHOP is not configured on the server.");
+  if (!shop) throw new Error("[ADMIN_ENV_MISSING:SHOPIFY_SHOP] SHOPIFY_SHOP is not configured on the server.");
   return shop;
 }
 
@@ -68,8 +76,18 @@ async function requestNewToken(): Promise<{ accessToken: string; expiresAt: numb
   const shop = getShopDomain();
   const clientId = process.env["SHOPIFY_CLIENT_ID"];
   const clientSecret = process.env["SHOPIFY_CLIENT_SECRET"];
-  if (!clientId || !clientSecret) {
-    throw new Error("SHOPIFY_CLIENT_ID/SHOPIFY_CLIENT_SECRET are not configured on the server.");
+  // Checked individually (not combined) so the diagnostic can name exactly
+  // which variable(s) this runtime cannot see -- never their values.
+  if (!clientId && !clientSecret) {
+    throw new Error(
+      "[ADMIN_ENV_MISSING:SHOPIFY_CLIENT_ID,SHOPIFY_CLIENT_SECRET] Neither SHOPIFY_CLIENT_ID nor SHOPIFY_CLIENT_SECRET is configured on the server.",
+    );
+  }
+  if (!clientId) {
+    throw new Error("[ADMIN_ENV_MISSING:SHOPIFY_CLIENT_ID] SHOPIFY_CLIENT_ID is not configured on the server.");
+  }
+  if (!clientSecret) {
+    throw new Error("[ADMIN_ENV_MISSING:SHOPIFY_CLIENT_SECRET] SHOPIFY_CLIENT_SECRET is not configured on the server.");
   }
 
   const resp = await fetch(`https://${shop}/admin/oauth/access_token`, {
@@ -80,12 +98,12 @@ async function requestNewToken(): Promise<{ accessToken: string; expiresAt: numb
 
   if (!resp.ok) {
     // Never echo the response body verbatim -- it can reflect request details.
-    throw new Error(`Shopify Admin token request failed (HTTP ${resp.status}).`);
+    throw new Error(`[ADMIN_TOKEN_REQUEST_FAILED] Shopify Admin token request failed (HTTP ${resp.status}).`);
   }
 
   const json = (await resp.json()) as { access_token?: string; expires_in?: number };
   if (!json.access_token) {
-    throw new Error("Shopify token endpoint responded without an access_token.");
+    throw new Error("[ADMIN_TOKEN_REQUEST_FAILED] Shopify token endpoint responded without an access_token.");
   }
 
   const lifetimeMs = typeof json.expires_in === "number" ? json.expires_in * 1000 : FALLBACK_TOKEN_LIFETIME_MS;
@@ -179,7 +197,7 @@ export async function adminGraphQLRequest<T = Record<string, unknown>>(
     // problem (bad client id/secret, app uninstalled), not staleness --
     // surface it clearly rather than returning an empty-looking result.
     throw new Error(
-      `Shopify Admin API authentication failed (HTTP ${second.httpStatus}) even after refreshing the token. This usually means a required access scope is missing from the app's Dev Dashboard installation, or the app's credentials are no longer valid.`,
+      `[ADMIN_GRAPHQL_ACCESS_DENIED] Shopify Admin API authentication failed (HTTP ${second.httpStatus}) even after refreshing the token. This usually means a required access scope is missing from the app's Dev Dashboard installation, or the app's credentials are no longer valid.`,
     );
   }
   return { data: second.data, errors: second.errors };
