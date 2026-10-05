@@ -73,11 +73,7 @@ import { adminGraphQLRequest } from "@/lib/shopify-admin.server";
 import { resolveCustomerIdFromToken } from "@/lib/b2b.functions";
 import { isValidGstin, normalizeGstin } from "@/lib/gst";
 
-export type B2BCompanySetupResult =
-  | { status: "created"; companyId: string; companyLocationId: string }
-  /** GST already belongs to a company this customer is not a member of.
-   * Never auto-joined: GSTINs are public, so knowing one proves nothing. */
-  | { status: "pending_review" };
+export type B2BCompanySetupResult = { status: "created"; companyId: string; companyLocationId: string };
 
 // TEMPORARY DIAGNOSTIC: every throw point below is tagged with a safe,
 // stable stage identifier -- added to pin down exactly which step of the
@@ -471,28 +467,16 @@ export const setupB2BCompany = createServerFn({ method: "POST" })
 
     const existing = await findCompanyByExternalId(data.gstNumber);
     if (existing) {
-      // SECURITY: a GST match alone must never add someone to an existing
-      // company (GSTINs are public -- printed on invoices, searchable on
-      // the GST portal). Only a customer who is ALREADY a contact of this
-      // company may continue (retry/self-heal of their own setup);
-      // everyone else is recorded for manual OfficeNeed review instead.
-      const membership = await findExistingContact(customerId, existing.id);
-      if (!membership) {
-        try {
-          const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-          await supabaseAdmin
-            .from("business_account_requests")
-            .upsert(
-              { shopify_customer_id: customerId, company_name: data.companyName, gst_number: data.gstNumber },
-              { onConflict: "shopify_customer_id" },
-            );
-        } catch (e) {
-          console.error("[B2B setup] Failed to record pending review request:", e);
-        }
-        console.warn(`[B2B setup] branch=existing-pending customer=${customerId} gst=${data.gstNumber} company=${existing.id}`);
-        return { status: "pending_review" };
-      }
-      console.log(`[B2B setup] branch=existing-member customer=${customerId} gst=${data.gstNumber} company=${existing.id}`);
+      // ONE GSTIN -> ONE Shopify Company -> MANY Company Contacts: any
+      // customer whose GST matches an existing Company is attached to
+      // that SAME Company, never a new one -- the submitted Company Name
+      // is ignored for identity purposes and the existing Company's own
+      // name is never written here. ensureContactAndRole below (shared
+      // with the fresh-company branch) is what actually assigns this
+      // customer as a contact with the Ordering only role, and is
+      // idempotent whether this customer is brand new to the company or
+      // retrying their own prior setup.
+      console.log(`[B2B setup] branch=existing customer=${customerId} gst=${data.gstNumber} company=${existing.id}`);
       companyId = existing.id;
       orderingOnlyRoleId = resolveOrderingOnlyRoleId(existing.contactRoles);
       const existingLocation = existing.locations.edges[0]?.node ?? null;
