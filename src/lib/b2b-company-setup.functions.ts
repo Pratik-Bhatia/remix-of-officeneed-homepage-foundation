@@ -1,3 +1,4 @@
+import { toIndiaZoneCode } from "./india-zones";
 /**
  * Automatic Shopify B2B company setup, run immediately after a Company-tab
  * self-registration (src/lib/customer.ts's registerCustomer, unchanged).
@@ -159,6 +160,7 @@ async function assignCompanyLocationAddress(
   phone: string | undefined,
   stage: string,
 ): Promise<void> {
+  console.log(`[B2B setup] company address codes stage=${stage} countryCode=IN zoneCode=${address.state} addressTypes=BILLING,SHIPPING`);
   const result = await adminGraphQLRequest<{
     companyLocationAssignAddress: {
       addresses: Array<{ id: string }> | null;
@@ -414,7 +416,9 @@ export const setupB2BCompany = createServerFn({ method: "POST" })
     const addressLine1 = input.address?.addressLine1?.trim() ?? "";
     const addressLine2 = input.address?.addressLine2?.trim() || undefined;
     const city = input.address?.city?.trim() ?? "";
-    const state = input.address?.state?.trim() ?? "";
+    const stateRaw = input.address?.state?.trim() ?? "";
+    const state = stateRaw ? toIndiaZoneCode(stateRaw) : "";
+    if (state === null) throw new Error("Please enter a valid Indian state (e.g. Maharashtra).");
     const pin = input.address?.pin?.trim() ?? "";
     const country = input.address?.country?.trim() ?? "";
     if (!addressLine1) throw new Error("Address Line 1 is required.");
