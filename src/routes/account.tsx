@@ -489,9 +489,9 @@ function B2BAccountStatus() {
 
   return (
     <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-border bg-muted/30 px-4 py-3 text-sm">
-      <Building2 className="size-4 shrink-0 text-muted-foreground" />
       {b2bStatus === "needs-location" ? (
         <>
+          <Building2 className="size-4 shrink-0 text-muted-foreground" />
           <span className="text-muted-foreground">Select your business location to see your company pricing:</span>
           <Select
             onValueChange={(id) => {
@@ -512,9 +512,13 @@ function B2BAccountStatus() {
           </Select>
         </>
       ) : (
-        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-6 gap-y-2">
-          <span className="text-foreground">Business account</span>
-          {locations.length > 1 ? (
+        <div className="flex w-full min-w-0 items-center gap-6 sm:gap-8">
+          <div className="flex shrink-0 items-center gap-3">
+            <Building2 className="size-4 shrink-0 text-muted-foreground" />
+            <span className="text-foreground">Business account</span>
+          </div>
+          <div className="flex min-w-0 items-center border-l border-border pl-6 sm:pl-8">
+            {locations.length > 1 ? (
               <Select
                 {...(companyLocationId ? { value: companyLocationId } : {})}
                 onValueChange={(id) => {
@@ -533,9 +537,10 @@ function B2BAccountStatus() {
                   ))}
                 </SelectContent>
               </Select>
-          ) : (
-            <span className="min-w-0 truncate text-muted-foreground">{locations[0]?.name}</span>
-          )}
+            ) : (
+              <span className="min-w-0 truncate font-medium text-foreground">{locations[0]?.name}</span>
+            )}
+          </div>
         </div>
       )}
     </div>
