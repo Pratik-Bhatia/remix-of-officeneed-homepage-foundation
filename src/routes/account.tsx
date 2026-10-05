@@ -472,7 +472,7 @@ function B2BAccountStatus() {
 
   if (b2bStatus === "b2c") {
     return (
-      <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-border bg-muted/30 px-4 py-3 text-sm">
+      <div className="mt-4 mb-6 flex flex-wrap items-center gap-3 rounded-xl border border-border bg-muted/30 px-4 py-3 text-sm">
         <Building2 className="size-4 shrink-0 text-muted-foreground" />
         <span className="text-muted-foreground">Buying for a company?</span>
         <button
@@ -488,7 +488,7 @@ function B2BAccountStatus() {
   if (b2bStatus !== "b2b" && b2bStatus !== "needs-location") return null;
 
   return (
-    <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-border bg-muted/30 px-4 py-3 text-sm">
+    <div className="mt-4 mb-6 flex flex-wrap items-center gap-3 rounded-xl border border-border bg-muted/30 px-4 py-3 text-sm">
       {b2bStatus === "needs-location" ? (
         <>
           <Building2 className="size-4 shrink-0 text-muted-foreground" />
