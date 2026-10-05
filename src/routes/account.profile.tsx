@@ -180,9 +180,7 @@ function BusinessDetailsFormDialog({
         data: {
           customerAccessToken: token,
           ...(companyLocationId ? { companyLocationId } : {}),
-          locationName: String(form.get("locationName") ?? "").trim(),
           companyName: String(form.get("companyName") ?? "").trim(),
-          contactName: String(form.get("contactName") ?? "").trim(),
           ...(phone ? { phone } : {}),
           address1: String(form.get("address1") ?? "").trim(),
           ...(address2 ? { address2 } : {}),
@@ -212,8 +210,6 @@ function BusinessDetailsFormDialog({
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 py-2">
           <Field id="companyName" label="Company Name" defaultValue={details.companyName} />
-          <Field id="locationName" label="Location Name" defaultValue={details.locationName} />
-          <Field id="contactName" label="Contact Person's Name" defaultValue={details.contactName ?? ""} />
           <div className="grid gap-4 sm:grid-cols-2">
             <Field id="phone" label="Phone" type="tel" defaultValue={details.phone ?? ""} />
             <Field id="gstNumber" label="GST Number" defaultValue={details.gstNumber ?? ""} disabled />
@@ -303,20 +299,15 @@ function BusinessAccountSection() {
             <dd className="mt-1 text-foreground/90">{details.companyName}</dd>
           </div>
           <div>
-            <dt className="text-xs font-medium tracking-wide text-muted-foreground">Location Name</dt>
-            <dd className="mt-1 text-foreground/90">{details.locationName}</dd>
-          </div>
-          <div>
             <dt className="text-xs font-medium tracking-wide text-muted-foreground">GST Number</dt>
             <dd className="mt-1 text-foreground/90">{details.gstNumber ?? "—"}</dd>
           </div>
-          <div>
-            <dt className="text-xs font-medium tracking-wide text-muted-foreground">Contact</dt>
-            <dd className="mt-1 text-foreground/90">
-              {details.contactName ?? "—"}
-              {details.phone ? ` · ${details.phone}` : ""}
-            </dd>
-          </div>
+          {details.phone ? (
+            <div>
+              <dt className="text-xs font-medium tracking-wide text-muted-foreground">Phone</dt>
+              <dd className="mt-1 text-foreground/90">{details.phone}</dd>
+            </div>
+          ) : null}
           <div className="sm:col-span-2">
             <dt className="text-xs font-medium tracking-wide text-muted-foreground">Business Address</dt>
             <dd className="mt-1 text-foreground/90">{addressLine || "—"}</dd>
