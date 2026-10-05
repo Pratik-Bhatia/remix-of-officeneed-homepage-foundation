@@ -131,10 +131,16 @@ export function ProductCard({
         to="/products/$slug"
         params={{ slug: product.slug }}
         aria-label={`View ${product.name}`}
-        className="group flex h-full flex-col rounded-2xl bg-white p-3 sm:p-4 shadow-[0_2px_12px_rgba(0,0,0,0.05)] transition-shadow duration-300 hover:shadow-[0_4px_20px_rgba(0,0,0,0.08)] outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+        className="group flex h-full flex-col outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-background"
       >
+        {/* The white rounded/shadowed "card" surface belongs to the image
+            only -- vendor/title/price below sit directly on the page
+            background, not inside a second white box. */}
         <div
-          className={cn("relative aspect-square w-full overflow-hidden rounded-xl", imageWellClassName ?? "bg-white")}
+          className={cn(
+            "relative aspect-square w-full overflow-hidden rounded-2xl shadow-[0_2px_12px_rgba(0,0,0,0.05)] transition-shadow duration-300 group-hover:shadow-[0_4px_20px_rgba(0,0,0,0.08)]",
+            imageWellClassName ?? "bg-white",
+          )}
           onPointerEnter={handlePointerEnter}
           onPointerLeave={handlePointerLeave}
         >
@@ -177,24 +183,27 @@ export function ProductCard({
           )}
         </div>
 
-        <div className="mt-4 flex flex-1 flex-col gap-2 px-1 pb-1">
+        {/* Compact info block, centered: vendor (optional), then title,
+            then price stacked BELOW it (never beside it) -- price given
+            more size/weight than the title so it reads as the stronger
+            element, while staying in the same font family/color system. */}
+        <div className="mt-2.5 flex flex-1 flex-col items-center gap-1 px-1 pb-1 text-center">
           {showEyebrow && (
             <p className="text-eyebrow text-muted-foreground">
               {product.vendor || eyebrowLabel(collections, product.subcategories[0] ?? product.category)}
             </p>
           )}
-          {/* min-h reserves 2 lines' worth of space on mobile even for a
-              short 1-line title, so the price sits at the same height
-              across every card in a row instead of drifting up/down with
-              title length; reset at sm: so desktop is unaffected. */}
-          <h3 className="line-clamp-2 min-h-[2.5rem] sm:min-h-0 text-sm font-medium leading-snug text-foreground sm:text-base">
+          <h3 className="line-clamp-2 text-sm font-semibold leading-snug text-foreground sm:text-base">
             {product.name}
           </h3>
-          <p className="text-xs tabular-nums text-foreground/80">
+          <p className="text-base font-normal tabular-nums text-foreground sm:text-lg">
             {pricePending ? (
               <span className="inline-block h-[1em] w-16 animate-pulse rounded bg-muted align-middle" aria-hidden />
             ) : product.price ? (
-              `${product.startingPrice ? "From " : ""}${product.price}`
+              // Still the min/starting variant price Shopify returned
+              // (product.startingPrice/product.price are unchanged) -- only
+              // the "From " prefix text is dropped from this display.
+              product.price
             ) : (
               "Price on enquiry"
             )}
