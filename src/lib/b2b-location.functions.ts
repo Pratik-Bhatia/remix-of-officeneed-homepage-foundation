@@ -159,8 +159,8 @@ export const updateB2BLocationDetails = createServerFn({ method: "POST" })
     customerAccessToken: string;
     companyLocationId?: string;
     companyName?: string;
-    locationName: string;
-    contactName: string;
+    locationName?: string;
+    contactName?: string;
     phone?: string;
     address1: string;
     address2?: string;
@@ -189,8 +189,8 @@ export const updateB2BLocationDetails = createServerFn({ method: "POST" })
       customerAccessToken: input.customerAccessToken,
       companyLocationId: input.companyLocationId,
       companyName: opt(input.companyName, "Company name"),
-      locationName: req(input.locationName, "Location name"),
-      contactName: req(input.contactName, "Contact name"),
+      locationName: opt(input.locationName, "Location name"),
+      contactName: opt(input.contactName, "Contact name"),
       phone: opt(input.phone, "Phone", 30),
       address1: req(input.address1, "Address Line 1"),
       address2: opt(input.address2, "Address Line 2"),
@@ -202,12 +202,15 @@ export const updateB2BLocationDetails = createServerFn({ method: "POST" })
   .handler(async ({ data }): Promise<B2BLocationDetails> => {
     const { customerId, companyLocationId } = await resolveAuthorizedCustomer(data.customerAccessToken, data.companyLocationId);
     const location = await loadSharedLocation(companyLocationId);
+    // Location name / contact are no longer collected in the customer UI;
+    // keep whatever this customer already had stored rather than wiping it.
+    const existingOwn = await loadOwnDetails(customerId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const row = {
       shopify_customer_id: customerId,
       company_name: data.companyName ?? location.company.name,
-      location_name: data.locationName,
-      contact_name: data.contactName,
+      location_name: data.locationName ?? existingOwn?.location_name ?? null,
+      contact_name: data.contactName ?? existingOwn?.contact_name ?? null,
       phone: data.phone ?? null,
       address1: data.address1,
       address2: data.address2 ?? null,
