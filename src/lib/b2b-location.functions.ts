@@ -18,7 +18,6 @@ import { toIndiaZoneCode } from "./india-zones";
 import { createServerFn } from "@tanstack/react-start";
 import { adminGraphQLRequest } from "@/lib/shopify-admin.server";
 import { resolveCustomerIdFromToken, resolveCompanyLocationsForCustomer } from "@/lib/b2b.functions";
-import { isValidGstin, normalizeGstin } from "@/lib/gst";
 
 export type B2BLocationDetails = {
   companyLocationId: string;
