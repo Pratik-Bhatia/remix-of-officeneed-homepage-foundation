@@ -314,19 +314,24 @@ export async function registerCustomer(input: {
   try {
     const resp = await storefrontApiRequest(
       `mutation Register($input: CustomerCreateInput!) {
-         customerCreate(input: $input) { customerUserErrors { code message } }
+         customerCreate(input: $input) { customerUserErrors { code field message } }
        }`,
       { input },
     );
-    const errors = (resp?.data as { customerCreate: { customerUserErrors: Array<{ code: string | null; message: string }> } })
+    const errors = (resp?.data as { customerCreate: { customerUserErrors: Array<{ code: string | null; field?: string[] | null; message: string }> } })
       .customerCreate.customerUserErrors;
     const err = errors[0];
     if (err) {
-      // TAKEN: Shopify's customer uniqueness constraint -- never worked
-      // around. An account with this email already exists (active or
-      // still pending its own activation link, which the Storefront API
-      // doesn't distinguish for an anonymous registration attempt); the
-      // correct next step is always "sign in", never "create another".
+      // Shopify returns code TAKEN for BOTH a duplicate email and a
+      // duplicate phone -- the `field` path tells them apart. Only an email
+      // conflict means "account exists, sign in"; a phone conflict gets its
+      // own code so the modal does not switch to sign-in mode.
+      if (err.code === "TAKEN" && err.field?.includes("phone")) {
+        throw new CustomerAuthError(
+          "This phone number is already linked to another account. Please use a different phone number.",
+          "PHONE_TAKEN",
+        );
+      }
       if (err.code === "TAKEN") {
         throw new CustomerAuthError("An account already exists with this email. Please sign in.", err.code);
       }
