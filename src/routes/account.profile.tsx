@@ -300,9 +300,7 @@ function BusinessAccountSection() {
       ) : (
         <dl className="mt-5 grid gap-4 sm:grid-cols-2 text-sm">
           <div>
-            <dt className="text-xs font-medium tracking-wide text-muted-foreground">
-              Company Name <span className="font-normal normal-case text-muted-foreground/70">(set by OfficeNeed)</span>
-            </dt>
+            <dt className="text-xs font-medium tracking-wide text-muted-foreground">Company Name</dt>
             <dd className="mt-1 text-foreground/90">{details.companyName}</dd>
           </div>
           <div>
