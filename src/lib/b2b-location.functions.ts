@@ -133,6 +133,17 @@ const ASSIGN_ADDRESS_MUTATION = `
   }
 `;
 
+// Renames the EXISTING company in place (same company id) -- never creates
+// a company, never touches locations, contacts, catalogs or tax settings.
+const COMPANY_UPDATE_MUTATION = `
+  mutation UpdateCompany($companyId: ID!, $input: CompanyInput!) {
+    companyUpdate(companyId: $companyId, input: $input) {
+      company { id name }
+      userErrors { message field }
+    }
+  }
+`;
+
 const TAX_SETTINGS_UPDATE_MUTATION = `
   mutation UpdateTaxSettings($companyLocationId: ID!, $taxRegistrationId: String) {
     companyLocationTaxSettingsUpdate(companyLocationId: $companyLocationId, taxRegistrationId: $taxRegistrationId) {
@@ -147,6 +158,7 @@ export const updateB2BLocationDetails = createServerFn({ method: "POST" })
     customerAccessToken: string;
     companyLocationId?: string;
     locationName: string;
+    companyName?: string;
     contactName: string;
     phone?: string;
     gstNumber?: string;
@@ -161,6 +173,8 @@ export const updateB2BLocationDetails = createServerFn({ method: "POST" })
     }
     const locationName = input.locationName?.trim();
     if (!locationName) throw new Error("Location name is required.");
+    const companyName = input.companyName?.trim() || undefined;
+    if (companyName && companyName.length > 255) throw new Error("Company name is too long.");
     const contactName = input.contactName?.trim();
     if (!contactName) throw new Error("Contact name is required.");
     const address1 = input.address1?.trim();
@@ -185,6 +199,7 @@ export const updateB2BLocationDetails = createServerFn({ method: "POST" })
       customerAccessToken: input.customerAccessToken,
       companyLocationId: input.companyLocationId,
       locationName,
+      companyName,
       contactName,
       phone: input.phone?.trim() || undefined,
       gstNumber,
@@ -197,6 +212,23 @@ export const updateB2BLocationDetails = createServerFn({ method: "POST" })
   })
   .handler(async ({ data }): Promise<B2BLocationDetails> => {
     const companyLocationId = await resolveAuthorizedLocationId(data.customerAccessToken, data.companyLocationId);
+
+    if (data.companyName) {
+      // Company id is derived server-side from the authorized location.
+      const current = await adminGraphQLRequest<LocationDetailsData>(LOCATION_DETAILS_QUERY, { id: companyLocationId });
+      const company = current.data?.companyLocation?.company;
+      if (!company) throw new Error("Could not load your business account.");
+      if (company.name !== data.companyName) {
+        const companyResult = await adminGraphQLRequest<{
+          companyUpdate: { company: { id: string } | null; userErrors: Array<{ message: string }> };
+        }>(COMPANY_UPDATE_MUTATION, { companyId: company.id, input: { name: data.companyName } });
+        const msgs = [
+          ...(companyResult.errors ?? []).map((e) => e.message),
+          ...(companyResult.data?.companyUpdate.userErrors ?? []).map((e) => e.message),
+        ];
+        if (msgs.length) throw new Error(`Could not update company name: ${msgs.join("; ")}`);
+      }
+    }
 
     const updateResult = await adminGraphQLRequest<{
       companyLocationUpdate: { companyLocation: { id: string } | null; userErrors: Array<{ message: string }> };

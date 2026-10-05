@@ -182,6 +182,7 @@ function BusinessDetailsFormDialog({
           customerAccessToken: token,
           ...(companyLocationId ? { companyLocationId } : {}),
           locationName: String(form.get("locationName") ?? "").trim(),
+          companyName: String(form.get("companyName") ?? "").trim(),
           contactName: String(form.get("contactName") ?? "").trim(),
           ...(phone ? { phone } : {}),
           ...(gstNumber ? { gstNumber } : {}),
@@ -208,11 +209,11 @@ function BusinessDetailsFormDialog({
         <DialogHeader>
           <DialogTitle>Edit business account details</DialogTitle>
           <DialogDescription>
-            Updates your company location on Shopify -- used for Corporate Pricing and checkout. Your company's
-            registered name can't be changed here; contact OfficeNeed if it needs to be updated.
+            Update your business information used for corporate orders and pricing.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 py-2">
+          <Field id="companyName" label="Company Name" defaultValue={details.companyName} />
           <Field id="locationName" label="Location Name" defaultValue={details.locationName} />
           <Field id="contactName" label="Contact Person's Name" defaultValue={details.contactName ?? ""} />
           <div className="grid gap-4 sm:grid-cols-2">
