@@ -1,3 +1,4 @@
+import { toIndiaZoneCode } from "./india-zones";
 /**
  * Read/update the authenticated B2B customer's own Company Location
  * details (business address, contact name/phone, GST) -- powers the
@@ -166,7 +167,9 @@ export const updateB2BLocationDetails = createServerFn({ method: "POST" })
     if (!address1) throw new Error("Address Line 1 is required.");
     const city = input.city?.trim();
     if (!city) throw new Error("City is required.");
-    const state = input.state?.trim();
+    const stateRaw = input.state?.trim();
+    const state = stateRaw ? toIndiaZoneCode(stateRaw) : null;
+    if (stateRaw && !state) throw new Error("Please enter a valid Indian state (e.g. Maharashtra).");
     if (!state) throw new Error("State is required.");
     const pin = input.pin?.trim();
     if (!pin) throw new Error("PIN / Postal Code is required.");
