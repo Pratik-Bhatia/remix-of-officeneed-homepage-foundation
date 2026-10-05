@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
+import customerAuthLifestyleImage from "@/assets/customer-auth-lifestyle.webp";
+import companyAuthLifestyleImage from "@/assets/company-auth-lifestyle.webp";
 import {
   Dialog,
   DialogContent,
@@ -225,7 +227,14 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
                 gstNumber,
                 contactName: fullName,
                 ...(phone ? { phone } : {}),
-                address: { addressLine1, ...(addressLine2 ? { addressLine2 } : {}), city, state, pin, country },
+                // The compact Company registration form no longer collects
+                // a business address (added later via Account Settings ->
+                // Business Account -> Edit Details) -- only the `upgrade`
+                // flow's fuller form still has these fields. Omitted
+                // entirely (not sent as empty strings) when absent, since
+                // the server-side address validator now treats any address
+                // it receives as one that must be complete.
+                ...(addressLine1 ? { address: { addressLine1, ...(addressLine2 ? { addressLine2 } : {}), city, state, pin, country } } : {}),
               },
             });
             // The existing B2BSync-driven resolve() for this exact token
@@ -288,6 +297,18 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
   };
 
   const isCompanyRegister = entryType === "company" && mode === "register";
+  // Gates the redesigned two-column Customer layout below. Scoped tightly
+  // to entryType==="customer" && mode!=="forgot" so Company sign-in/
+  // register and the (currently entryType-agnostic) forgot-password
+  // screen keep rendering through the untouched branch further down --
+  // neither their markup nor their behavior changes.
+  const showCustomerAuthLayout = entryType === "customer" && mode !== "forgot";
+  // Same idea for the redesigned two-column Company layout -- excludes
+  // `upgrade` (a signed-in B2C customer adding a business from the account
+  // page) on purpose: that flow has different copy/fields (no email,
+  // no password) and isn't one of the two states this redesign covers, so
+  // it keeps rendering through the untouched branch, same as forgot.
+  const showCompanyAuthLayout = entryType === "company" && mode !== "forgot" && !upgrade;
   // Remount the form whenever the mode/tab changes so no field value
   // (notably email/password) is carried between Sign in, Customer
   // register and Company register -- same-position inputs were
@@ -342,6 +363,279 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
+      {showCustomerAuthLayout ? (
+        <DialogContent className="flex max-h-[calc(100dvh-1.5rem)] w-[calc(100vw-1.5rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-md lg:max-w-4xl lg:flex-row">
+          {/* Compact image banner -- mobile/tablet only (below lg:). Fixed,
+              modest height so the form stays the priority; no text overlay
+              here (the DialogHeader below already carries the copy at this
+              size). Same image asset as the desktop panel, never swapped
+              when switching Sign In <-> Create Account. */}
+          {/* Vertical object-position tuned so the full bottle (which sits
+              in the lower ~40-95% of the source photo) survives this
+              banner's aggressive width-driven vertical crop -- the default
+              center crop was cutting its base off. Horizontal doesn't need
+              tuning here: at this wide/short aspect ratio cover matches
+              container width exactly, so there's no horizontal crop at all. */}
+          <div className="relative h-40 w-full shrink-0 overflow-hidden sm:h-48 lg:hidden">
+            <img
+              src={customerAuthLifestyleImage}
+              alt=""
+              className="h-full w-full object-cover object-[50%_88%]"
+            />
+          </div>
+
+          {/* Visual panel -- desktop only (lg:+). Same lifestyle image.
+              object-fit:cover alone left the bottle too small to read its
+              label: at this tall/narrow panel ratio, cover matches the
+              panel's full HEIGHT with zero vertical cropping, so the bottle
+              renders at (effectively) the photo's native proportions
+              scaled down to panel height -- same relative size as in the
+              source photo, where it's a small part of a wide, airy scene.
+              Fix: scale the already-cropped image up further with a
+              transform, anchored (origin-[...]) at the point the bottle
+              ends up at under the base object-left crop (computed: roughly
+              28% across / 62% down the panel), so zooming enlarges the
+              bottle+label specifically instead of zooming toward the
+              panel's geometric center (which would just crop in on empty
+              background). The top gradient/text area ends up showing MORE
+              background after this zoom (scaling from a below-center
+              origin pushes the top of the frame further out), if anything
+              widening its clearance from the bottle, not shrinking it. */}
+          <div className="relative hidden shrink-0 overflow-hidden lg:flex lg:w-1/2">
+            <img
+              src={customerAuthLifestyleImage}
+              alt=""
+              className="h-full w-full scale-[1.6] object-cover object-left origin-[28%_62%]"
+            />
+            <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-black/10 to-transparent" aria-hidden />
+            <div className="absolute inset-x-0 top-0 p-8 lg:p-10">
+              <span className="text-[0.7rem] font-semibold uppercase tracking-[0.14em] text-white/80">
+                Your Account
+              </span>
+              <h2 className="mt-3 font-display text-3xl font-medium leading-tight tracking-tight text-white">
+                Everything you need, in one place.
+              </h2>
+            </div>
+          </div>
+
+          {/* Form column -- same handleSubmit, same field names, same
+              passwordField/noAutofill helpers the Company/forgot branch
+              below uses; only the markup/spacing around them is new. */}
+          <div className="flex min-h-0 flex-1 flex-col">
+            <div className="shrink-0 space-y-4 px-5 pb-4 pt-6 sm:px-8 sm:pt-8">
+              <DialogHeader>
+                <DialogTitle>{mode === "signin" ? "Welcome back" : "Create your account"}</DialogTitle>
+                <DialogDescription>
+                  {mode === "signin"
+                    ? "Sign in to access your orders, saved products, and account details."
+                    : "Join Officeneed to track orders, save products, and manage your account."}
+                </DialogDescription>
+              </DialogHeader>
+              <Tabs
+                value={entryType}
+                onValueChange={(v) => {
+                  setEntryType(v as "customer" | "company");
+                  setMode("signin");
+                  setGstError(null);
+                }}
+                className="w-full"
+              >
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="customer">Individual</TabsTrigger>
+                  <TabsTrigger value="company">Corporate</TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
+
+            <form key={formKey} onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col" autoComplete="on">
+              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-5 pb-4 pt-1 sm:px-8" data-scrollable="true">
+                {mode === "register" ? (
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="firstName">First Name</Label>
+                      <Input id="firstName" name="firstName" autoComplete="given-name" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="lastName">Last Name</Label>
+                      <Input id="lastName" name="lastName" autoComplete="family-name" />
+                    </div>
+                  </div>
+                ) : null}
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email</Label>
+                  <Input id="email" name="email" type="email" required autoComplete="email" defaultValue="" placeholder="you@example.com" {...noAutofill} />
+                </div>
+                {passwordField}
+              </div>
+
+              <div className="shrink-0 px-5 pb-5 pt-3 sm:px-8">
+                <Button type="submit" className="w-full" disabled={busy}>
+                  {busy ? <Loader2 className="size-4 animate-spin mr-2" /> : null}
+                  {mode === "signin" ? "Sign In" : "Create Account"}
+                </Button>
+              </div>
+            </form>
+
+            <div className="shrink-0 px-5 pb-6 text-center text-sm text-muted-foreground sm:px-8">
+              <button
+                type="button"
+                className="text-primary hover:underline font-medium"
+                onClick={() => setMode(mode === "signin" ? "register" : "signin")}
+              >
+                {mode === "signin" ? "New here? Create an account" : "Already have an account? Sign in"}
+              </button>
+            </div>
+          </div>
+        </DialogContent>
+      ) : showCompanyAuthLayout ? (
+        <DialogContent className="flex max-h-[calc(100dvh-1.5rem)] w-[calc(100vw-1.5rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-md lg:max-w-4xl lg:flex-row">
+          {/* Exact 50/50 split, matching the Individual layout's modal
+              width/proportions. At a true half-width panel there's enough
+              room to show the composition close to centered without
+              cropping any of the gift box/journal/pen/bottle cluster
+              tightly -- a plain object-center reads as the natural,
+              unbiased choice here, rather than the left/up bias the
+              narrower 36-44% panels needed. */}
+          <div className="relative h-40 w-full shrink-0 overflow-hidden sm:h-48 lg:hidden">
+            <img
+              src={companyAuthLifestyleImage}
+              alt=""
+              className="h-full w-full object-cover object-[45%_75%]"
+            />
+          </div>
+
+          <div className="relative hidden shrink-0 overflow-hidden lg:flex lg:w-1/2">
+            <img
+              src={companyAuthLifestyleImage}
+              alt=""
+              className="h-full w-full object-cover object-center"
+            />
+            <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-black/10 to-transparent" aria-hidden />
+            <div className="absolute inset-x-0 top-0 p-8 lg:p-10">
+              <span className="text-[0.7rem] font-semibold uppercase tracking-[0.14em] text-white/80">
+                Your Business
+              </span>
+              <h2 className="mt-3 font-display text-3xl font-medium leading-tight tracking-tight text-white">
+                Corporate pricing, built for your business.
+              </h2>
+            </div>
+          </div>
+
+          {/* Form column -- same handleSubmit/field names/validation the
+              untouched branch below uses for upgrade and for forgot
+              password; only the markup/organization is new. */}
+          <div className="flex min-h-0 flex-1 flex-col">
+            <div className="shrink-0 space-y-4 px-5 pb-4 pt-6 sm:px-8 sm:pt-8">
+              <DialogHeader>
+                <DialogTitle>{mode === "signin" ? "Welcome back, business" : "Create your business account"}</DialogTitle>
+                <DialogDescription>
+                  {mode === "signin"
+                    ? "Sign in to access your corporate pricing, orders, and account details."
+                    : "Register your business to access corporate pricing, streamlined ordering, and more."}
+                </DialogDescription>
+              </DialogHeader>
+              <Tabs
+                value={entryType}
+                onValueChange={(v) => {
+                  setEntryType(v as "customer" | "company");
+                  setMode("signin");
+                  setGstError(null);
+                }}
+                className="w-full"
+              >
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="customer">Individual</TabsTrigger>
+                  <TabsTrigger value="company">Corporate</TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
+
+            <form key={formKey} onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col" autoComplete="on">
+              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-5 pb-4 pt-1 sm:px-8" data-scrollable="true">
+                {mode === "signin" ? (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="email">Business Email</Label>
+                      <Input id="email" name="email" type="email" required autoComplete="email" defaultValue="" placeholder="you@company.com" {...noAutofill} />
+                    </div>
+                    {passwordField}
+                  </>
+                ) : (
+                  <>
+                    {sectionLabel("Business information")}
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="fullName">Full Name</Label>
+                        <Input id="fullName" name="fullName" autoComplete="name" required />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="companyName">Company Name</Label>
+                        <Input id="companyName" name="companyName" autoComplete="organization" required />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="email">Email</Label>
+                        <Input id="email" name="email" type="email" required autoComplete="email" defaultValue="" placeholder="you@company.com" {...noAutofill} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="phone">Phone Number</Label>
+                        <Input id="phone" name="phone" type="tel" required autoComplete="tel" defaultValue="+91 " placeholder="+91 98765 43210" />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="gstNumber">GST Number</Label>
+                      <Input
+                        id="gstNumber"
+                        name="gstNumber"
+                        required
+                        autoComplete="off"
+                        placeholder="22AAAAA0000A1Z5"
+                        aria-invalid={gstError ? true : undefined}
+                        onChange={() => { if (gstError) setGstError(null); }}
+                      />
+                      {gstError ? <p className="text-sm text-destructive">{gstError}</p> : null}
+                    </div>
+
+                    {/* Deliberately no Business Address section here --
+                        registration no longer collects the registered
+                        business address (see setupB2BCompany's now-optional
+                        `address` input). It's added later from Account
+                        Settings -> Business Account -> Edit Details
+                        (BusinessDetailsFormDialog in account.profile.tsx /
+                        updateB2BLocationDetails), which is unrelated to and
+                        never overwritten by a B2B order's delivery address
+                        at checkout. */}
+                    {sectionLabel("Account security")}
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      {passwordField}
+                      <div className="space-y-2">
+                        <Label htmlFor="confirmPassword">Confirm Password</Label>
+                        <PasswordInput id="confirmPassword" name="confirmPassword" required minLength={5} defaultValue="" autoComplete="new-password" {...noAutofill} />
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <div className="shrink-0 border-t border-border bg-background px-5 pb-5 pt-3 sm:px-8">
+                <Button type="submit" className="w-full" disabled={busy}>
+                  {busy ? <Loader2 className="size-4 animate-spin mr-2" /> : null}
+                  {mode === "signin" ? "Sign In" : "Create Business Account"}
+                </Button>
+              </div>
+            </form>
+
+            <div className="shrink-0 px-5 pb-6 text-center text-sm text-muted-foreground sm:px-8">
+              <button
+                type="button"
+                className="text-primary hover:underline font-medium"
+                onClick={() => setMode(mode === "signin" ? "register" : "signin")}
+              >
+                {mode === "signin" ? "New business? Create a business account" : "Already have an account? Sign in"}
+              </button>
+            </div>
+          </div>
+        </DialogContent>
+      ) : (
       <DialogContent
         className={
           "flex max-h-[calc(100dvh-1.5rem)] w-[calc(100vw-1.5rem)] flex-col gap-0 overflow-hidden p-0 " +
@@ -383,8 +677,8 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
               className="w-full"
             >
               <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="customer">Customer</TabsTrigger>
-                <TabsTrigger value="company">Company</TabsTrigger>
+                <TabsTrigger value="customer">Individual</TabsTrigger>
+                <TabsTrigger value="company">Corporate</TabsTrigger>
               </TabsList>
             </Tabs>
           )}
@@ -535,6 +829,7 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
         </div>
         )}
       </DialogContent>
+      )}
     </Dialog>
   );
 }

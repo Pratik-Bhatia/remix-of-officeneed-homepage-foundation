@@ -253,8 +253,8 @@ function SignInPanel({ onDone }: { onDone: () => Promise<void> }) {
           className="mt-5 w-full"
         >
           <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="customer">Customer</TabsTrigger>
-            <TabsTrigger value="company">Company</TabsTrigger>
+            <TabsTrigger value="customer">Individual</TabsTrigger>
+            <TabsTrigger value="company">Corporate</TabsTrigger>
           </TabsList>
         </Tabs>
       )}

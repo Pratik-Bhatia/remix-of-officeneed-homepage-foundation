@@ -400,7 +400,16 @@ export const setupB2BCompany = createServerFn({ method: "POST" })
     gstNumber: string;
     contactName: string;
     phone?: string;
-    address: B2BAddressInput;
+    // Optional: the registered business address is no longer collected on
+    // the registration form (it's added later from Account Settings ->
+    // Business Account -> Edit Details, src/lib/b2b-location.functions.ts's
+    // updateB2BLocationDetails). When omitted, the Company/Company Location
+    // are created without one -- never an invented, placeholder, or
+    // copied-from-elsewhere address. Still accepted here (not removed
+    // entirely) so that existing caller, b2b-location.functions.ts's own
+    // address-assignment path, and any future caller that DOES have a real
+    // address to set up front keep working unchanged.
+    address?: B2BAddressInput;
   }) => {
     if (!input?.customerAccessToken || typeof input.customerAccessToken !== "string") {
       throw new Error("Missing session token.");
@@ -413,24 +422,29 @@ export const setupB2BCompany = createServerFn({ method: "POST" })
     const contactName = input.contactName?.trim() || companyName;
     const phone = input.phone?.trim() || undefined;
 
-    const addressLine1 = input.address?.addressLine1?.trim() ?? "";
-    const addressLine2 = input.address?.addressLine2?.trim() || undefined;
-    const city = input.address?.city?.trim() ?? "";
-    const stateRaw = input.address?.state?.trim() ?? "";
-    const state = stateRaw ? toIndiaZoneCode(stateRaw) : "";
-    if (state === null) throw new Error("Please enter a valid Indian state (e.g. Maharashtra).");
-    const pin = input.address?.pin?.trim() ?? "";
-    const country = input.address?.country?.trim() ?? "";
-    if (!addressLine1) throw new Error("Address Line 1 is required.");
-    if (!city) throw new Error("City is required.");
-    if (!state) throw new Error("State is required.");
-    if (!pin) throw new Error("PIN / Postal Code is required.");
-    if (!country) throw new Error("Country is required.");
-    // GST (the dedup key and the taxRegistrationId this address is stored
-    // against) only applies to India -- see the B2BAddressInput comment
-    // for why this is a fixed check rather than a general country mapping.
-    if (country.trim().toLowerCase() !== "india") {
-      throw new Error("Only India is currently supported for Company registration addresses.");
+    let address: B2BAddressInput | undefined;
+    if (input.address) {
+      const addressLine1 = input.address.addressLine1?.trim() ?? "";
+      const addressLine2 = input.address.addressLine2?.trim() || undefined;
+      const city = input.address.city?.trim() ?? "";
+      const stateRaw = input.address.state?.trim() ?? "";
+      const state = stateRaw ? toIndiaZoneCode(stateRaw) : "";
+      if (state === null) throw new Error("Please enter a valid Indian state (e.g. Maharashtra).");
+      const pin = input.address.pin?.trim() ?? "";
+      const country = input.address.country?.trim() ?? "";
+      if (!addressLine1) throw new Error("Address Line 1 is required.");
+      if (!city) throw new Error("City is required.");
+      if (!state) throw new Error("State is required.");
+      if (!pin) throw new Error("PIN / Postal Code is required.");
+      if (!country) throw new Error("Country is required.");
+      // GST (the dedup key and the taxRegistrationId this address would be
+      // stored against) only applies to India -- see the B2BAddressInput
+      // comment for why this is a fixed check rather than a general
+      // country mapping.
+      if (country.trim().toLowerCase() !== "india") {
+        throw new Error("Only India is currently supported for Company registration addresses.");
+      }
+      address = { addressLine1, ...(addressLine2 ? { addressLine2 } : {}), city, state, pin, country };
     }
 
     return {
@@ -439,7 +453,7 @@ export const setupB2BCompany = createServerFn({ method: "POST" })
       gstNumber: normalizeGstin(gstNumberRaw),
       contactName,
       ...(phone ? { phone } : {}),
-      address: { addressLine1, ...(addressLine2 ? { addressLine2 } : {}), city, state, pin, country },
+      ...(address ? { address } : {}),
     };
   })
   .handler(async ({ data }): Promise<B2BCompanySetupResult> => {
@@ -513,9 +527,13 @@ export const setupB2BCompany = createServerFn({ method: "POST" })
           throw stagePlainError("COMPANY_LOCATION_CREATE_FAILED", "companyLocationCreate did not return a usable location.");
         }
         // Freshly created (self-heal path) -- no existing address to
-        // protect, so always assign the one just collected.
-        await assignCompanyLocationAddress(companyLocationId, data.address, data.contactName, data.phone, "COMPANY_LOCATION_CREATE_FAILED");
-      } else if (!existingLocation?.billingAddress?.address1) {
+        // protect, so assign the one just collected, if any was given
+        // (registration no longer collects one by default; see Edit
+        // Details in Account Settings -> Business Account).
+        if (data.address) {
+          await assignCompanyLocationAddress(companyLocationId, data.address, data.contactName, data.phone, "COMPANY_LOCATION_CREATE_FAILED");
+        }
+      } else if (data.address && !existingLocation?.billingAddress?.address1) {
         // Self-heal case B: the location exists but has no address --
         // exactly the state left behind by companyCreate succeeding and a
         // later companyLocationAssignAddress call failing (confirmed this
@@ -559,9 +577,14 @@ export const setupB2BCompany = createServerFn({ method: "POST" })
       orderingOnlyRoleId = resolveOrderingOnlyRoleId(company.contactRoles);
       companyLocationId = company.locations.edges[0]?.node.id ?? null;
       if (!companyLocationId) throw stagePlainError("COMPANY_CREATE_FAILED", "companyCreate did not create a usable location.");
-      // Brand-new company/location -- always assign the address collected
-      // on the registration form.
-      await assignCompanyLocationAddress(companyLocationId, data.address, data.contactName, data.phone, "COMPANY_CREATE_FAILED");
+      // Brand-new company/location -- assign the address if one was given.
+      // Registration no longer collects one by default: the Company and
+      // Company Location are created with no billing/shipping address at
+      // all, and the registered business address is added later from
+      // Account Settings -> Business Account -> Edit Details.
+      if (data.address) {
+        await assignCompanyLocationAddress(companyLocationId, data.address, data.contactName, data.phone, "COMPANY_CREATE_FAILED");
+      }
     }
 
     // 4/5/6, fully idempotent -- see ensureContactAndRole's doc comment.
