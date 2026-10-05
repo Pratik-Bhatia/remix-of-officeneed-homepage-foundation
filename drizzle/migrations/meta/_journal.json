@@ -8,6 +8,13 @@
       "when": 1791011306279,
       "tag": "0000_add_business_account_requests",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1791206562816,
+      "tag": "0001_customer_business_details",
+      "breakpoints": true
     }
   ]
 }

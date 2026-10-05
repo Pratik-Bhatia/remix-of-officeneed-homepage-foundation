@@ -131,6 +131,54 @@ export type Database = {
         }
         Relationships: []
       }
+      customer_business_details: {
+        Row: {
+          address1: string | null
+          address2: string | null
+          city: string | null
+          company_name: string | null
+          contact_name: string | null
+          created_at: string
+          id: string
+          location_name: string | null
+          phone: string | null
+          pin: string | null
+          shopify_customer_id: string
+          state: string | null
+          updated_at: string
+        }
+        Insert: {
+          address1?: string | null
+          address2?: string | null
+          city?: string | null
+          company_name?: string | null
+          contact_name?: string | null
+          created_at?: string
+          id?: string
+          location_name?: string | null
+          phone?: string | null
+          pin?: string | null
+          shopify_customer_id: string
+          state?: string | null
+          updated_at?: string
+        }
+        Update: {
+          address1?: string | null
+          address2?: string | null
+          city?: string | null
+          company_name?: string | null
+          contact_name?: string | null
+          created_at?: string
+          id?: string
+          location_name?: string | null
+          phone?: string | null
+          pin?: string | null
+          shopify_customer_id?: string
+          state?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       customer_carts: {
         Row: {
           cart_id: string
