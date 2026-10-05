@@ -25,6 +25,7 @@ export function ProductCard({
   className,
   showEyebrow = false,
   imageWellClassName,
+  pricePending = false,
 }: {
   product: Product;
   /** Extra classes merged onto the outer card wrapper. Lets a caller like
@@ -40,9 +41,20 @@ export function ProductCard({
    * /products grid treatment). Bestsellers passes its own #F5F5F7 "cutout"
    * treatment to match that section's card design. */
   imageWellClassName?: string;
+  /** True while this buyer's correct price for `product` is still being
+   * determined (B2B context resolving, or its contextual-pricing overlay
+   * still in flight) -- renders a skeleton instead of `product.price` so
+   * an anonymous/B2C number is never painted as a frame of the UI for a
+   * buyer who may turn out to be B2B. See useShopifyCatalogue /
+   * useShopifyBestsellers's `pricesReady`. */
+  pricePending?: boolean;
 }) {
   const { savedHandles, toggleSave } = useSaves();
   const [busy, setBusy] = useState(false);
+  if (import.meta.env.DEV) {
+    // Dev-only (tree-shaken in production builds). Slug + boolean only.
+    console.debug("[ProductCard] slug:", product.slug, "| pricePending:", pricePending);
+  }
   // Same cached collections query every other category surface uses (React
   // Query dedupes by key, so N cards on a grid cost one request, not N) --
   // resolves the eyebrow's subcategory/category label to its CURRENT
@@ -179,9 +191,13 @@ export function ProductCard({
             {product.name}
           </h3>
           <p className="text-xs tabular-nums text-foreground/80">
-            {product.price
-              ? `${product.startingPrice ? "From " : ""}${product.price}`
-              : "Price on enquiry"}
+            {pricePending ? (
+              <span className="inline-block h-[1em] w-16 animate-pulse rounded bg-muted align-middle" aria-hidden />
+            ) : product.price ? (
+              `${product.startingPrice ? "From " : ""}${product.price}`
+            ) : (
+              "Price on enquiry"
+            )}
           </p>
         </div>
       </Link>

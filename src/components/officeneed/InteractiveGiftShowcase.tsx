@@ -21,7 +21,7 @@ import { useShopifyCatalogue } from "@/lib/shopify-overlay";
  */
 function resolveHamperProduct(
   product: GiftShowcaseProduct,
-  catalogue: ReturnType<typeof useShopifyCatalogue>,
+  catalogue: ReturnType<typeof useShopifyCatalogue>["products"],
 ): GiftShowcaseProduct {
   const live = catalogue.find((p) => p.slug === product.shopifyProductHandle);
   if (!live) return product;
@@ -345,7 +345,7 @@ function HamperCarousel() {
   // Same cached catalogue query every ProductCard on the site already uses
   // -- reused here, not refetched, to resolve any hotspot whose
   // shopifyProductHandle matches a real product.
-  const catalogue = useShopifyCatalogue(products);
+  const { products: catalogue } = useShopifyCatalogue(products);
   const resolvedHampers = useMemo(
     () =>
       giftHampers.map((hamper) => ({

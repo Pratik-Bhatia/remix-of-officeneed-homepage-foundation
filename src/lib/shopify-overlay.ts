@@ -114,8 +114,8 @@ type Rule = { category: Product["category"]; sub: string; match: RegExp };
 const RULES: Rule[] = [
   { category: "Officeneed Exclusive", sub: "Featured Exclusives", match: /featured exclusive/ },
   { category: "Officeneed Exclusive", sub: "New Exclusives", match: /new exclusive/ },
-  { category: "Fragrance Gifting", sub: "Perfume Gift Sets", match: /perfume gift set|fragrance gift set|perfume set/ },
-  // Must come after the more specific "Perfume Gift Sets" rule above (so a
+  { category: "Fragrance Gifting", sub: "Perfume Gift Set", match: /perfume gift set|fragrance gift set|perfume set/ },
+  // Must come after the more specific "Perfume Gift Set" rule above (so a
   // perfume gift set still correctly lands under Fragrance Gifting, not
   // here) but before EVERY single-item keyword rule below (bottle, pen,
   // pendrive, diary, cable, etc.): a multi-item gift-set product's title
@@ -529,14 +529,27 @@ function buyerCacheConfig(
  * query itself -- keeps the (now always-anonymous, safely shared) base
  * product fetch cacheable while this overlay stays scoped to exactly the
  * resolved company location, never bleeding into another buyer's cache.
+ *
+ * `ready` is the price-flash gate: false whenever painting the caller's
+ * current price data would risk showing the wrong buyer's price for even
+ * one frame --
+ *   - b2bStore hasn't finished its own determination yet (`resolved` is
+ *     false -- covers SSR, pre-hydration, and the brief client resolve()
+ *     window on every hard refresh/sign-in);
+ *   - OR the buyer IS B2B but this exact set of variant ids' contextual
+ *     price overlay hasn't finished fetching yet (`isFetched` false).
+ * B2C/anonymous/needs-location never depend on the overlay, so once
+ * `resolved` is true they're immediately ready -- only a true "b2b" status
+ * with locations to price waits on the overlay query too.
  */
-function useB2BPriceOverlayMap(variantIds: string[]) {
+export function useB2BPriceOverlayMap(variantIds: string[]): { overlay: B2BPriceOverlayMap; ready: boolean } {
+  const resolved = useB2BStore((s) => s.resolved);
   const status = useB2BStore((s) => s.status);
   const companyLocationId = useB2BStore((s) => s.companyLocationId);
   const token = useB2BStore((s) => s.resolvedForToken);
   const ids = [...new Set(variantIds)].sort();
   const enabled = status === "b2b" && !!companyLocationId && !!token && ids.length > 0;
-  const { data } = useQuery({
+  const { data, isFetched } = useQuery({
     queryKey: ["shopify", "b2b-price-overlay", companyLocationId ?? "none", ids.join(",")],
     queryFn: async (): Promise<B2BPriceOverlayMap> => {
       if (!token || !companyLocationId) return {};
@@ -552,7 +565,12 @@ function useB2BPriceOverlayMap(variantIds: string[]) {
     gcTime: 0,
     retry: 1,
   });
-  return data ?? {};
+  const ready = !resolved ? false : status === "b2b" && companyLocationId && ids.length > 0 ? isFetched : true;
+  if (import.meta.env.DEV) {
+    // Dev-only (tree-shaken in production builds). Status/booleans only.
+    console.debug("[useB2BPriceOverlayMap] status:", status, "| resolved:", resolved, "| ready:", ready);
+  }
+  return { overlay: data ?? {}, ready };
 }
 
 /**
@@ -574,16 +592,23 @@ export function shopifyCatalogueQueryOptions(buyer: BuyerContext, customerId: st
   };
 }
 
-export function useShopifyCatalogue(staticProducts: Product[]) {
+/** `pricesReady` is false only while real Shopify data exists but this
+ * buyer's correct price for it is still being determined (see
+ * useB2BPriceOverlayMap) -- never while there's no live data at all (the
+ * static-catalogue fallback below has no buyer-dependent pricing to wait
+ * on, so it's always "ready" exactly as it already rendered before this
+ * flag existed). Callers that render a price must skeleton it while false
+ * instead of painting whatever's currently in `products`. */
+export function useShopifyCatalogue(staticProducts: Product[]): { products: Product[]; pricesReady: boolean } {
   const buyer = useBuyerContext();
   const customerId = useB2BStore((s) => s.customerId);
   const { data } = useQuery(shopifyCatalogueQueryOptions(buyer, customerId));
 
   const baseNodes = data ?? [];
   const variantIds = baseNodes.flatMap((n) => n.variants.edges.map((e) => e.node.id));
-  const priceOverlay = useB2BPriceOverlayMap(variantIds);
+  const { overlay: priceOverlay, ready } = useB2BPriceOverlayMap(variantIds);
   const nodes = applyB2BPriceOverlayToAll(baseNodes, priceOverlay);
-  if (nodes.length === 0) return staticProducts;
+  if (nodes.length === 0) return { products: staticProducts, pricesReady: true };
 
   const index = buildShopifyIndex(nodes);
   const live = nodes.map(shopifyNodeToProduct);
@@ -591,7 +616,7 @@ export function useShopifyCatalogue(staticProducts: Product[]) {
   const fallback = staticProducts.filter(
     (p) => !liveSlugs.has(p.slug) && !findShopifyMatch(index, p.slug, p.name),
   );
-  return [...live, ...fallback];
+  return { products: [...live, ...fallback], pricesReady: ready };
 }
 
 /**
@@ -604,7 +629,7 @@ export function useShopifyCatalogue(staticProducts: Product[]) {
  * full images[] array this used to trim down to just images[0]) stays
  * identical between the two.
  */
-export function useShopifyBestsellers(staticItems: Product[] = []): Product[] {
+export function useShopifyBestsellers(staticItems: Product[] = []): { products: Product[]; pricesReady: boolean } {
   const buyer = useBuyerContext();
   const customerId = useB2BStore((s) => s.customerId);
   const { queryKeySuffix, staleTime, gcTime } = buyerCacheConfig(buyer, customerId);
@@ -621,9 +646,9 @@ export function useShopifyBestsellers(staticItems: Product[] = []): Product[] {
 
   const baseNodes = data ?? [];
   const variantIds = baseNodes.flatMap((n) => n.variants.edges.map((e) => e.node.id));
-  const priceOverlay = useB2BPriceOverlayMap(variantIds);
+  const { overlay: priceOverlay, ready } = useB2BPriceOverlayMap(variantIds);
   const nodes = applyB2BPriceOverlayToAll(baseNodes, priceOverlay);
-  if (nodes.length === 0) return staticItems;
+  if (nodes.length === 0) return { products: staticItems, pricesReady: true };
 
   const live = nodes.map((node) => ({ ...shopifyNodeToProduct(node), badge: "Bestseller" as const }));
 
@@ -634,7 +659,7 @@ export function useShopifyBestsellers(staticItems: Product[] = []): Product[] {
     (item) => !liveSlugs.has(item.slug) && !findShopifyMatch(index, item.slug, item.name),
   );
 
-  return [...live, ...fallback];
+  return { products: [...live, ...fallback], pricesReady: ready };
 }
 
 

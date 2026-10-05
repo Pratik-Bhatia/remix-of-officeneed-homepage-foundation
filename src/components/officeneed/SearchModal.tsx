@@ -19,7 +19,9 @@ export function SearchModal({ open, onOpenChange }: { open: boolean; onOpenChang
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
-  const catalogue = useShopifyCatalogue(products);
+  // Search's quick results never show price (just image/name/category), so
+  // pricesReady isn't consulted here -- no buyer-dependent content to gate.
+  const { products: catalogue } = useShopifyCatalogue(products);
   const { collections } = useShopifyCollections();
 
   // Built here (not at module scope) so each entry's label can resolve the

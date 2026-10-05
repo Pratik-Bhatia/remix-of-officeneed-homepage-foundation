@@ -174,7 +174,7 @@ function ProductsPage() {
   // no subcategory icon is incorrectly highlighted there.
   const activeSubcategoryHandle = taxonomyMatch?.parentTitle ? collection : undefined;
 
-  const catalogue = useShopifyCatalogue(products);
+  const { products: catalogue, pricesReady } = useShopifyCatalogue(products);
   const { collections, isLoading: collectionsLoading } = useShopifyCollections();
 
   /** Returns the Shopify-hosted image URL for a collection, or null if not yet loaded / unavailable. */
@@ -320,15 +320,25 @@ function ProductsPage() {
         <div className="mx-auto w-full max-w-[1600px] px-5 pt-10 sm:px-8 sm:pt-12 lg:px-12 lg:pt-16">
           <header className="max-w-2xl mb-10">
             <h1 className="text-4xl sm:text-5xl font-display font-medium leading-tight tracking-tight text-foreground">
-              {isAllProducts
-                ? "All Products"
-                : missingMapping
-                  ? missingMapping
-                  : mainCategoryTitle
-                    ? resolveLiveTitle(collections, TAXONOMY[mainCategoryTitle])
-                    : taxonomyMatch
-                      ? resolveLiveTitle(collections, taxonomyMatch.node)
-                      : null}
+              {isAllProducts ? (
+                "All Products"
+              ) : missingMapping ? (
+                missingMapping
+              ) : collectionsLoading ? (
+                // Neither mainCategoryTitle nor taxonomyMatch's title is
+                // ever painted here first: both ultimately resolve through
+                // resolveLiveTitle, which falls back to taxonomy.ts's
+                // stable string until `collections` has loaded -- i.e. on
+                // every hard refresh, the canonical (live Shopify) title
+                // isn't knowable yet. Rendering that stable fallback here
+                // is exactly the flash this guards against: a skeleton
+                // until the real title is known, never a stale title.
+                <span className="inline-block h-[1em] w-64 max-w-full animate-pulse rounded bg-muted align-middle" aria-hidden />
+              ) : mainCategoryTitle ? (
+                resolveLiveTitle(collections, TAXONOMY[mainCategoryTitle])
+              ) : taxonomyMatch ? (
+                resolveLiveTitle(collections, taxonomyMatch.node)
+              ) : null}
             </h1>
             {isAllProducts && (
               <p className="mt-4 text-sm sm:text-base leading-relaxed text-muted-foreground">
@@ -393,7 +403,11 @@ function ProductsPage() {
                             )}
                           </div>
                           <span className="text-[11px] sm:text-xs font-medium text-foreground/80 group-hover:text-foreground text-center leading-tight">
-                            {liveTitle}
+                            {collectionsLoading ? (
+                              <span className="inline-block h-[1em] w-12 animate-pulse rounded bg-muted align-middle" aria-hidden />
+                            ) : (
+                              liveTitle
+                            )}
                           </span>
                         </button>
                       </li>
@@ -437,7 +451,11 @@ function ProductsPage() {
                               isActive ? "font-semibold text-foreground" : "font-medium text-foreground/80 group-hover:text-foreground",
                             )}
                           >
-                            {liveTitle}
+                            {collectionsLoading ? (
+                              <span className="inline-block h-[1em] w-12 animate-pulse rounded bg-muted align-middle" aria-hidden />
+                            ) : (
+                              liveTitle
+                            )}
                           </span>
                           <span
                             aria-hidden
@@ -590,7 +608,7 @@ function ProductsPage() {
               ) : (
                 <div className="grid grid-cols-2 gap-x-5 gap-y-10 sm:gap-x-6 md:grid-cols-3 lg:grid-cols-4">
                   {visible.map((p) => (
-                    <ProductCard key={p.slug} product={p} />
+                    <ProductCard key={p.slug} product={p} pricePending={!pricesReady} />
                   ))}
                 </div>
               )}

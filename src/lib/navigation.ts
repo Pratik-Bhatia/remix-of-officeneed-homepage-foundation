@@ -40,8 +40,8 @@ export const navCategories: NavCategory[] = [
     items: [
       "European Perfume",
       "Middle Eastern Perfume",
-      "Perfume Gift Sets",
       "Body Deodorant",
+      "Perfume Gift Set",
     ],
   },
   {

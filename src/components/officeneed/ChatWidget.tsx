@@ -74,7 +74,7 @@ const PURPOSE_ICON: Record<string, typeof Gift> = {
 export function ChatWidget() {
   const [open, setOpen] = useState(false);
   const [phase, setPhase] = useState<"qualification" | "refinement" | "enquiry" | "done" | "fragrance">("qualification");
-  const catalogue = useShopifyCatalogue(staticProducts);
+  const { products: catalogue, pricesReady: cataloguePricesReady } = useShopifyCatalogue(staticProducts);
   const { collections } = useShopifyCollections();
   const buyer = useBuyerContext();
   const customerId = useB2BStore((s) => s.customerId);
@@ -314,7 +314,12 @@ export function ChatWidget() {
   useEffect(() => {
     if (!pendingRecommendation) return;
 
-    if (catalogueLoading) {
+    // Also waits on cataloguePricesReady: recommending/filtering by price
+    // (recommendProducts below, budget matching included) must never run
+    // against a still-anonymous price for a buyer who may turn out to be
+    // B2B -- same rule as the visible price skeleton elsewhere, applied to
+    // this recommendation engine's own read of the price.
+    if (catalogueLoading || !cataloguePricesReady) {
       setTyping(true);
       setLoadingMsg("Finding the best options for you...");
       return;
@@ -369,7 +374,7 @@ export function ChatWidget() {
     pushBot(`Based on what you've told me, here are a few options I'd recommend.${priceNote}${bulkNote}`, 400, picks, true, explanations);
     pushBot(refineStep.question, 1400);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingRecommendation, catalogueLoading, catalogueError, catalogue]);
+  }, [pendingRecommendation, catalogueLoading, cataloguePricesReady, catalogueError, catalogue]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });

@@ -13,6 +13,14 @@ interface B2BStore {
   customerId: string | null;
   /** The token this result was resolved for, so a stale in-flight resolve() from a just-replaced token can't clobber the current state. */
   resolvedForToken: string | null;
+  /** True once a real determination has been made for the CURRENT page
+   * load -- either resolve() finished (success or its fail-safe-to-b2c
+   * catch branch) or reset() ran (no token / signed out). `status` alone
+   * can't signal this: "idle" is both "never checked yet" (initial state,
+   * SSR, pre-hydration) and "checked, confirmed anonymous" (reset()'s own
+   * target state), and price-bearing UI needs to tell those apart --
+   * see src/lib/shopify-overlay.ts's usePriceOverlay / useB2BPriceOverlayMap. */
+  resolved: boolean;
   resolve: (token: string) => Promise<void>;
   /** Only accepts an id already present in `locations` -- i.e. one the server already confirmed this customer is assigned to. Silently ignores any other value. */
   selectLocation: (id: string) => void;
@@ -33,10 +41,18 @@ export const useB2BStore = create<B2BStore>()((set, get) => ({
   companyLocationId: null,
   customerId: null,
   resolvedForToken: null,
+  resolved: false,
 
   resolve: async (token: string) => {
     if (get().resolvedForToken === token && get().status !== "idle") return;
-    set({ status: "resolving" });
+    // `resolved` must drop back to false here, not just at the initial
+    // "never checked" default -- this same path runs again on switching
+    // identity (sign out of one account, into another, same tab). Without
+    // this, `resolved` would stay stale-true from the PREVIOUS customer's
+    // determination for the whole in-flight window below, and price UI
+    // gated on it would paint that previous buyer's cached price/overlay
+    // for the new one until this resolution finishes.
+    set({ status: "resolving", resolved: false });
     try {
       const result = await resolveB2BSession({ data: { customerAccessToken: token } });
       // A newer resolve() may have started (and possibly already finished)
@@ -45,19 +61,19 @@ export const useB2BStore = create<B2BStore>()((set, get) => ({
       if (get().resolvedForToken !== null && get().resolvedForToken !== token && get().status !== "resolving") return;
 
       if (result.status === "b2c") {
-        set({ status: "b2c", locations: [], companyLocationId: null, customerId: result.customerId, resolvedForToken: token });
+        set({ status: "b2c", locations: [], companyLocationId: null, customerId: result.customerId, resolvedForToken: token, resolved: true });
         return;
       }
       const { locations, customerId } = result;
       if (locations.length === 1) {
-        set({ status: "b2b", locations, companyLocationId: locations[0]!.id, customerId, resolvedForToken: token });
+        set({ status: "b2b", locations, companyLocationId: locations[0]!.id, customerId, resolvedForToken: token, resolved: true });
       } else {
-        set({ status: "needs-location", locations, companyLocationId: null, customerId, resolvedForToken: token });
+        set({ status: "needs-location", locations, companyLocationId: null, customerId, resolvedForToken: token, resolved: true });
       }
     } catch (err) {
       console.error("[B2B] Failed to resolve B2B session:", err instanceof Error ? err.message : err);
       // Fail safe to B2C rather than leaving status stuck on "resolving".
-      set({ status: "b2c", locations: [], companyLocationId: null, customerId: null, resolvedForToken: token });
+      set({ status: "b2c", locations: [], companyLocationId: null, customerId: null, resolvedForToken: token, resolved: true });
     }
   },
 
@@ -67,5 +83,5 @@ export const useB2BStore = create<B2BStore>()((set, get) => ({
     set({ status: "b2b", companyLocationId: id });
   },
 
-  reset: () => set({ status: "idle", locations: [], companyLocationId: null, customerId: null, resolvedForToken: null }),
+  reset: () => set({ status: "idle", locations: [], companyLocationId: null, customerId: null, resolvedForToken: null, resolved: true }),
 }));

@@ -13,14 +13,14 @@ import { RichText } from "@/components/officeneed/RichText";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { getProductBySlug, getRelatedProducts } from "@/lib/products";
-import { fetchProductByHandle, fetchRelatedProducts, formatMoney, type ShopifyVariantNode, type BuyerContext } from "@/lib/shopify";
-import { mergeProduct, shopifyNodeToProduct, useShopifyCollections } from "@/lib/shopify-overlay";
+import { fetchProductByHandle, fetchRelatedProducts, formatMoney, type ShopifyProductNode, type ShopifyVariantNode, type BuyerContext } from "@/lib/shopify";
+import { mergeProduct, shopifyNodeToProduct, useShopifyCollections, useB2BPriceOverlayMap } from "@/lib/shopify-overlay";
 import { TAXONOMY, resolveLiveTitle } from "@/lib/taxonomy";
 import { useCartStore } from "@/stores/cartStore";
 import { useB2BStore } from "@/stores/b2bStore";
 import { getCustomerToken } from "@/lib/customer";
 import { getB2BPriceOverlay } from "@/lib/b2b-pricing.functions";
-import { applyB2BPriceOverlay } from "@/lib/b2b-pricing";
+import { applyB2BPriceOverlay, applyB2BPriceOverlayToAll } from "@/lib/b2b-pricing";
 import { createServerOnlyFn } from "@tanstack/react-start";
 import { setResponseHeader } from "@tanstack/react-start/server";
 import { toast } from "sonner";
@@ -153,7 +153,14 @@ export const Route = createFileRoute("/products/$slug")({
 
     related = relatedNodes.map(shopifyNodeToProduct);
 
-    return { product, node, related };
+    // relatedNodes (raw, pre-conversion) travels alongside `related` so the
+    // component can re-apply a freshly-fetched client-side price overlay --
+    // see ProductDetail()'s pdpPriceOverlay below. This loader's own
+    // overlay application above only ever runs with a token (a client-side
+    // navigation); a hard refresh's SSR pass always has token=null, so
+    // without this the component would be stuck showing anonymous pricing
+    // for the lifetime of the page view for a signed-in B2B buyer.
+    return { product, node, related, relatedNodes };
   },
   head: ({ params, loaderData, match }) => {
     if (!loaderData) {
@@ -250,15 +257,49 @@ function ProductNotFound() {
 }
 
 function ProductDetail() {
-  const { product, node, related } = Route.useLoaderData();
-  const { collections } = useShopifyCollections();
+  const { product: loaderProduct, node: loaderNode, related: loaderRelated, relatedNodes: loaderRelatedNodes } = Route.useLoaderData();
+  const slug = Route.useParams().slug;
+
+  // Re-applies the B2B contextual-pricing overlay CLIENT-SIDE, on top of
+  // whatever the loader returned. Required because the loader's own
+  // overlay application (above) only ever has a token on a client-side
+  // navigation -- a hard refresh's SSR pass always runs with token=null,
+  // so without this, a signed-in B2B buyer would see anonymous pricing
+  // baked into the page for its entire lifetime (TanStack Router's loader
+  // data has no built-in revalidation once mounted). Same overlay
+  // mechanism the catalogue/bestsellers grids already use reactively
+  // (useB2BPriceOverlayMap) -- no new B2B architecture, just applying the
+  // existing one on this route too instead of only inside its loader.
+  // Idempotent against the loader's own application (applyB2BPriceOverlay
+  // just overwrites price/compareAtPrice from the same overlay map either
+  // way), so this is safe whether or not the loader already applied it.
+  const pdpVariantIds = useMemo(() => {
+    const nodes = [loaderNode, ...loaderRelatedNodes].filter((n): n is ShopifyProductNode => !!n);
+    return nodes.flatMap((n) => n.variants.edges.map((e) => e.node.id));
+  }, [loaderNode, loaderRelatedNodes]);
+  const { overlay: pdpPriceOverlay, ready: pricesReady } = useB2BPriceOverlayMap(pdpVariantIds);
+
+  const node = useMemo(
+    () => (loaderNode ? applyB2BPriceOverlay(loaderNode, pdpPriceOverlay) : loaderNode),
+    [loaderNode, pdpPriceOverlay],
+  );
+  const staticProductForSlug = useMemo(() => getProductBySlug(slug), [slug]);
+  const product = useMemo(() => {
+    if (!node) return loaderProduct;
+    return staticProductForSlug ? mergeProduct(staticProductForSlug, node) : shopifyNodeToProduct(node);
+  }, [node, staticProductForSlug, loaderProduct]);
+  const related = useMemo(() => {
+    if (loaderRelatedNodes.length === 0) return loaderRelated;
+    return applyB2BPriceOverlayToAll(loaderRelatedNodes, pdpPriceOverlay).map(shopifyNodeToProduct);
+  }, [loaderRelatedNodes, loaderRelated, pdpPriceOverlay]);
+
+  const { collections, isLoading: collectionsLoading } = useShopifyCollections();
   const [quantity, setQuantity] = useState<number>(product.minimumOrderQuantity || 1);
   const [customizerOpen, setCustomizerOpen] = useState(false);
   const [zoomOpen, setZoomOpen] = useState(false);
   const purchaseSectionRef = useRef<HTMLDivElement>(null);
   const [showStickyBar, setShowStickyBar] = useState(false);
   const [reviews, setReviews] = useState<Review[]>([]);
-  const slug = Route.useParams().slug;
 
   // WhatsApp browse-abandon trigger (KwikEngage) when the shopper leaves this page.
   useProductBrowseAbandon({ handle: slug, title: product.name });
@@ -508,7 +549,15 @@ function ProductDetail() {
   const compareAmount = selectedVariant?.compareAtPrice
     ? parseFloat(selectedVariant.compareAtPrice.amount)
     : NaN;
-  const showCompareAt = Number.isFinite(compareAmount) && compareAmount > unitAmount;
+  // Gates every price render below: true until this buyer's context is
+  // known AND (if they're B2B) this product's contextual-pricing overlay
+  // has actually finished -- see useB2BPriceOverlayMap. Never paint
+  // anonymous/B2C pricing for a buyer who might still turn out to be B2B.
+  const pricePending = !pricesReady;
+  const priceSkeleton = (
+    <span className="inline-block h-[1em] w-20 animate-pulse rounded bg-muted align-middle" aria-hidden />
+  );
+  const showCompareAt = !pricePending && Number.isFinite(compareAmount) && compareAmount > unitAmount;
 
   const availabilityLabel = selectedVariant
     ? selectedVariant.availableForSale
@@ -615,10 +664,14 @@ function ProductDetail() {
             {/* Information */}
             <div className="w-full min-w-0 max-w-full overflow-wrap-break-word">
               <p className="text-eyebrow text-muted-foreground">
-                {(() => {
-                  const categoryNode = (TAXONOMY as Record<string, { handle: string | null; title: string }>)[product.category];
-                  return categoryNode ? resolveLiveTitle(collections, categoryNode) : product.category;
-                })()}
+                {collectionsLoading ? (
+                  <span className="inline-block h-[1em] w-24 animate-pulse rounded bg-muted align-middle" aria-hidden />
+                ) : (
+                  (() => {
+                    const categoryNode = (TAXONOMY as Record<string, { handle: string | null; title: string }>)[product.category];
+                    return categoryNode ? resolveLiveTitle(collections, categoryNode) : product.category;
+                  })()
+                )}
               </p>
               <h1 className="mt-2 text-3xl md:text-4xl lg:text-[40px] font-semibold tracking-tight text-foreground leading-[1.1] text-balance">{product.name}</h1>
               <ProductRatingSummary reviews={reviews} />
@@ -628,9 +681,11 @@ function ProductDetail() {
                 <div>
                   <div className="flex flex-wrap items-baseline gap-3">
                     <p className="text-2xl font-semibold tabular-nums text-foreground tracking-tight">
-                      {displayPrice
-                        ? `${!selectedVariant && product.startingPrice ? "From " : ""}${displayPrice}`
-                        : "Price on enquiry"}
+                      {pricePending
+                        ? priceSkeleton
+                        : displayPrice
+                          ? `${!selectedVariant && product.startingPrice ? "From " : ""}${displayPrice}`
+                          : "Price on enquiry"}
                     </p>
                     {showCompareAt ? (
                       <p className="text-sm tabular-nums text-muted-foreground line-through">
@@ -930,7 +985,7 @@ function ProductDetail() {
               </div>
               <div className="grid grid-cols-2 gap-x-5 gap-y-10 sm:gap-x-6 md:grid-cols-3 xl:grid-cols-4">
                 {related.map((p) => (
-                  <ProductCard key={p.slug} product={p} />
+                  <ProductCard key={p.slug} product={p} pricePending={pricePending} />
                 ))}
               </div>
             </section>
@@ -954,7 +1009,7 @@ function ProductDetail() {
               <img src={activeMedia?.url ?? product.images[0]} className="size-12 shrink-0 rounded-md object-contain bg-secondary/30 border border-border p-0.5" alt="" />
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium truncate text-foreground">{product.name}</p>
-                <p className="text-sm font-medium text-muted-foreground">{displayPrice}</p>
+                <p className="text-sm font-medium text-muted-foreground">{pricePending ? priceSkeleton : displayPrice}</p>
               </div>
             </div>
             <div className="flex items-center gap-3 shrink-0">
@@ -1013,7 +1068,7 @@ function ProductDetail() {
               <img src={activeMedia?.url ?? product.images[0]} className="size-10 shrink-0 rounded-md object-contain bg-secondary/30 border border-border p-0.5" alt="" />
               <div className="flex-1 min-w-0 flex items-center justify-between gap-3">
                 <p className="text-sm font-medium truncate text-foreground">{product.name}</p>
-                <p className="text-sm font-medium text-foreground shrink-0">{displayPrice}</p>
+                <p className="text-sm font-medium text-foreground shrink-0">{pricePending ? priceSkeleton : displayPrice}</p>
               </div>
             </div>
             <div className="flex items-center gap-2 pl-[52px]">

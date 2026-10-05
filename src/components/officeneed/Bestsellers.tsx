@@ -25,7 +25,7 @@ export function Bestsellers() {
   const [canPrev, setCanPrev] = useState(false);
   const [canNext, setCanNext] = useState(true);
 
-  const catalogue = useShopifyBestsellers(bestsellerProducts);
+  const { products: catalogue, pricesReady } = useShopifyBestsellers(bestsellerProducts);
   const { collections } = useShopifyCollections();
 
   const products = useMemo(
@@ -136,6 +136,7 @@ export function Bestsellers() {
                 key={p.slug}
                 product={p}
                 showEyebrow
+                pricePending={!pricesReady}
                 className="w-[74vw] shrink-0 snap-start sm:w-[46vw] md:w-[34vw] lg:w-[calc((100%-4.5rem)/4)]"
               />
             ))}

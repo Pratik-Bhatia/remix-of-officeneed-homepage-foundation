@@ -18,7 +18,7 @@ export type FragranceMatch = {
 
 export function getFragranceRecommendations(products: Product[], answers: FragranceQuizAnswers): FragranceMatch[] {
   // SOURCE OF TRUTH: real Shopify collection membership (perfumes /
-  // european-perfume / eastern-perfume / perfume-gift-set), not
+  // european-perfume / eastern-perfume / body-deodorant / perfume-gift-set-1), not
   // classify()-derived category/subcategories. This also keeps out
   // products Shopify has separately collectioned as "body-deodorant"
   // rather than "perfumes" -- see fragrance-engine tests.
