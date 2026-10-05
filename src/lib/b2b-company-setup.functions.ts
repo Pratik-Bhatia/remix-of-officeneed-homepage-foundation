@@ -138,7 +138,7 @@ function toCompanyAddressInput(address: B2BAddressInput, recipient: string, phon
 const ASSIGN_ADDRESS_MUTATION = `
   mutation AssignCompanyLocationAddress($locationId: ID!, $address: CompanyAddressInput!, $addressTypes: [CompanyAddressType!]!) {
     companyLocationAssignAddress(locationId: $locationId, address: $address, addressTypes: $addressTypes) {
-      companyAddress { id }
+      addresses { id }
       userErrors { message field }
     }
   }
@@ -161,7 +161,7 @@ async function assignCompanyLocationAddress(
 ): Promise<void> {
   const result = await adminGraphQLRequest<{
     companyLocationAssignAddress: {
-      companyAddress: { id: string } | null;
+      addresses: Array<{ id: string }> | null;
       userErrors: Array<{ message: string; field: string[] | null }>;
     };
   }>(ASSIGN_ADDRESS_MUTATION, {

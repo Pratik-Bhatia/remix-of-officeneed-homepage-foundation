@@ -126,7 +126,7 @@ const LOCATION_UPDATE_MUTATION = `
 const ASSIGN_ADDRESS_MUTATION = `
   mutation AssignAddress($locationId: ID!, $address: CompanyAddressInput!, $addressTypes: [CompanyAddressType!]!) {
     companyLocationAssignAddress(locationId: $locationId, address: $address, addressTypes: $addressTypes) {
-      companyAddress { id }
+      addresses { id }
       userErrors { message field }
     }
   }
@@ -210,7 +210,7 @@ export const updateB2BLocationDetails = createServerFn({ method: "POST" })
     }
 
     const addressResult = await adminGraphQLRequest<{
-      companyLocationAssignAddress: { companyAddress: { id: string } | null; userErrors: Array<{ message: string }> };
+      companyLocationAssignAddress: { addresses: Array<{ id: string }> | null; userErrors: Array<{ message: string }> };
     }>(ASSIGN_ADDRESS_MUTATION, {
       locationId: companyLocationId,
       address: {
