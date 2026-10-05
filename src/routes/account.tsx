@@ -512,12 +512,9 @@ function B2BAccountStatus() {
           </Select>
         </>
       ) : (
-        <span className="text-foreground">
-          Business account
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-6 gap-y-2">
+          <span className="text-foreground">Business account</span>
           {locations.length > 1 ? (
-            <>
-              {" "}
-              —{" "}
               <Select
                 {...(companyLocationId ? { value: companyLocationId } : {})}
                 onValueChange={(id) => {
@@ -536,11 +533,10 @@ function B2BAccountStatus() {
                   ))}
                 </SelectContent>
               </Select>
-            </>
           ) : (
-            <span className="text-muted-foreground"> — {locations[0]?.name}</span>
+            <span className="min-w-0 truncate text-muted-foreground">{locations[0]?.name}</span>
           )}
-        </span>
+        </div>
       )}
     </div>
   );
