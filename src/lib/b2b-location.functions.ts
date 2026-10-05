@@ -18,7 +18,6 @@ import { toIndiaZoneCode } from "./india-zones";
 import { createServerFn } from "@tanstack/react-start";
 import { adminGraphQLRequest } from "@/lib/shopify-admin.server";
 import { resolveCustomerIdFromToken, resolveCompanyLocationsForCustomer } from "@/lib/b2b.functions";
-import { isValidGstin, normalizeGstin } from "@/lib/gst";
 
 export type B2BLocationDetails = {
   companyLocationId: string;
@@ -68,17 +67,78 @@ type LocationDetailsData = {
   } | null;
 };
 
-/** Re-resolves the customer's assigned locations from their token, then
- * returns whichever id is safe to use: the client's hint if (and only if)
- * it's actually in that list, else the customer's first assigned
- * location. Shared by both server functions below. */
-async function resolveAuthorizedLocationId(customerAccessToken: string, requestedLocationId?: string): Promise<string> {
+/** Re-resolves the customer's identity and assigned locations from their
+ * token, then returns the customer id plus whichever location id is safe
+ * to use (client hint only if it's in the server-resolved list). */
+async function resolveAuthorizedCustomer(customerAccessToken: string, requestedLocationId?: string) {
   const customerId = await resolveCustomerIdFromToken(customerAccessToken);
   if (!customerId) throw new Error("Could not verify the signed-in customer.");
   const locations = await resolveCompanyLocationsForCustomer(customerId);
   if (locations.length === 0) throw new Error("No business account is linked to this customer.");
-  const authorized = requestedLocationId && locations.some((l) => l.id === requestedLocationId) ? requestedLocationId : locations[0]!.id;
-  return authorized;
+  const companyLocationId =
+    requestedLocationId && locations.some((l) => l.id === requestedLocationId) ? requestedLocationId : locations[0]!.id;
+  return { customerId: String(customerId), companyLocationId };
+}
+
+type OwnDetailsRow = {
+  company_name: string | null;
+  location_name: string | null;
+  contact_name: string | null;
+  phone: string | null;
+  address1: string | null;
+  address2: string | null;
+  city: string | null;
+  state: string | null;
+  pin: string | null;
+};
+
+/** ARCHITECTURE: the shared company/location is ONLY the B2B pricing
+ * association (and GSTIN). Displayed/editable business details are stored
+ * per Shopify customer in customer_business_details and never written back
+ * to the shared company or location, so customers sharing a GSTIN never see
+ * or modify each other's details. Shared location values are used only as
+ * an initial fallback for fields the customer hasn't set yet. */
+async function loadSharedLocation(companyLocationId: string) {
+  const result = await adminGraphQLRequest<LocationDetailsData>(LOCATION_DETAILS_QUERY, { id: companyLocationId });
+  if (result.errors?.length) {
+    throw new Error("Could not load your business account details.");
+  }
+  const location = result.data?.companyLocation;
+  if (!location) throw new Error("Could not load your business account details.");
+  return location;
+}
+
+async function loadOwnDetails(customerId: string): Promise<OwnDetailsRow | null> {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { data, error } = await supabaseAdmin
+    .from("customer_business_details")
+    .select("company_name, location_name, contact_name, phone, address1, address2, city, state, pin")
+    .eq("shopify_customer_id", customerId)
+    .maybeSingle();
+  if (error) throw new Error("Could not load your business account details.");
+  return data;
+}
+
+function mergeDetails(
+  companyLocationId: string,
+  location: NonNullable<LocationDetailsData["companyLocation"]>,
+  own: OwnDetailsRow | null,
+): B2BLocationDetails {
+  const addr = location.billingAddress;
+  return {
+    companyLocationId,
+    companyName: own?.company_name ?? location.company.name,
+    locationName: own?.location_name ?? location.name,
+    gstNumber: location.taxSettings?.taxRegistrationId ?? null,
+    contactName: own?.contact_name ?? addr?.recipient ?? null,
+    phone: own?.phone ?? addr?.phone ?? location.phone ?? null,
+    address1: own?.address1 ?? addr?.address1 ?? null,
+    address2: own ? own.address2 : addr?.address2 ?? null,
+    city: own?.city ?? addr?.city ?? null,
+    state: own?.state ?? addr?.zoneCode ?? null,
+    pin: own?.pin ?? addr?.zip ?? null,
+    country: "India",
+  };
 }
 
 export const getB2BLocationDetails = createServerFn({ method: "POST" })
@@ -89,79 +149,19 @@ export const getB2BLocationDetails = createServerFn({ method: "POST" })
     return { customerAccessToken: input.customerAccessToken, companyLocationId: input.companyLocationId };
   })
   .handler(async ({ data }): Promise<B2BLocationDetails> => {
-    const companyLocationId = await resolveAuthorizedLocationId(data.customerAccessToken, data.companyLocationId);
-
-    const result = await adminGraphQLRequest<LocationDetailsData>(LOCATION_DETAILS_QUERY, { id: companyLocationId });
-    if (result.errors?.length) {
-      throw new Error(`Could not load your business account details: ${result.errors.map((e) => e.message).join("; ")}`);
-    }
-    const location = result.data?.companyLocation;
-    if (!location) throw new Error("Could not load your business account details.");
-
-    const addr = location.billingAddress;
-    return {
-      companyLocationId: location.id,
-      companyName: location.company.name,
-      locationName: location.name,
-      gstNumber: location.taxSettings?.taxRegistrationId ?? null,
-      contactName: addr?.recipient ?? null,
-      phone: addr?.phone ?? location.phone ?? null,
-      address1: addr?.address1 ?? null,
-      address2: addr?.address2 ?? null,
-      city: addr?.city ?? null,
-      state: addr?.zoneCode ?? null,
-      pin: addr?.zip ?? null,
-      country: addr?.countryCode === "IN" ? "India" : addr?.countryCode ?? null,
-    };
+    const { customerId, companyLocationId } = await resolveAuthorizedCustomer(data.customerAccessToken, data.companyLocationId);
+    const [location, own] = await Promise.all([loadSharedLocation(companyLocationId), loadOwnDetails(customerId)]);
+    return mergeDetails(companyLocationId, location, own);
   });
-
-const LOCATION_UPDATE_MUTATION = `
-  mutation UpdateLocation($companyLocationId: ID!, $input: CompanyLocationUpdateInput!) {
-    companyLocationUpdate(companyLocationId: $companyLocationId, input: $input) {
-      companyLocation { id }
-      userErrors { message field }
-    }
-  }
-`;
-
-const ASSIGN_ADDRESS_MUTATION = `
-  mutation AssignAddress($locationId: ID!, $address: CompanyAddressInput!, $addressTypes: [CompanyAddressType!]!) {
-    companyLocationAssignAddress(locationId: $locationId, address: $address, addressTypes: $addressTypes) {
-      addresses { id }
-      userErrors { message field }
-    }
-  }
-`;
-
-// Renames the EXISTING company in place (same company id) -- never creates
-// a company, never touches locations, contacts, catalogs or tax settings.
-const COMPANY_UPDATE_MUTATION = `
-  mutation UpdateCompany($companyId: ID!, $input: CompanyInput!) {
-    companyUpdate(companyId: $companyId, input: $input) {
-      company { id name }
-      userErrors { message field }
-    }
-  }
-`;
-
-const TAX_SETTINGS_UPDATE_MUTATION = `
-  mutation UpdateTaxSettings($companyLocationId: ID!, $taxRegistrationId: String) {
-    companyLocationTaxSettingsUpdate(companyLocationId: $companyLocationId, taxRegistrationId: $taxRegistrationId) {
-      companyLocation { id }
-      userErrors { message field }
-    }
-  }
-`;
 
 export const updateB2BLocationDetails = createServerFn({ method: "POST" })
   .inputValidator((input: {
     customerAccessToken: string;
     companyLocationId?: string;
-    locationName: string;
     companyName?: string;
+    locationName: string;
     contactName: string;
     phone?: string;
-    gstNumber?: string;
     address1: string;
     address2?: string;
     city: string;
@@ -171,149 +171,53 @@ export const updateB2BLocationDetails = createServerFn({ method: "POST" })
     if (!input?.customerAccessToken || typeof input.customerAccessToken !== "string") {
       throw new Error("Missing session token.");
     }
-    const locationName = input.locationName?.trim();
-    if (!locationName) throw new Error("Location name is required.");
-    const companyName = input.companyName?.trim() || undefined;
-    if (companyName && companyName.length > 255) throw new Error("Company name is too long.");
-    const contactName = input.contactName?.trim();
-    if (!contactName) throw new Error("Contact name is required.");
-    const address1 = input.address1?.trim();
-    if (!address1) throw new Error("Address Line 1 is required.");
-    const city = input.city?.trim();
-    if (!city) throw new Error("City is required.");
-    const stateRaw = input.state?.trim();
-    const state = stateRaw ? toIndiaZoneCode(stateRaw) : null;
-    if (stateRaw && !state) throw new Error("Please enter a valid Indian state (e.g. Maharashtra).");
-    if (!state) throw new Error("State is required.");
-    const pin = input.pin?.trim();
-    if (!pin) throw new Error("PIN / Postal Code is required.");
-
-    let gstNumber: string | undefined;
-    const gstRaw = input.gstNumber?.trim();
-    if (gstRaw) {
-      if (!isValidGstin(gstRaw)) throw new Error("GST number is not a valid GSTIN.");
-      gstNumber = normalizeGstin(gstRaw);
-    }
-
+    const req = (v: string | undefined, label: string, max = 255) => {
+      const t = v?.trim();
+      if (!t) throw new Error(`${label} is required.`);
+      if (t.length > max) throw new Error(`${label} is too long.`);
+      return t;
+    };
+    const opt = (v: string | undefined, label: string, max = 255) => {
+      const t = v?.trim();
+      if (t && t.length > max) throw new Error(`${label} is too long.`);
+      return t || undefined;
+    };
+    const stateRaw = req(input.state, "State");
+    const state = toIndiaZoneCode(stateRaw);
+    if (!state) throw new Error("Please enter a valid Indian state (e.g. Maharashtra).");
     return {
       customerAccessToken: input.customerAccessToken,
       companyLocationId: input.companyLocationId,
-      locationName,
-      companyName,
-      contactName,
-      phone: input.phone?.trim() || undefined,
-      gstNumber,
-      address1,
-      address2: input.address2?.trim() || undefined,
-      city,
+      companyName: opt(input.companyName, "Company name"),
+      locationName: req(input.locationName, "Location name"),
+      contactName: req(input.contactName, "Contact name"),
+      phone: opt(input.phone, "Phone", 30),
+      address1: req(input.address1, "Address Line 1"),
+      address2: opt(input.address2, "Address Line 2"),
+      city: req(input.city, "City", 120),
       state,
-      pin,
+      pin: req(input.pin, "PIN / Postal Code", 12),
     };
   })
   .handler(async ({ data }): Promise<B2BLocationDetails> => {
-    const companyLocationId = await resolveAuthorizedLocationId(data.customerAccessToken, data.companyLocationId);
-
-    if (data.companyName) {
-      // Company id is derived server-side from the authorized location.
-      const current = await adminGraphQLRequest<LocationDetailsData>(LOCATION_DETAILS_QUERY, { id: companyLocationId });
-      const company = current.data?.companyLocation?.company;
-      if (!company) throw new Error("Could not load your business account.");
-      if (company.name !== data.companyName) {
-        const companyResult = await adminGraphQLRequest<{
-          companyUpdate: { company: { id: string } | null; userErrors: Array<{ message: string }> };
-        }>(COMPANY_UPDATE_MUTATION, { companyId: company.id, input: { name: data.companyName } });
-        const msgs = [
-          ...(companyResult.errors ?? []).map((e) => e.message),
-          ...(companyResult.data?.companyUpdate.userErrors ?? []).map((e) => e.message),
-        ];
-        if (msgs.length) throw new Error(`Could not update company name: ${msgs.join("; ")}`);
-      }
-    }
-
-    const updateResult = await adminGraphQLRequest<{
-      companyLocationUpdate: { companyLocation: { id: string } | null; userErrors: Array<{ message: string }> };
-    }>(LOCATION_UPDATE_MUTATION, {
-      companyLocationId,
-      input: { name: data.locationName, ...(data.phone ? { phone: data.phone } : {}) },
-    });
-    if (updateResult.errors?.length) {
-      throw new Error(`Could not update location details: ${updateResult.errors.map((e) => e.message).join("; ")}`);
-    }
-    const updateErrors = updateResult.data?.companyLocationUpdate.userErrors ?? [];
-    if (updateErrors.length) {
-      throw new Error(`Could not update location details: ${updateErrors.map((e) => e.message).join("; ")}`);
-    }
-
-    const addressResult = await adminGraphQLRequest<{
-      companyLocationAssignAddress: { addresses: Array<{ id: string }> | null; userErrors: Array<{ message: string }> };
-    }>(ASSIGN_ADDRESS_MUTATION, {
-      locationId: companyLocationId,
-      address: {
-        address1: data.address1,
-        ...(data.address2 ? { address2: data.address2 } : {}),
-        city: data.city,
-        zoneCode: data.state,
-        zip: data.pin,
-        countryCode: "IN",
-        recipient: data.contactName,
-        ...(data.phone ? { phone: data.phone } : {}),
-      },
-      addressTypes: ["BILLING", "SHIPPING"],
-    });
-    if (addressResult.errors?.length) {
-      throw new Error(`Could not update your business address: ${addressResult.errors.map((e) => e.message).join("; ")}`);
-    }
-    const addressErrors = addressResult.data?.companyLocationAssignAddress.userErrors ?? [];
-    if (addressErrors.length) {
-      throw new Error(`Could not update your business address: ${addressErrors.map((e) => e.message).join("; ")}`);
-    }
-
-    if (data.gstNumber) {
-      const taxResult = await adminGraphQLRequest<{
-        companyLocationTaxSettingsUpdate: { companyLocation: { id: string } | null; userErrors: Array<{ message: string }> };
-      }>(TAX_SETTINGS_UPDATE_MUTATION, { companyLocationId, taxRegistrationId: data.gstNumber });
-      if (taxResult.errors?.length) {
-        throw new Error(`Could not update GST number: ${taxResult.errors.map((e) => e.message).join("; ")}`);
-      }
-      const taxErrors = taxResult.data?.companyLocationTaxSettingsUpdate.userErrors ?? [];
-      if (taxErrors.length) {
-        throw new Error(`Could not update GST number: ${taxErrors.map((e) => e.message).join("; ")}`);
-      }
-    }
-
-    const refreshed = await adminGraphQLRequest<LocationDetailsData>(LOCATION_DETAILS_QUERY, { id: companyLocationId });
-    const location = refreshed.data?.companyLocation;
-    if (!location) {
-      // Updates above already succeeded -- a failure to re-read is never
-      // worth surfacing as an overall failure.
-      return {
-        companyLocationId,
-        companyName: "",
-        locationName: data.locationName,
-        gstNumber: data.gstNumber ?? null,
-        contactName: data.contactName,
-        phone: data.phone ?? null,
-        address1: data.address1,
-        address2: data.address2 ?? null,
-        city: data.city,
-        state: data.state,
-        pin: data.pin,
-        country: "India",
-      };
-    }
-    const addr = location.billingAddress;
-    return {
-      companyLocationId: location.id,
-      companyName: location.company.name,
-      locationName: location.name,
-      gstNumber: location.taxSettings?.taxRegistrationId ?? null,
-      contactName: addr?.recipient ?? null,
-      phone: addr?.phone ?? location.phone ?? null,
-      address1: addr?.address1 ?? null,
-      address2: addr?.address2 ?? null,
-      city: addr?.city ?? null,
-      state: addr?.zoneCode ?? null,
-      pin: addr?.zip ?? null,
-      country: addr?.countryCode === "IN" ? "India" : addr?.countryCode ?? null,
+    const { customerId, companyLocationId } = await resolveAuthorizedCustomer(data.customerAccessToken, data.companyLocationId);
+    const location = await loadSharedLocation(companyLocationId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const row = {
+      shopify_customer_id: customerId,
+      company_name: data.companyName ?? location.company.name,
+      location_name: data.locationName,
+      contact_name: data.contactName,
+      phone: data.phone ?? null,
+      address1: data.address1,
+      address2: data.address2 ?? null,
+      city: data.city,
+      state: data.state,
+      pin: data.pin,
     };
+    const { error } = await supabaseAdmin
+      .from("customer_business_details")
+      .upsert(row, { onConflict: "shopify_customer_id" });
+    if (error) throw new Error("Could not update your business account details.");
+    return mergeDetails(companyLocationId, location, row);
   });

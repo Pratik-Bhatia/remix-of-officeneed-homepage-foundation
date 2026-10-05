@@ -175,7 +175,6 @@ function BusinessDetailsFormDialog({
     setBusy(true);
     try {
       const phone = String(form.get("phone") ?? "").trim();
-      const gstNumber = String(form.get("gstNumber") ?? "").trim();
       const address2 = String(form.get("address2") ?? "").trim();
       const updated = await updateB2BLocationDetails({
         data: {
@@ -185,7 +184,6 @@ function BusinessDetailsFormDialog({
           companyName: String(form.get("companyName") ?? "").trim(),
           contactName: String(form.get("contactName") ?? "").trim(),
           ...(phone ? { phone } : {}),
-          ...(gstNumber ? { gstNumber } : {}),
           address1: String(form.get("address1") ?? "").trim(),
           ...(address2 ? { address2 } : {}),
           city: String(form.get("city") ?? "").trim(),
@@ -218,7 +216,7 @@ function BusinessDetailsFormDialog({
           <Field id="contactName" label="Contact Person's Name" defaultValue={details.contactName ?? ""} />
           <div className="grid gap-4 sm:grid-cols-2">
             <Field id="phone" label="Phone" type="tel" defaultValue={details.phone ?? ""} />
-            <Field id="gstNumber" label="GST Number" defaultValue={details.gstNumber ?? ""} />
+            <Field id="gstNumber" label="GST Number" defaultValue={details.gstNumber ?? ""} disabled />
           </div>
           <Field id="address1" label="Address Line 1" defaultValue={details.address1 ?? ""} />
           <Field id="address2" label="Address Line 2 (optional)" defaultValue={details.address2 ?? ""} />
