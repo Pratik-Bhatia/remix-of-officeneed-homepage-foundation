@@ -121,7 +121,11 @@ function B2BAccountStatus() {
                 </SelectContent>
               </Select>
             ) : (
-              <span className="min-w-0 truncate font-medium text-foreground">{locations[0]?.name}</span>
+              // Display only: company setup names the default location
+              // "<Company> - Head Office"; the bar shows just the company name.
+              <span className="min-w-0 truncate font-medium text-foreground">
+                {locations[0]?.name.replace(/\s+-\s+Head Office$/i, "")}
+              </span>
             )}
           </div>
         </div>
