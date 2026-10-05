@@ -160,6 +160,7 @@ async function assignCompanyLocationAddress(
   phone: string | undefined,
   stage: string,
 ): Promise<void> {
+  console.log(`[B2B setup] company address codes stage=${stage} countryCode=IN zoneCode=${address.state} addressTypes=BILLING,SHIPPING`);
   const result = await adminGraphQLRequest<{
     companyLocationAssignAddress: {
       addresses: Array<{ id: string }> | null;
