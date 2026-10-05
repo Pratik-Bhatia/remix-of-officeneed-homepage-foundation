@@ -3,13 +3,7 @@ import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import customerAuthLifestyleImage from "@/assets/customer-auth-lifestyle.webp";
 import companyAuthLifestyleImage from "@/assets/company-auth-lifestyle.webp";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
@@ -28,7 +22,53 @@ import { useB2BStore } from "@/stores/b2bStore";
 /** Thrown internally when business setup is held for manual review. */
 class PendingReview extends Error {}
 
-export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+/**
+ * The ONLY thing that differs between the global modal and the embedded
+ * /account/* presentation: the surrounding surface. Every branch below
+ * renders its form/header/tabs children through this, so there is exactly
+ * one JSX implementation of the actual authentication UI -- modal mode
+ * wraps it in the real Radix DialogContent (unchanged), embedded mode
+ * wraps the identical children in a plain, centered, bordered card sized
+ * for an in-page layout instead of the viewport (no max-h/100vw sizing --
+ * the page scrolls naturally; no close button -- there's nothing to
+ * close).
+ */
+function AuthSurface({
+  embedded,
+  className,
+  children,
+}: {
+  embedded: boolean;
+  className: string;
+  children: React.ReactNode;
+}) {
+  if (embedded) {
+    return (
+      <div className="mx-auto flex w-full flex-col gap-0 overflow-hidden rounded-2xl border border-border bg-background lg:max-w-4xl lg:flex-row">
+        {children}
+      </div>
+    );
+  }
+  return <DialogContent className={className}>{children}</DialogContent>;
+}
+
+export function CustomerAuthModal({
+  open = false,
+  onOpenChange = () => {},
+  embedded = false,
+}: {
+  /** Modal mode only -- ignored when `embedded` is true. */
+  open?: boolean;
+  /** Modal mode only -- ignored when `embedded` is true. */
+  onOpenChange?: (open: boolean) => void;
+  /** Renders the SAME form/content inline (a plain, centered card) instead
+   * of inside a Radix Dialog -- for a protected route (e.g. /account/*)
+   * that needs this exact authentication UI embedded in the page rather
+   * than as an overlay. There is still only one implementation of the
+   * actual form: see AuthSurface below, which is the only thing that
+   * differs between the two modes. */
+  embedded?: boolean;
+}) {
   const [mode, setMode] = useState<"signin" | "register" | "forgot">("signin");
   // Whether the neutral "we've sent a link" confirmation is showing, in
   // place of the forgot-password email form. Reset to false every time
@@ -84,7 +124,7 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
   // and never cart/shopping data, neither of which this component touches.
   const wasOpen = useRef(open);
   useEffect(() => {
-    if (open && !wasOpen.current) {
+    if (!embedded && open && !wasOpen.current) {
       const signedIn = !!getCustomerToken();
       setUpgrade(signedIn);
       setMode(signedIn ? "register" : "signin");
@@ -93,7 +133,22 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
       setRecoverySent(false);
     }
     wasOpen.current = open;
-  }, [open]);
+  }, [open, embedded]);
+
+  // Embedded has no open/close transition to key off -- it's rendered
+  // exactly when the caller already knows the visitor is signed out (see
+  // account.tsx's `status === "out"` gate), so this just initializes once
+  // on mount, same values the modal's own effect above would set for an
+  // anonymous visitor.
+  useEffect(() => {
+    if (!embedded) return;
+    setUpgrade(false);
+    setMode("signin");
+    setEntryType("customer");
+    setGstError(null);
+    setRecoverySent(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -273,9 +328,16 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
         });
         toast.success("Account created successfully");
       }
-      onOpenChange(false);
+      // Embedded: there's no dialog to close, and the visitor is already on
+      // the /account/* route they asked for (e.g. /account/orders) -- the
+      // parent's own status==="in" check (useCustomer(), which the token
+      // event this sign-in/register just fired will refresh) is what makes
+      // the requested child route render next, with no navigation needed
+      // or wanted here. Navigating to the bare /account index would be the
+      // "unnecessary redirect" this was explicitly asked not to do.
+      if (!embedded) onOpenChange(false);
       await refreshSaves(true);
-      navigate({ to: "/account" });
+      if (!embedded) navigate({ to: "/account" });
     } catch (error) {
       // An email that's already registered should send the shopper to
       // sign in, not leave them stuck on a failed "Create Account" form.
@@ -361,10 +423,10 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
     </div>
   );
 
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+  const authContent = (
+    <>
       {showCustomerAuthLayout ? (
-        <DialogContent className="flex max-h-[calc(100dvh-1.5rem)] w-[calc(100vw-1.5rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-md lg:max-w-4xl lg:flex-row">
+        <AuthSurface embedded={embedded} className="flex max-h-[calc(100dvh-1.5rem)] w-[calc(100vw-1.5rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-md lg:max-w-4xl lg:flex-row">
           {/* Compact image banner -- mobile/tablet only (below lg:). Fixed,
               modest height so the form stays the priority; no text overlay
               here (the DialogHeader below already carries the copy at this
@@ -423,14 +485,14 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
               below uses; only the markup/spacing around them is new. */}
           <div className="flex min-h-0 flex-1 flex-col">
             <div className="shrink-0 space-y-4 px-5 pb-4 pt-6 sm:px-8 sm:pt-8">
-              <DialogHeader>
-                <DialogTitle>{mode === "signin" ? "Welcome back" : "Create your account"}</DialogTitle>
-                <DialogDescription>
+              <div className="flex flex-col space-y-1.5 text-center sm:text-left">
+                <h2 className="text-lg font-semibold leading-none tracking-tight">{mode === "signin" ? "Welcome back" : "Create your account"}</h2>
+                <p className="text-sm text-muted-foreground">
                   {mode === "signin"
                     ? "Sign in to access your orders, saved products, and account details."
                     : "Join Officeneed to track orders, save products, and manage your account."}
-                </DialogDescription>
-              </DialogHeader>
+                </p>
+              </div>
               <Tabs
                 value={entryType}
                 onValueChange={(v) => {
@@ -486,9 +548,9 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
               </button>
             </div>
           </div>
-        </DialogContent>
+        </AuthSurface>
       ) : showCompanyAuthLayout ? (
-        <DialogContent className="flex max-h-[calc(100dvh-1.5rem)] w-[calc(100vw-1.5rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-md lg:max-w-4xl lg:flex-row">
+        <AuthSurface embedded={embedded} className="flex max-h-[calc(100dvh-1.5rem)] w-[calc(100vw-1.5rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-md lg:max-w-4xl lg:flex-row">
           {/* Exact 50/50 split, matching the Individual layout's modal
               width/proportions. At a true half-width panel there's enough
               room to show the composition close to centered without
@@ -526,14 +588,14 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
               password; only the markup/organization is new. */}
           <div className="flex min-h-0 flex-1 flex-col">
             <div className="shrink-0 space-y-4 px-5 pb-4 pt-6 sm:px-8 sm:pt-8">
-              <DialogHeader>
-                <DialogTitle>{mode === "signin" ? "Welcome back, business" : "Create your business account"}</DialogTitle>
-                <DialogDescription>
+              <div className="flex flex-col space-y-1.5 text-center sm:text-left">
+                <h2 className="text-lg font-semibold leading-none tracking-tight">{mode === "signin" ? "Welcome back, business" : "Create your business account"}</h2>
+                <p className="text-sm text-muted-foreground">
                   {mode === "signin"
                     ? "Sign in to access your corporate pricing, orders, and account details."
                     : "Register your business to access corporate pricing, streamlined ordering, and more."}
-                </DialogDescription>
-              </DialogHeader>
+                </p>
+              </div>
               <Tabs
                 value={entryType}
                 onValueChange={(v) => {
@@ -634,24 +696,25 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
               </button>
             </div>
           </div>
-        </DialogContent>
+        </AuthSurface>
       ) : (
-      <DialogContent
+      <AuthSurface
+        embedded={embedded}
         className={
           "flex max-h-[calc(100dvh-1.5rem)] w-[calc(100vw-1.5rem)] flex-col gap-0 overflow-hidden p-0 " +
           (isCompanyRegister ? "sm:max-w-[580px]" : "sm:max-w-md")
         }
       >
         <div className="shrink-0 space-y-4 px-5 pb-4 pt-6 sm:px-6">
-          <DialogHeader>
-            <DialogTitle>
+          <div className="flex flex-col space-y-1.5 text-center sm:text-left">
+            <h2 className="text-lg font-semibold leading-none tracking-tight">
               {mode === "forgot"
                 ? "Reset your password"
                 : entryType === "company"
                   ? mode === "signin" ? "Sign in to your business account" : upgrade ? "Register your business" : "Create your business account"
                   : mode === "signin" ? "Sign in to your account" : "Create your account"}
-            </DialogTitle>
-            <DialogDescription>
+            </h2>
+            <p className="text-sm text-muted-foreground">
               {mode === "forgot"
                 ? recoverySent
                   ? "Check your email for the next step."
@@ -663,8 +726,8 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
                   : mode === "signin"
                     ? "Sign in to see your orders and saved products."
                     : "Create an account to track your orders and keep a list of saved products."}
-            </DialogDescription>
-          </DialogHeader>
+            </p>
+          </div>
 
           {mode === "forgot" || upgrade ? null : (
             <Tabs
@@ -828,8 +891,15 @@ export function CustomerAuthModal({ open, onOpenChange }: { open: boolean; onOpe
           </button>
         </div>
         )}
-      </DialogContent>
+      </AuthSurface>
       )}
+    </>
+  );
+
+  if (embedded) return authContent;
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      {authContent}
     </Dialog>
   );
 }

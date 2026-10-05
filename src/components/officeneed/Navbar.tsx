@@ -11,6 +11,12 @@ import { SearchModal } from "./SearchModal";
 import { CustomerAuthModal } from "./CustomerAuthModal";
 import { useCustomer } from "@/lib/customer";
 
+// sessionStorage (not localStorage): this gates a once-per-TAB-SESSION
+// auto-popup, not a permanent dismissal -- a fresh browser session (or a
+// fresh incognito window) should see it again. No existing OfficeNeed
+// preference system covers this, so this is its own narrowly-scoped key.
+const AUTH_POPUP_SHOWN_KEY = "officeneed_auth_popup_shown";
+
 function Logo({ className }: { className?: string }) {
   return (
     <Link
@@ -80,6 +86,33 @@ export function Navbar() {
       window.removeEventListener("open-auth-modal", handleOpenAuth);
     };
   }, []);
+
+  // Automatic first-visit auth popup. Reuses the exact same modal/state as
+  // every other entry point above (setAuthOpen) -- no second modal, no
+  // separate auth-state tracking. Gated on `status` (the same
+  // useCustomer() value the manual Account icon above already checks), so
+  // this can only ever fire once that's genuinely resolved to "out"
+  // (anonymous) -- "checking" is skipped entirely, never treated as "not
+  // signed in", which is what prevents the open-then-flash-closed glitch
+  // for an already-authenticated visitor on a slow connection. The ref
+  // guard makes this a true one-shot per mount: it won't re-fire if
+  // `status` later flips from "out" to "in" (e.g. the visitor signs in
+  // through this very popup).
+  const autoPopupChecked = useRef(false);
+  useEffect(() => {
+    if (status === "checking" || autoPopupChecked.current) return;
+    autoPopupChecked.current = true;
+    if (status !== "out") return; // signed in (Individual or Corporate) -- never auto-open
+    try {
+      if (sessionStorage.getItem(AUTH_POPUP_SHOWN_KEY)) return;
+      sessionStorage.setItem(AUTH_POPUP_SHOWN_KEY, "true");
+    } catch {
+      // Private-mode/storage-disabled edge case -- fail safe to not
+      // auto-opening on every navigation rather than crashing.
+      return;
+    }
+    setAuthOpen(true);
+  }, [status]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

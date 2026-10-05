@@ -60,11 +60,11 @@ function SavesPage() {
       <p className="mt-1 text-sm text-muted-foreground">Products you've bookmarked for later.</p>
 
       {loading || !loaded ? (
-        <div className="mt-6 rounded-2xl border border-border p-10 text-center text-sm text-muted-foreground">
+        <div className="mt-6 rounded-2xl border border-border bg-background p-10 text-center text-sm text-muted-foreground">
           Loading your saved products…
         </div>
       ) : products.length === 0 ? (
-        <div className="mt-6 rounded-2xl border border-border p-12 text-center">
+        <div className="mt-6 rounded-2xl border border-border bg-background p-12 text-center">
           <h3 className="text-base font-medium text-foreground">No saved items found. Start exploring.</h3>
           <p className="mx-auto mt-2 max-w-sm text-sm text-muted-foreground">
             Tap the save icon on any product to keep it here for later.

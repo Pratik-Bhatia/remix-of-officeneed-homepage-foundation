@@ -51,7 +51,7 @@ function OrdersPage() {
       <p className="mt-1 text-sm text-muted-foreground">A record of your recent purchases with Officeneed.</p>
 
       {orders.length === 0 ? (
-        <div className="mt-6 rounded-2xl border border-border p-12 text-center">
+        <div className="mt-6 rounded-2xl border border-border bg-background p-12 text-center">
           <h3 className="text-base font-medium text-foreground">No orders yet</h3>
           <p className="mx-auto mt-2 max-w-sm text-sm text-muted-foreground">
             Once you place an order it will appear here with its status and details.
@@ -65,7 +65,7 @@ function OrdersPage() {
           {orders.map((order) => {
             const status = statusLabel(order);
             return (
-              <article key={order.id} className="rounded-2xl border border-border p-5 sm:p-6">
+              <article key={order.id} className="rounded-2xl border border-border bg-background p-5 sm:p-6">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <p className="text-sm font-medium text-foreground">Order {order.name}</p>

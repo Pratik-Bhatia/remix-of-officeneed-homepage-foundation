@@ -279,7 +279,7 @@ function BusinessAccountSection() {
     : "";
 
   return (
-    <div className="mt-6 rounded-2xl border border-border p-5 sm:p-6">
+    <div className="mt-6 rounded-2xl border border-border bg-background p-5 sm:p-6">
       <div className="flex items-center justify-between">
         <h3 className="flex items-center gap-2 text-sm font-medium text-foreground">
           <Building2 className="size-4 text-muted-foreground" />
@@ -402,7 +402,7 @@ function ProfilePage() {
       <p className="mt-1 text-sm text-muted-foreground">Keep your contact and delivery details current.</p>
 
       <form onSubmit={handleSubmit} className="mt-6 space-y-6">
-        <div className="rounded-2xl border border-border p-5 sm:p-6">
+        <div className="rounded-2xl border border-border bg-background p-5 sm:p-6">
           <h3 className="text-sm font-medium text-foreground">Personal Information</h3>
           <div className="mt-5 grid gap-5 sm:grid-cols-2">
             <Field id="firstName" label="First Name" defaultValue={customer?.firstName ?? ""} />
@@ -421,7 +421,7 @@ function ProfilePage() {
 
       <BusinessAccountSection />
 
-      <div className="mt-6 rounded-2xl border border-border p-5 sm:p-6">
+      <div className="mt-6 rounded-2xl border border-border bg-background p-5 sm:p-6">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-medium text-foreground">Address Book</h3>
           <Button
