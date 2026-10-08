@@ -307,53 +307,6 @@ function ProductDetail() {
   // they currently call the same underlying handleBuyNow().
   const [isAddingToCart, setIsAddingToCart] = useState(false);
   const [isBuyingNow, setIsBuyingNow] = useState(false);
-  // TEMPORARY DIAGNOSTIC -- remove once the click-not-registering root
-  // cause is identified. Logs the real DOM state at the button center
-  // (elementFromPoint/elementsFromPoint, computed pointer-events, the
-  // actual .disabled DOM property) at three checkpoints: page load, right
-  // after an add-to-cart/buy-now operation finishes, and on every click
-  // attempt. Also a capture-phase document click listener to confirm the
-  // click reaches document at all.
-  const addToCartBtnRef = useRef<HTMLButtonElement>(null);
-  const buyNowBtnRef = useRef<HTMLButtonElement>(null);
-  const diagLog = (label: string) => {
-    for (const [name, ref] of [["AddToCart", addToCartBtnRef], ["BuyNow", buyNowBtnRef]] as const) {
-      const el = ref.current;
-      if (!el) {
-        console.log(`[DIAG][${label}][${name}] ref is null (not mounted)`);
-        continue;
-      }
-      const rect = el.getBoundingClientRect();
-      const cx = rect.left + rect.width / 2;
-      const cy = rect.top + rect.height / 2;
-      const top = document.elementFromPoint(cx, cy);
-      const stack = document.elementsFromPoint(cx, cy).map((e) => {
-        const cls = typeof e.className === "string" ? e.className : "";
-        return `${e.tagName}${e.id ? "#" + e.id : ""}${cls ? "." + cls.trim().split(/\s+/).join(".") : ""}`;
-      });
-      console.log(`[DIAG][${label}][${name}]`, {
-        rect: { x: rect.x, y: rect.y, w: rect.width, h: rect.height },
-        center: { cx, cy },
-        buttonDisabledProp: el.disabled,
-        buttonPointerEvents: getComputedStyle(el).pointerEvents,
-        buttonZIndex: getComputedStyle(el).zIndex,
-        elementAtCenter: top === el ? "BUTTON ITSELF (correct)" : (top ? `${top.tagName}${top.id ? "#" + top.id : ""}${typeof top.className === "string" && top.className ? "." + top.className.trim().split(/\s+/).join(".") : ""}` : "null"),
-        fullStackAtCenter: stack,
-      });
-    }
-  };
-  useEffect(() => {
-    diagLog("page-load");
-    const onDocClick = (e: MouseEvent) => {
-      const path = e.composedPath().slice(0, 5).map((n: EventTarget) =>
-        n instanceof Element ? `${n.tagName}${n.id ? "#" + n.id : ""}` : String(n),
-      );
-      console.log("[DIAG][document-capture-click]", { target: (e.target as Element)?.tagName, path });
-    };
-    document.addEventListener("click", onDocClick, { capture: true });
-    return () => document.removeEventListener("click", onDocClick, { capture: true });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
   const [customizerOpen, setCustomizerOpen] = useState(false);
   const [zoomOpen, setZoomOpen] = useState(false);
   const purchaseSectionRef = useRef<HTMLDivElement>(null);
@@ -589,28 +542,22 @@ function ProductDetail() {
   // cart/checkout behavior is unchanged, this only isolates which button
   // shows its own spinner and disables itself while the shared action runs.
   const handleAddToCartClick = async () => {
-    console.log("[DIAG] Add to Cart onClick FIRED. isAddingToCart=", isAddingToCart);
-    diagLog("click-attempt-addtocart");
     if (isAddingToCart) return;
     setIsAddingToCart(true);
     try {
       await handleBuyNow();
     } finally {
       setIsAddingToCart(false);
-      setTimeout(() => diagLog("after-operation-addtocart"), 0);
     }
   };
 
   const handleBuyNowClick = async () => {
-    console.log("[DIAG] Buy Now onClick FIRED. isBuyingNow=", isBuyingNow);
-    diagLog("click-attempt-buynow");
     if (isBuyingNow) return;
     setIsBuyingNow(true);
     try {
       await handleBuyNow();
     } finally {
       setIsBuyingNow(false);
-      setTimeout(() => diagLog("after-operation-buynow"), 0);
     }
   };
 
@@ -924,7 +871,6 @@ function ProductDetail() {
 
                   <div className="flex flex-1 gap-3">
                     <Button
-                      ref={addToCartBtnRef}
                       variant="secondary"
                       size="lg"
                       onClick={handleAddToCartClick}
@@ -934,7 +880,6 @@ function ProductDetail() {
                       {isAddingToCart ? <Loader2 className="size-4 animate-spin" /> : "Add to Cart"}
                     </Button>
                     <Button
-                      ref={buyNowBtnRef}
                       size="lg"
                       onClick={handleBuyNowClick}
                       disabled={isBuyingNow || (!!selectedVariant && !selectedVariant.availableForSale)}

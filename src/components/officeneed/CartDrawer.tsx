@@ -85,11 +85,23 @@ export function CartDrawer({ triggerClassName }: { triggerClassName?: string }) 
     const handleCloseOverlays = (e: any) => {
       if (e.detail !== "cart") setIsOpen(false);
     };
+    // Lets other components (e.g. the PDP's Add to Cart/Buy Now, when the
+    // selected variant is already in the bag) open this drawer without
+    // owning its state -- mirrors handleCloseOverlays above. Previously
+    // dispatched from products.$slug.tsx with no listener anywhere, so it
+    // silently did nothing: the click correctly short-circuited (item
+    // already in cart, nothing to re-add) but never actually showed the
+    // shopper their cart, which looked identical to the button being dead.
+    const handleOpenOverlays = (e: any) => {
+      if (e.detail === "cart") setIsOpen(true);
+    };
     window.addEventListener("keydown", handleEsc);
     window.addEventListener("close-overlays", handleCloseOverlays);
+    window.addEventListener("open-overlays", handleOpenOverlays);
     return () => {
       window.removeEventListener("keydown", handleEsc);
       window.removeEventListener("close-overlays", handleCloseOverlays);
+      window.removeEventListener("open-overlays", handleOpenOverlays);
     };
   }, [isOpen]);
 
