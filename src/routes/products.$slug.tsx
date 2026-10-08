@@ -457,27 +457,39 @@ function ProductDetail() {
   const hasVariantChoice = variants.length > 1;
 
   const cartItem = items.find(i => i.variantId === selectedVariant?.id);
+  const cartQuantity = cartItem?.quantity;
   const isItemInCart = !!cartItem;
 
-  // The stepper always means "how many to add on the next click" -- it is
-  // deliberately NOT synced to the cart's actual line quantity. It used to
-  // mirror that value and double as a live cart-quantity editor once the
-  // item was already in the cart, but that's exactly what caused Add to
-  // Cart to compound (add 2 -> cart has 2 -> stepper shows 2 -> next click
-  // adds 2 more -> cart has 4 -> stepper shows 4 -> next click adds 4...).
-  // Reset only when the selected variant changes, so switching color/size
-  // doesn't carry over an unrelated amount.
+  // Before the item is in the cart, the stepper is just "how many to add".
+  // Once it's in the cart, the stepper becomes a live editor for that
+  // line's real quantity -- +/- here update the cart (and drawer/checkout)
+  // immediately, same as the drawer's own +/-. Add to Cart's own button
+  // switches to "View Cart" in that state (see handleAddToCart) rather
+  // than adding more, so there's only ever one control adjusting quantity
+  // at a time -- no compounding.
   useEffect(() => {
-    const next = product.minimumOrderQuantity || 1;
+    const next = cartQuantity !== undefined ? cartQuantity : product.minimumOrderQuantity || 1;
     setQuantity(next);
     // Don't clobber what the shopper is actively typing -- the field
     // resyncs from the committed quantity once they blur/Enter instead.
     if (!quantityInputFocusedRef.current) setQuantityInput(String(next));
-  }, [selectedVariant?.id, product.minimumOrderQuantity]);
+  }, [cartQuantity, selectedVariant?.id, product.minimumOrderQuantity]);
 
   const handleQuantityChange = (newQty: number) => {
     if (!selectedVariant) return;
-    setQuantity(Math.max(1, newQty));
+
+    if (!isItemInCart) {
+      setQuantity(Math.max(1, newQty));
+      return;
+    }
+
+    if (newQty <= 0) {
+      useCartStore.getState().removeItem(selectedVariant.id);
+      setQuantity(1);
+    } else {
+      setQuantity(newQty);
+      useCartStore.getState().updateQuantity(selectedVariant.id, newQty);
+    }
   };
 
   // Commits whatever is currently typed in the quantity field: integers
@@ -529,10 +541,16 @@ function ProductDetail() {
     }
   };
 
-  // Add to Cart: always adds this quantity, every click -- no special
-  // "already in cart" case. cartStore.addItem() itself increments the
-  // existing line's quantity when the variant is already present.
+  // Add to Cart: adds the selected quantity the first time. Once the
+  // variant is already in the cart, the stepper above is the live editor
+  // for its quantity (see handleQuantityChange) -- clicking this button
+  // again just opens the cart drawer instead of adding more, so there's
+  // never two different controls both trying to own the line's quantity.
   const handleAddToCart = async () => {
+    if (isItemInCart) {
+      window.dispatchEvent(new CustomEvent("open-overlays", { detail: "cart" }));
+      return;
+    }
     if (!validatePurchasable()) return;
     const ok = await addCurrentVariantToCart();
     if (ok) toast.success("Added to cart", { description: product.name });
@@ -908,7 +926,7 @@ function ProductDetail() {
                       disabled={isAddingToCart || (!!selectedVariant && !selectedVariant.availableForSale)}
                       className="flex-1 h-[52px] text-[13px] font-semibold tracking-wide uppercase bg-secondary text-secondary-foreground hover:bg-secondary/80 border border-border/80 shadow-none rounded-md"
                     >
-                      {isAddingToCart ? <Loader2 className="size-4 animate-spin" /> : "Add to Cart"}
+                      {isAddingToCart ? <Loader2 className="size-4 animate-spin" /> : isItemInCart ? "View Cart" : "Add to Cart"}
                     </Button>
                     <Button
                       size="lg"
@@ -1136,7 +1154,7 @@ function ProductDetail() {
                 disabled={isAddingToCart || (!!selectedVariant && !selectedVariant.availableForSale)}
                 className="h-11 w-[220px] xl:w-[280px] font-medium"
               >
-                {isAddingToCart ? <Loader2 className="size-4 animate-spin" /> : selectedVariant && !selectedVariant.availableForSale ? "Sold out" : "Add to Cart"}
+                {isAddingToCart ? <Loader2 className="size-4 animate-spin" /> : selectedVariant && !selectedVariant.availableForSale ? "Sold out" : isItemInCart ? "View Cart" : "Add to Cart"}
               </Button>
             </div>
           </div>
@@ -1194,7 +1212,7 @@ function ProductDetail() {
                 disabled={isAddingToCart || (!!selectedVariant && !selectedVariant.availableForSale)}
                 className="h-10 flex-[1.5] font-medium"
               >
-                {isAddingToCart ? <Loader2 className="size-4 animate-spin" /> : selectedVariant && !selectedVariant.availableForSale ? "Sold out" : "Add"}
+                {isAddingToCart ? <Loader2 className="size-4 animate-spin" /> : selectedVariant && !selectedVariant.availableForSale ? "Sold out" : isItemInCart ? "View Cart" : "Add"}
               </Button>
             </div>
           </div>
