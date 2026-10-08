@@ -367,7 +367,6 @@ function ProductDetail() {
 
 
   const addItem = useCartStore((s) => s.addItem);
-  const updateQuantity = useCartStore((s) => s.updateQuantity);
   const items = useCartStore((s) => s.items);
   const prepareCheckout = useCartStore((s) => s.prepareCheckout);
   const deliveryAddress = useCartStore((s) => s.deliveryAddress);
@@ -458,35 +457,27 @@ function ProductDetail() {
   const hasVariantChoice = variants.length > 1;
 
   const cartItem = items.find(i => i.variantId === selectedVariant?.id);
-  const cartQuantity = cartItem?.quantity;
   const isItemInCart = !!cartItem;
 
-  // Sync PDP quantity with cart
+  // The stepper always means "how many to add on the next click" -- it is
+  // deliberately NOT synced to the cart's actual line quantity. It used to
+  // mirror that value and double as a live cart-quantity editor once the
+  // item was already in the cart, but that's exactly what caused Add to
+  // Cart to compound (add 2 -> cart has 2 -> stepper shows 2 -> next click
+  // adds 2 more -> cart has 4 -> stepper shows 4 -> next click adds 4...).
+  // Reset only when the selected variant changes, so switching color/size
+  // doesn't carry over an unrelated amount.
   useEffect(() => {
-    const next = cartQuantity !== undefined ? cartQuantity : product.minimumOrderQuantity || 1;
+    const next = product.minimumOrderQuantity || 1;
     setQuantity(next);
     // Don't clobber what the shopper is actively typing -- the field
     // resyncs from the committed quantity once they blur/Enter instead.
     if (!quantityInputFocusedRef.current) setQuantityInput(String(next));
-  }, [cartQuantity, selectedVariant?.id, product.minimumOrderQuantity]);
+  }, [selectedVariant?.id, product.minimumOrderQuantity]);
 
   const handleQuantityChange = (newQty: number) => {
     if (!selectedVariant) return;
-
-    if (!isItemInCart) {
-      setQuantity(Math.max(1, newQty));
-      return;
-    }
-
-    if (newQty <= 0) {
-      // Remove from cart
-      useCartStore.getState().removeItem(selectedVariant.id);
-      setQuantity(1); // Reset default for PDP
-    } else {
-      // Auto sync
-      setQuantity(newQty); // Optimistic UI
-      useCartStore.getState().updateQuantity(selectedVariant.id, newQty);
-    }
+    setQuantity(Math.max(1, newQty));
   };
 
   // Commits whatever is currently typed in the quantity field: integers
