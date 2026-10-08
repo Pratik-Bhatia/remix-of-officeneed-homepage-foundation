@@ -1,4 +1,4 @@
-import { trackViewContent } from "@/lib/meta-pixel";
+import { trackViewContent, trackInitiateCheckout } from "@/lib/meta-pixel";
 import { useMemo, useState, useRef, useEffect } from "react";
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { Minus, Plus, ChevronLeft, ChevronRight, Loader2, ZoomIn, X, ShieldCheck, Lock, Award, Truck, BadgeCheck } from "lucide-react";
@@ -369,6 +369,9 @@ function ProductDetail() {
   const addItem = useCartStore((s) => s.addItem);
   const updateQuantity = useCartStore((s) => s.updateQuantity);
   const items = useCartStore((s) => s.items);
+  const prepareCheckout = useCartStore((s) => s.prepareCheckout);
+  const deliveryAddress = useCartStore((s) => s.deliveryAddress);
+  const b2bStatus = useB2BStore((s) => s.status);
 
   const min = product.minimumOrderQuantity || 1;
   const step = 1;
@@ -498,54 +501,91 @@ function ProductDetail() {
     if (finalQty !== quantity) handleQuantityChange(finalQty);
   };
 
-  const handleBuyNow = async () => {
+  // Shared guard: is there actually something purchasable selected right
+  // now? Used by both Add to Cart and Buy Now so their error toasts never
+  // drift apart.
+  const validatePurchasable = (): boolean => {
     if (!node) {
       toast.error("This product is currently available for enquiry only.");
-      return;
+      return false;
     }
-
-    const variantToUse = selectedVariant;
-    if (!variantToUse) return;
-    if (!variantToUse.availableForSale) {
+    if (!selectedVariant) return false;
+    if (!selectedVariant.availableForSale) {
       toast.error("Sorry, this option is out of stock.");
-      return;
+      return false;
     }
-    
-    if (isItemInCart) {
-      // If already in cart, button just opens drawer since quantity auto-syncs
-      window.dispatchEvent(new CustomEvent("open-overlays", { detail: "cart" }));
-      return;
-    }
+    return true;
+  };
 
-    if (!variantToUse.availableForSale) {
-      toast.error("This option is currently sold out.");
-      return;
-    }
-
+  // The actual cartStore.addItem() call, shared by both buttons -- always
+  // adds (or increments, if this variant is already a line -- addItem's
+  // own "existing" branch handles that), never silently no-ops.
+  const addCurrentVariantToCart = async (): Promise<boolean> => {
+    if (!node || !selectedVariant) return false;
     try {
       await addItem({
         product: { node },
-        variantId: variantToUse.id,
-        variantTitle: variantToUse.title,
-        price: variantToUse.price ?? node.priceRange?.minVariantPrice,
+        variantId: selectedVariant.id,
+        variantTitle: selectedVariant.title,
+        price: selectedVariant.price ?? node.priceRange?.minVariantPrice,
         quantity,
-        selectedOptions: variantToUse.selectedOptions ?? [],
+        selectedOptions: selectedVariant.selectedOptions ?? [],
       });
-      toast.success("Added to cart", { description: product.name });
-      window.dispatchEvent(new CustomEvent("open-overlays", { detail: "cart" }));
+      return true;
     } catch {
       toast.error("Failed to add to cart");
+      return false;
     }
   };
 
-  // Thin per-button wrappers around the exact same handleBuyNow() call --
-  // cart/checkout behavior is unchanged, this only isolates which button
-  // shows its own spinner and disables itself while the shared action runs.
+  // Add to Cart: always adds this quantity, every click -- no special
+  // "already in cart" case. cartStore.addItem() itself increments the
+  // existing line's quantity when the variant is already present.
+  const handleAddToCart = async () => {
+    if (!validatePurchasable()) return;
+    const ok = await addCurrentVariantToCart();
+    if (ok) toast.success("Added to cart", { description: product.name });
+  };
+
+  // Buy Now: ensures the selected variant is in the cart (adding it only
+  // if it isn't there yet, so a repeat click doesn't silently bump the
+  // quantity right before checkout), then hands off to the exact same
+  // checkout mechanism CartDrawer's own Checkout button uses --
+  // including the B2B "pick a delivery address on /cart first" guard.
+  const handleBuyNowCheckout = async () => {
+    if (!validatePurchasable()) return;
+    if (!isItemInCart) {
+      const ok = await addCurrentVariantToCart();
+      if (!ok) return;
+    }
+    if (b2bStatus === "b2b" && !deliveryAddress) {
+      navigate({ to: "/cart" });
+      return;
+    }
+    const win = window.open("", "_blank");
+    try {
+      const checkoutUrl = await prepareCheckout();
+      if (!checkoutUrl) {
+        win?.close();
+        toast.error("Couldn't start checkout. Please try again.");
+        return;
+      }
+      trackInitiateCheckout(useCartStore.getState().items);
+      if (win) win.location.href = checkoutUrl;
+      else window.open(checkoutUrl, "_blank");
+    } catch {
+      win?.close();
+      toast.error("Couldn't start checkout. Please try again.");
+    }
+  };
+
+  // Thin per-button wrappers -- each only isolates which button shows its
+  // own spinner and disables itself while its own action runs.
   const handleAddToCartClick = async () => {
     if (isAddingToCart) return;
     setIsAddingToCart(true);
     try {
-      await handleBuyNow();
+      await handleAddToCart();
     } finally {
       setIsAddingToCart(false);
     }
@@ -555,7 +595,7 @@ function ProductDetail() {
     if (isBuyingNow) return;
     setIsBuyingNow(true);
     try {
-      await handleBuyNow();
+      await handleBuyNowCheckout();
     } finally {
       setIsBuyingNow(false);
     }
@@ -1105,7 +1145,7 @@ function ProductDetail() {
                 disabled={isAddingToCart || (!!selectedVariant && !selectedVariant.availableForSale)}
                 className="h-11 w-[220px] xl:w-[280px] font-medium"
               >
-                {isAddingToCart ? <Loader2 className="size-4 animate-spin" /> : selectedVariant && !selectedVariant.availableForSale ? "Sold out" : isItemInCart ? "View Cart" : "Add to Cart"}
+                {isAddingToCart ? <Loader2 className="size-4 animate-spin" /> : selectedVariant && !selectedVariant.availableForSale ? "Sold out" : "Add to Cart"}
               </Button>
             </div>
           </div>
@@ -1163,7 +1203,7 @@ function ProductDetail() {
                 disabled={isAddingToCart || (!!selectedVariant && !selectedVariant.availableForSale)}
                 className="h-10 flex-[1.5] font-medium"
               >
-                {isAddingToCart ? <Loader2 className="size-4 animate-spin" /> : selectedVariant && !selectedVariant.availableForSale ? "Sold out" : isItemInCart ? "View Cart" : "Add"}
+                {isAddingToCart ? <Loader2 className="size-4 animate-spin" /> : selectedVariant && !selectedVariant.availableForSale ? "Sold out" : "Add"}
               </Button>
             </div>
           </div>
