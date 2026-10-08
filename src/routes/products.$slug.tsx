@@ -7,7 +7,6 @@ import { Footer } from "@/components/officeneed/Footer";
 import { ProductCard } from "@/components/officeneed/ProductCard";
 import { ProductInformation } from "@/components/officeneed/ProductInformation";
 import { ProductReviews, ProductRatingSummary, MOCK_REVIEWS, type Review } from "@/components/officeneed/ProductReviews";
-import { EnquiryDialog } from "@/components/officeneed/EnquiryDialog";
 import { ProductCustomizer } from "@/components/officeneed/ProductCustomizer";
 import { RichText } from "@/components/officeneed/RichText";
 import { Button } from "@/components/ui/button";
@@ -295,6 +294,19 @@ function ProductDetail() {
 
   const { collections, isLoading: collectionsLoading } = useShopifyCollections();
   const [quantity, setQuantity] = useState<number>(product.minimumOrderQuantity || 1);
+  // Raw text the quantity <input> displays while being edited -- kept
+  // separate from `quantity` (the committed number everything else reads)
+  // so the field can sit empty or mid-typed (e.g. "" or "5" on the way to
+  // "50") without being clamped back to 1 on every keystroke. Only
+  // normalized/synced to the cart on blur or Enter -- see commitQuantity.
+  const [quantityInput, setQuantityInput] = useState<string>(String(product.minimumOrderQuantity || 1));
+  const quantityInputFocusedRef = useRef(false);
+  // Independent per-button loading flags -- Add to Cart and Buy Now (and
+  // the sticky-bar "Add to Cart"/"Add" buttons, which are the same action)
+  // each spin and disable only themselves, never each other, even though
+  // they currently call the same underlying handleBuyNow().
+  const [isAddingToCart, setIsAddingToCart] = useState(false);
+  const [isBuyingNow, setIsBuyingNow] = useState(false);
   const [customizerOpen, setCustomizerOpen] = useState(false);
   const [zoomOpen, setZoomOpen] = useState(false);
   const purchaseSectionRef = useRef<HTMLDivElement>(null);
@@ -357,7 +369,6 @@ function ProductDetail() {
   const addItem = useCartStore((s) => s.addItem);
   const updateQuantity = useCartStore((s) => s.updateQuantity);
   const items = useCartStore((s) => s.items);
-  const isCartLoading = useCartStore((s) => s.isLoading);
 
   const min = product.minimumOrderQuantity || 1;
   const step = 1;
@@ -449,16 +460,16 @@ function ProductDetail() {
 
   // Sync PDP quantity with cart
   useEffect(() => {
-    if (cartQuantity !== undefined) {
-      setQuantity(cartQuantity);
-    } else {
-      setQuantity(product.minimumOrderQuantity || 1);
-    }
+    const next = cartQuantity !== undefined ? cartQuantity : product.minimumOrderQuantity || 1;
+    setQuantity(next);
+    // Don't clobber what the shopper is actively typing -- the field
+    // resyncs from the committed quantity once they blur/Enter instead.
+    if (!quantityInputFocusedRef.current) setQuantityInput(String(next));
   }, [cartQuantity, selectedVariant?.id, product.minimumOrderQuantity]);
 
   const handleQuantityChange = (newQty: number) => {
     if (!selectedVariant) return;
-    
+
     if (!isItemInCart) {
       setQuantity(Math.max(1, newQty));
       return;
@@ -473,6 +484,18 @@ function ProductDetail() {
       setQuantity(newQty); // Optimistic UI
       useCartStore.getState().updateQuantity(selectedVariant.id, newQty);
     }
+  };
+
+  // Commits whatever is currently typed in the quantity field: integers
+  // only, clamped to the minimum order quantity, empty/invalid falls back
+  // to that minimum -- never negative, never decimal. Only runs on blur/
+  // Enter (see the input's onBlur/onKeyDown), so mid-edit states (empty,
+  // a single partial digit) never get force-corrected while typing.
+  const commitQuantity = () => {
+    const parsed = Number.parseInt(quantityInput, 10);
+    const finalQty = Number.isFinite(parsed) && parsed >= min ? parsed : min;
+    setQuantityInput(String(finalQty));
+    if (finalQty !== quantity) handleQuantityChange(finalQty);
   };
 
   const handleBuyNow = async () => {
@@ -512,6 +535,29 @@ function ProductDetail() {
       window.dispatchEvent(new CustomEvent("open-overlays", { detail: "cart" }));
     } catch {
       toast.error("Failed to add to cart");
+    }
+  };
+
+  // Thin per-button wrappers around the exact same handleBuyNow() call --
+  // cart/checkout behavior is unchanged, this only isolates which button
+  // shows its own spinner and disables itself while the shared action runs.
+  const handleAddToCartClick = async () => {
+    if (isAddingToCart) return;
+    setIsAddingToCart(true);
+    try {
+      await handleBuyNow();
+    } finally {
+      setIsAddingToCart(false);
+    }
+  };
+
+  const handleBuyNowClick = async () => {
+    if (isBuyingNow) return;
+    setIsBuyingNow(true);
+    try {
+      await handleBuyNow();
+    } finally {
+      setIsBuyingNow(false);
     }
   };
 
@@ -773,24 +819,50 @@ function ProductDetail() {
                     <button
                       type="button"
                       aria-label="Decrease quantity"
-                      onClick={() => handleQuantityChange(Math.max(min, quantity - step))}
+                      onClick={() => {
+                        const next = Math.max(min, quantity - step);
+                        setQuantityInput(String(next));
+                        handleQuantityChange(next);
+                      }}
                       className="px-4 text-foreground/60 hover:text-foreground hover:bg-muted/50 transition-colors h-full flex items-center justify-center"
                     >
                       <Minus className="size-4" strokeWidth={2} />
                     </button>
                     <input
-                      type="number"
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
                       name="quantity"
                       aria-label="Quantity"
-                      value={quantity}
-                      min={min}
-                      onChange={(e) => handleQuantityChange(Math.max(min, Number(e.target.value) || min))}
+                      value={quantityInput}
+                      onChange={(e) => {
+                        const next = e.target.value;
+                        // Digits only, but an empty field is allowed while
+                        // editing -- it's normalized on blur/Enter instead
+                        // of being forced back to the minimum immediately.
+                        if (next === "" || /^\d+$/.test(next)) setQuantityInput(next);
+                      }}
+                      onFocus={(e) => {
+                        quantityInputFocusedRef.current = true;
+                        e.currentTarget.select();
+                      }}
+                      onBlur={() => {
+                        quantityInputFocusedRef.current = false;
+                        commitQuantity();
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") e.currentTarget.blur();
+                      }}
                       className="flex-1 min-w-0 h-full bg-transparent text-center text-sm font-semibold tabular-nums outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                     />
                     <button
                       type="button"
                       aria-label="Increase quantity"
-                      onClick={() => handleQuantityChange(quantity + step)}
+                      onClick={() => {
+                        const next = quantity + step;
+                        setQuantityInput(String(next));
+                        handleQuantityChange(next);
+                      }}
                       className="px-4 text-foreground/60 hover:text-foreground hover:bg-muted/50 transition-colors h-full flex items-center justify-center"
                     >
                       <Plus className="size-4" strokeWidth={2} />
@@ -801,21 +873,19 @@ function ProductDetail() {
                     <Button
                       variant="secondary"
                       size="lg"
-                      onClick={handleBuyNow}
-                      disabled={isCartLoading || (!!selectedVariant && !selectedVariant.availableForSale)}
+                      onClick={handleAddToCartClick}
+                      disabled={isAddingToCart || (!!selectedVariant && !selectedVariant.availableForSale)}
                       className="flex-1 h-[52px] text-[13px] font-semibold tracking-wide uppercase bg-secondary text-secondary-foreground hover:bg-secondary/80 border border-border/80 shadow-none rounded-md"
                     >
-                      {isCartLoading ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
-                      Add to Cart
+                      {isAddingToCart ? <Loader2 className="size-4 animate-spin" /> : "Add to Cart"}
                     </Button>
                     <Button
                       size="lg"
-                      onClick={handleBuyNow}
-                      disabled={isCartLoading || (!!selectedVariant && !selectedVariant.availableForSale)}
+                      onClick={handleBuyNowClick}
+                      disabled={isBuyingNow || (!!selectedVariant && !selectedVariant.availableForSale)}
                       className="flex-1 h-[52px] text-[13px] font-semibold tracking-wide uppercase bg-foreground text-background hover:bg-foreground/90 shadow-none rounded-md"
                     >
-                      {isCartLoading ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
-                      {selectedVariant && !selectedVariant.availableForSale ? "Sold out" : "Buy Now"}
+                      {isBuyingNow ? <Loader2 className="size-4 animate-spin" /> : selectedVariant && !selectedVariant.availableForSale ? "Sold out" : "Buy Now"}
                     </Button>
                   </div>
                 </div>
@@ -945,27 +1015,6 @@ function ProductDetail() {
             </div>
           </div>
 
-          {/* Enquiry CTA */}
-          <section
-            aria-labelledby="enquiry-heading"
-            className="mt-16 rounded-2xl border border-border px-6 py-10 text-center sm:mt-20 sm:px-10"
-          >
-            <h2 id="enquiry-heading" className="text-lg font-semibold text-foreground sm:text-xl">
-              Interested in this product?
-            </h2>
-            <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-muted-foreground">
-              Tell us what you need and our team will help you with pricing, quantities,
-              customization and delivery.
-            </p>
-            <div className="mt-6 flex justify-center">
-              <EnquiryDialog
-                product={product}
-                quantity={quantity}
-                trigger={<Button size="lg">Send Enquiry</Button>}
-              />
-            </div>
-          </section>
-
           {/* Customer Reviews */}
           <ProductReviews 
             reviews={reviews} 
@@ -985,7 +1034,7 @@ function ProductDetail() {
               </div>
               <div className="grid grid-cols-2 gap-x-5 gap-y-10 sm:gap-x-6 md:grid-cols-3 xl:grid-cols-4">
                 {related.map((p) => (
-                  <ProductCard key={p.slug} product={p} pricePending={pricePending} />
+                  <ProductCard key={p.slug} product={p} pricePending={pricePending} imageWellClassName="bg-[#F5F5F7]" />
                 ))}
               </div>
             </section>
@@ -1051,13 +1100,12 @@ function ProductDetail() {
                   <ChevronRight className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none rotate-90" />
                 </div>
               )}
-              <Button 
-                onClick={handleBuyNow}
-                disabled={isCartLoading || (!!selectedVariant && !selectedVariant.availableForSale)}
+              <Button
+                onClick={handleAddToCartClick}
+                disabled={isAddingToCart || (!!selectedVariant && !selectedVariant.availableForSale)}
                 className="h-11 w-[220px] xl:w-[280px] font-medium"
               >
-                {isCartLoading ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
-                {selectedVariant && !selectedVariant.availableForSale ? "Sold out" : isItemInCart ? "View Cart" : "Add to Cart"}
+                {isAddingToCart ? <Loader2 className="size-4 animate-spin" /> : selectedVariant && !selectedVariant.availableForSale ? "Sold out" : isItemInCart ? "View Cart" : "Add to Cart"}
               </Button>
             </div>
           </div>
@@ -1110,13 +1158,12 @@ function ProductDetail() {
                   <ChevronRight className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none rotate-90" />
                 </div>
               )}
-              <Button 
-                onClick={handleBuyNow}
-                disabled={isCartLoading || (!!selectedVariant && !selectedVariant.availableForSale)}
+              <Button
+                onClick={handleAddToCartClick}
+                disabled={isAddingToCart || (!!selectedVariant && !selectedVariant.availableForSale)}
                 className="h-10 flex-[1.5] font-medium"
               >
-                {isCartLoading ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
-                {selectedVariant && !selectedVariant.availableForSale ? "Sold out" : isItemInCart ? "View Cart" : "Add"}
+                {isAddingToCart ? <Loader2 className="size-4 animate-spin" /> : selectedVariant && !selectedVariant.availableForSale ? "Sold out" : isItemInCart ? "View Cart" : "Add"}
               </Button>
             </div>
           </div>

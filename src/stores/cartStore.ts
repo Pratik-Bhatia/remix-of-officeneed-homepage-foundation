@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { toast } from "sonner";
-import { storefrontApiRequest, type ShopifyProduct } from "@/lib/shopify";
+import { storefrontApiRequest, type ShopifyProduct, type ShopifyProductNode, type ShopifyImage } from "@/lib/shopify";
 import { getCustomerToken } from "@/lib/customer";
 import { useB2BStore } from "@/stores/b2bStore";
 import { appendAttribution, getAttribution } from "@/lib/attribution";
@@ -16,6 +16,21 @@ export interface CartItem {
   price: { amount: string; currencyCode: string };
   quantity: number;
   selectedOptions: Array<{ name: string; value: string }>;
+  /** The exact variant the shopper selected when this line was added --
+   * sourced from Shopify's own cart line (ProductVariant.image), never
+   * guessed client-side. Falls back to the product's featured/first image
+   * only when the variant itself has no image. See resolveLineImage().
+   * Optional on input: addItem() always derives the real value from
+   * Shopify's mutation response, so callers never need to supply it. */
+  image?: ShopifyImage | null;
+}
+
+/** Selected-variant image, falling back to the product's featured image,
+ * then its first image -- never the reverse. This is the single place that
+ * decides a cart line's thumbnail, so CartDrawer/cart.tsx/CartLineItem all
+ * stay in sync by construction. */
+function resolveLineImage(variantImage: ShopifyImage | null | undefined, productNode: ShopifyProductNode | undefined): ShopifyImage | null {
+  return variantImage ?? productNode?.featuredImage ?? productNode?.images?.edges?.[0]?.node ?? null;
 }
 
 export interface CartDiscountCode {
@@ -94,6 +109,7 @@ const FULL_CART_FIELDS = `
         merchandise {
           ... on ProductVariant {
             id
+            image { url altText }
           }
         }
       }
@@ -232,6 +248,7 @@ function itemsFromRemote(cart: any): CartItem[] {
         price: m.price,
         quantity: n.quantity,
         selectedOptions: m.selectedOptions ?? [],
+        image: resolveLineImage(m.image, p),
         product: {
           node: {
             ...p,
@@ -287,8 +304,8 @@ function attributionAttributes(): Array<{ key: string; value: string }> {
 
 type UserError = { field: string[] | null; message: string; code?: string | null };
 type CartWarning = { code: string; message: string; target?: string };
-type ShopifyLine = { id: string; quantity: number; merchandise: { id: string } | null };
-type ValidLine = { id: string; quantity: number; merchandise: { id: string } };
+type ShopifyLine = { id: string; quantity: number; merchandise: { id: string; image?: ShopifyImage | null } | null };
+type ValidLine = { id: string; quantity: number; merchandise: { id: string; image?: ShopifyImage | null } };
 
 function isCartNotFoundError(userErrors: UserError[]): boolean {
   return userErrors.some(
@@ -382,7 +399,7 @@ function reconcileItems(localItems: CartItem[], shopifyLines: ValidLine[]): Cart
     .filter((item) => item && item.variantId && lineMap.has(item.variantId))
     .map((item) => {
       const sl = lineMap.get(item.variantId)!;
-      return { ...item, lineId: sl.id, quantity: sl.quantity };
+      return { ...item, lineId: sl.id, quantity: sl.quantity, image: resolveLineImage(sl.merchandise.image, item.product?.node) };
     });
 }
 
@@ -498,7 +515,7 @@ export const useCartStore = create<CartStore>()(
               set({
                 cartId: cart.id,
                 checkoutUrl: formatCheckoutUrl(cart.checkoutUrl),
-                items: [{ ...item, lineId: line.id, quantity: line.quantity }],
+                items: [{ ...item, lineId: line.id, quantity: line.quantity, image: resolveLineImage(line.merchandise.image, item.product?.node) }],
                 discountCodes: cart.discountCodes ?? [],
                 cost: extractCost(cart),
               });
@@ -542,7 +559,7 @@ export const useCartStore = create<CartStore>()(
                 toast.error("Sorry, this item is out of stock.");
                 return;
               }
-              set({ items: [...get().items, { ...item, lineId: line.id, quantity: line.quantity }] });
+              set({ items: [...get().items, { ...item, lineId: line.id, quantity: line.quantity, image: resolveLineImage(line.merchandise.image, item.product?.node) }] });
               applyCart(cart);
             }
           } catch (error) {

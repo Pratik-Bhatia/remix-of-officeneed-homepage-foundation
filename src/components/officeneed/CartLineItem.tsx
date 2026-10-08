@@ -19,7 +19,13 @@ export function CartLineItem({
   onDecrease: () => void;
   onRemove: () => void;
 }) {
-  const image = item.product?.node?.images?.edges?.[0]?.node;
+  // The exact variant image selected when this line was added (Shopify's
+  // own cart-line data, see cartStore.ts's resolveLineImage()) -- falls
+  // back to the product's featured/first image only when the variant
+  // itself has none. Never jumps straight to images[0] (the old bug: a
+  // Black variant added to cart would show the product's default/first
+  // image, e.g. Brown, instead of the Black the shopper actually picked).
+  const image = item.image ?? item.product?.node?.featuredImage ?? item.product?.node?.images?.edges?.[0]?.node ?? null;
 
   return (
     <div className="flex gap-5 border-b border-border/50 pb-5 last:border-0 last:pb-0">
