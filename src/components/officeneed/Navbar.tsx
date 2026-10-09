@@ -336,9 +336,10 @@ export function Navbar() {
               informational links below -- my-6 (48px total) read as an
               oversized, inconsistent gap compared to every other rhythm in
               this menu (56px category rows separated by a hairline only,
-              48px link rows 8px apart). Narrower margin keeps the same
-              divider, just proportionate to the rest of the drawer. */}
-          <div className="my-4 border-t border-border"></div>
+              48px link rows 8px apart). Narrowed first to my-4, then to
+              my-3 (24px total) -- keeps the same divider, just
+              proportionate to the rest of the drawer. */}
+          <div className="my-3 border-t border-border"></div>
           <div className="flex flex-col gap-2">
             <Link
               to="/clients"
