@@ -2105,6 +2105,18 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
                   </div>
                 </div>
 
+                {/* Fixed product preview -- a sibling of the sliding
+                    viewport below, not inside it, so it's never translated
+                    and never re-measured/remounted on a step change. There
+                    is exactly one previewPane element (built once, above);
+                    this is the only place it's inserted into the mobile
+                    tree, so the drag/resize engine's refs
+                    (previewContainerRef/productImageRef/constraintsRef)
+                    still only ever attach to one DOM node. */}
+                <div className="shrink-0">
+                  {previewPane}
+                </div>
+
                 {/* Viewport: each pane below is independently positioned
                     (absolute, inset-0) and slides fully in/out of THIS
                     box's own bounds -- not a shared double-wide track. Each
@@ -2114,9 +2126,13 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
                     nested percentage-width calculations agreeing with each
                     other. overflow-hidden here (plus the dialog's own
                     overflow-x-hidden) means the off-screen pane can never
-                    cause page-level horizontal scroll. */}
+                    cause page-level horizontal scroll. Only this viewport
+                    -- never the step indicator or the preview above --
+                    participates in the slide. */}
                 <div className="relative flex-1 min-h-0 overflow-hidden">
-                  {/* Pane 1 — Add & Position Your Logo */}
+                  {/* Pane 1 — Add & Position Your Logo (configuration only;
+                      the preview itself now lives above, outside the
+                      track) */}
                   <div
                     ref={mobilePane1Ref}
                     tabIndex={-1}
@@ -2125,7 +2141,6 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
                     className="absolute inset-0 flex flex-col overflow-y-auto outline-none transition-transform duration-300 ease-out motion-reduce:transition-none motion-reduce:duration-0"
                     style={{ transform: mobileStep === 1 ? "translateX(0%)" : "translateX(-100%)" }}
                   >
-                    {previewPane}
                     <div className="p-6">
                       {logoControlsContent}
                     </div>
