@@ -332,49 +332,21 @@ export function Navbar() {
             })}
           </ul>
           
-          {/* Section boundary between the category list and the
-              informational links below -- my-6 (48px total) read as an
-              oversized, inconsistent gap compared to every other rhythm in
-              this menu (56px category rows separated by a hairline only,
-              48px link rows 8px apart). Narrowed first to my-4, then to
-              my-3 (24px total) -- keeps the same divider, just
-              proportionate to the rest of the drawer. */}
-          <div className="my-3 border-t border-border"></div>
-          <div className="flex flex-col gap-2">
-            <Link
-              to="/clients"
-              onClick={() => setMobileOpen(false)}
-              className="flex min-h-12 w-full items-center text-[15px] text-muted-foreground hover:text-foreground"
-            >
-              Our Clients
-            </Link>
-            <Link
-              to="/faqs"
-              onClick={() => setMobileOpen(false)}
-              className="flex min-h-12 w-full items-center text-[15px] text-muted-foreground hover:text-foreground"
-            >
-              FAQs
-            </Link>
-            <Link
-              to="/blog"
-              onClick={() => setMobileOpen(false)}
-              className="flex min-h-12 w-full items-center text-[15px] text-muted-foreground hover:text-foreground"
-            >
-              Blog
-            </Link>
-          </div>
-
-          {/* Account -- deliberately set apart from the plain informational
-              links above (own margin, soft bg-muted highlight, bold label +
-              supporting line) so sign-in/registration stays discoverable
-              instead of reading as just another secondary link. Reuses the
-              existing design system's own neutral tokens (bg-muted,
-              text-foreground) rather than introducing a new accent color --
-              this app's palette has no blue token anywhere. Same
-              onClick/auth logic as before: unauthenticated taps open the
-              existing CustomerAuthModal (Individual/Corporate), signed-in
-              taps go straight to /account -- nothing about the auth flow
-              itself changed. */}
+          {/* Account -- the mobile drawer's informational links (Our
+              Clients/FAQs/Blog) and the divider that used to sit below the
+              category list were both removed in a later simplification
+              pass; those pages/links still exist everywhere else (desktop
+              nav, footer), just not duplicated in this drawer. Account's
+              own mt-4 is now the only, intentional gap below the category
+              list. Set apart with its own margin, soft bg-muted highlight,
+              and bold label + supporting line so sign-in/registration
+              stays discoverable. Reuses the existing design system's own
+              neutral tokens (bg-muted, text-foreground) rather than
+              introducing a new accent color -- this app's palette has no
+              blue token anywhere. Same onClick/auth logic as before:
+              unauthenticated taps open the existing CustomerAuthModal
+              (Individual/Corporate), signed-in taps go straight to
+              /account -- nothing about the auth flow itself changed. */}
           <button
             type="button"
             aria-label="Account — sign in, create an account, or view your orders"
