@@ -238,6 +238,22 @@ export function ChatWidget() {
     return () => window.removeEventListener("officeneed:overlay-toggle", onOverlayToggle);
   }, []);
 
+  // Same idea, independent source: the PDP's own fixed sticky purchase bar
+  // (products.$slug.tsx) sits in this exact same bottom-right corner once
+  // it's showing, and can cover a control right behind it (e.g. the
+  // Corporate Gifting CTA). A separate event/state rather than folding this
+  // into navOverlayOpen above -- two components independently computing
+  // and dispatching one shared "final" boolean would race and clobber each
+  // other's value; each owns its own slice here, ORed together below.
+  const [stickyBarOpen, setStickyBarOpen] = useState(false);
+  useEffect(() => {
+    const onStickyBarToggle = (e: Event) => {
+      setStickyBarOpen(Boolean((e as CustomEvent<{ open: boolean }>).detail?.open));
+    };
+    window.addEventListener("officeneed:sticky-bar-toggle", onStickyBarToggle);
+    return () => window.removeEventListener("officeneed:sticky-bar-toggle", onStickyBarToggle);
+  }, []);
+
   // Kick off (or re-seed) the conversation -- generic by default, or
   // context-aware based on the shopper's current page. Runs whenever the
   // widget opens while `!hasAnswered`, i.e. the shopper hasn't yet given a
@@ -786,7 +802,7 @@ export function ChatWidget() {
       {/* Floating Launcher Button -- the single OfficeGPT entry point */}
       <div className={cn(
         "fixed bottom-6 right-6 z-[100] transition-all duration-300",
-        open || navOverlayOpen ? "opacity-0 pointer-events-none translate-y-4 scale-95" : "opacity-100 translate-y-0 scale-100"
+        open || navOverlayOpen || stickyBarOpen ? "opacity-0 pointer-events-none translate-y-4 scale-95" : "opacity-100 translate-y-0 scale-100"
       )}>
         <button
           onClick={openLauncher}

@@ -365,6 +365,18 @@ function ProductDetail() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
+  // The floating chat launcher (ChatWidget.tsx, fixed bottom-6 right-6) has
+  // no awareness of this page's own fixed sticky purchase bar -- whenever
+  // that bar is showing, it sits in the exact same corner and can cover the
+  // Corporate Gifting CTA (or any other control) right behind it. Reuses
+  // showStickyBar -- the single source of truth for whether that bar is
+  // visible -- instead of tracking a second copy of it in ChatWidget. A
+  // dedicated event name (not the Navbar-owned officeneed:overlay-toggle)
+  // so this component's own on/off state can't race with Navbar's and
+  // clobber one another; ChatWidget combines both independently.
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent("officeneed:sticky-bar-toggle", { detail: { open: showStickyBar } }));
+  }, [showStickyBar]);
 
   const addItem = useCartStore((s) => s.addItem);
   const items = useCartStore((s) => s.items);
@@ -826,7 +838,12 @@ function ProductDetail() {
                     <div
                       role="group"
                       aria-labelledby="variant-label"
-                      className="flex flex-wrap gap-2.5"
+                      // Mobile: a single non-wrapping, horizontally-scrolling
+                      // row -- flex-wrap at this width let a pill like
+                      // "Blue" spill onto its own orphaned second row. sm+
+                      // (where there's room) reverts to the original
+                      // wrapping layout, unchanged.
+                      className="flex flex-nowrap sm:flex-wrap gap-2 sm:gap-2.5 overflow-x-auto sm:overflow-visible pb-1 sm:pb-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                     >
                       {variants.map((v) => {
                         const isSelected = selectedVariant?.id === v.id;
@@ -838,7 +855,7 @@ function ProductDetail() {
                             onClick={() => selectVariant(v)}
                             aria-pressed={isSelected}
                             className={cn(
-                              "flex items-center gap-2 rounded-md border py-2 pl-2 pr-4 text-[13px] font-medium transition-all outline-none focus-visible:ring-2 focus-visible:ring-foreground",
+                              "flex shrink-0 items-center gap-2 rounded-md border py-2 pl-2 pr-3 sm:pr-4 text-[13px] font-medium transition-all outline-none focus-visible:ring-2 focus-visible:ring-foreground",
                               thumb ? "" : "pl-4",
                               isSelected
                                 ? "border-foreground bg-foreground text-background"
@@ -851,7 +868,7 @@ function ProductDetail() {
                                 src={thumb}
                                 alt=""
                                 loading="lazy"
-                                className="size-6 shrink-0 rounded-[4px] bg-transparent object-cover"
+                                className="size-5 sm:size-6 shrink-0 rounded-[4px] bg-transparent object-cover"
                               />
                             ) : null}
                             <span className="whitespace-nowrap">{v.title}</span>
@@ -864,7 +881,12 @@ function ProductDetail() {
 
                 {/* Quantity and Actions Row */}
                 <div ref={purchaseSectionRef} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-2">
-                  <div className="inline-flex h-[52px] w-full sm:w-32 shrink-0 items-center border border-border bg-transparent rounded-md overflow-hidden">
+                  {/* w-36 (144px) at every width, not full-width on mobile
+                      -- a 52px-tall bar stretched edge to edge just to hold
+                      a centered 1-2 digit number read as oversized/empty.
+                      144px sits inside the compact 120-150px range and
+                      still gives the +/- buttons a comfortable tap target. */}
+                  <div className="inline-flex h-[52px] w-36 shrink-0 items-center border border-border bg-transparent rounded-md overflow-hidden">
                     <button
                       type="button"
                       aria-label="Decrease quantity"
@@ -942,7 +964,7 @@ function ProductDetail() {
 
               {/* Corporate Gifting Customizer CTA */}
               {product.category === "Corporate Gifting" && (
-                <div className="mt-8 rounded-xl bg-muted/30 border border-border p-6 flex flex-col items-center text-center sm:items-start sm:text-left sm:flex-row sm:justify-between gap-6">
+                <div className="mt-8 rounded-xl bg-muted/30 border border-border p-5 sm:p-6 flex flex-col items-center text-center sm:items-start sm:text-left sm:flex-row sm:justify-between gap-4 sm:gap-6">
                   <div>
                     <h3 className="text-lg font-semibold text-foreground">Make It Yours</h3>
                     <p className="text-sm text-muted-foreground mt-1 max-w-sm">
