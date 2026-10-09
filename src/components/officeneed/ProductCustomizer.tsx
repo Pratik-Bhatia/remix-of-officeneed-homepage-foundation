@@ -1378,9 +1378,11 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
       const effFlipH = isMultiComponentGiftSet ? (primaryCustomized?.flipH ?? false) : flipH;
       const effFlipV = isMultiComponentGiftSet ? (primaryCustomized?.flipV ?? false) : flipV;
       const effLogoPos = isMultiComponentGiftSet ? primaryCustomized?.logoPos : logoPos;
-      const previewBase64 = isMultiComponentGiftSet
-        ? (giftSetComponentsList.map((c) => componentPreviews[c.id]).find(Boolean) ?? "")
-        : customizationSnapshot;
+      // Same value the on-screen "Your Customization" summary displays
+      // (summaryPreviewSrc, computed once above render) -- the submitted
+      // preview and the one the shopper confirmed on screen are
+      // guaranteed to be the exact same image.
+      const previewBase64 = summaryPreviewSrc;
 
       const result = await submitCorporateQuote({
         data: {
@@ -1528,6 +1530,19 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
   };
 
   if (!product) return null;
+
+  // The single source of truth for "what does this customization actually
+  // look like" -- a real html2canvas capture of the live customizer
+  // preview (captureCustomizationSnapshot, run once per component in
+  // handleProceedToQuote right as the shopper leaves the "customize"
+  // step), not a second, hand-reconstructed rendering of the product photo
+  // + a repositioned/rescaled logo layer. The "Your Customization" summary
+  // below and the actual quote submission (submitQuote) both read this
+  // same value, so there is exactly one place that decides what the
+  // confirmed placement looked like -- they can't drift apart.
+  const summaryPreviewSrc = isMultiComponentGiftSet
+    ? (giftSetComponentsList.map((c) => componentPreviews[c.id]).find(Boolean) ?? "")
+    : customizationSnapshot;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -2316,24 +2331,29 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
                     </Button>
                   </div>
                   
+                  {/* summaryPreviewSrc is a real screenshot of the live
+                      customizer preview (captureCustomizationSnapshot),
+                      not a product photo + a separately-repositioned logo
+                      layer. The old version here rebuilt the logo's
+                      placement from logoPos/logoScale/logoRotation using a
+                      hardcoded `* 0.3` pixel multiplier that had no actual
+                      relationship to this box's size vs. the customizer's
+                      own preview box -- correct only by coincidence, if
+                      ever. A single flat image, scaled via object-contain,
+                      can't drift from what the shopper actually confirmed:
+                      whatever the box's size, the logo's position relative
+                      to the product scales uniformly with it. Falls back
+                      to the plain, logo-free product photo only if a
+                      snapshot genuinely failed to capture (e.g. a tainted
+                      canvas) -- never to a guessed placement. */}
                   <div className="w-full aspect-[4/5] bg-[#F9FAFB] rounded-xl border border-border mb-8 flex items-center justify-center p-6 relative overflow-hidden shadow-inner">
-                    <img 
-                      src={previewImage} 
-                      alt="Product" 
+                    <img
+                      src={summaryPreviewSrc || previewImage}
+                      alt="Your customization"
                       className="w-full h-full object-contain pointer-events-none drop-shadow-sm"
                     />
-                    {logo && (
-                      <div className="absolute inset-0 m-auto flex items-center justify-center">
-                        <img src={currentDisplayLogo || ""} alt="Logo" className="object-contain" style={{ mixBlendMode: activeMixBlend as any, filter: printingMethod === "Laser Engraving" ? laserDropShadow : "drop-shadow(0 1px 2px rgb(0 0 0 / 0.1))",  
-                            width: `${logoScale[0]}%`, 
-                            rotate: `${logoRotation[0]}deg`,
-                            transform: `translate(${logoPos.x * 0.3}px, ${logoPos.y * 0.3}px)`
-                          }} 
-                        />
-                      </div>
-                    )}
                   </div>
-                  
+
                   <div className="space-y-5 text-sm flex-1">
                     <div className="grid grid-cols-2 gap-2 pb-4 border-b border-border">
                       <span className="text-muted-foreground">Product</span>
