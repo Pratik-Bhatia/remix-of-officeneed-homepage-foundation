@@ -790,7 +790,7 @@ export function ChatWidget() {
       )}>
         <button
           onClick={openLauncher}
-          className="group flex items-center justify-center size-14 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+          className="group flex items-center justify-center size-14 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
           aria-label="Open OfficeGPT"
         >
           <AiAssistantIcon className="size-full rounded-full" />
