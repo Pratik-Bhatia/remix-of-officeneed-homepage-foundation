@@ -254,6 +254,18 @@ export function ChatWidget() {
     return () => window.removeEventListener("officeneed:sticky-bar-toggle", onStickyBarToggle);
   }, []);
 
+  // Same idea, third independent source: the Product Customizer dialog
+  // (ProductCustomizer.tsx) sits at the same z-50 every Dialog uses, with
+  // no awareness of this launcher's z-[100] either.
+  const [customizerOpen, setCustomizerOpenState] = useState(false);
+  useEffect(() => {
+    const onCustomizerToggle = (e: Event) => {
+      setCustomizerOpenState(Boolean((e as CustomEvent<{ open: boolean }>).detail?.open));
+    };
+    window.addEventListener("officeneed:customizer-toggle", onCustomizerToggle);
+    return () => window.removeEventListener("officeneed:customizer-toggle", onCustomizerToggle);
+  }, []);
+
   // Kick off (or re-seed) the conversation -- generic by default, or
   // context-aware based on the shopper's current page. Runs whenever the
   // widget opens while `!hasAnswered`, i.e. the shopper hasn't yet given a
@@ -802,7 +814,7 @@ export function ChatWidget() {
       {/* Floating Launcher Button -- the single OfficeGPT entry point */}
       <div className={cn(
         "fixed bottom-6 right-6 z-[100] transition-all duration-300",
-        open || navOverlayOpen || stickyBarOpen ? "opacity-0 pointer-events-none translate-y-4 scale-95" : "opacity-100 translate-y-0 scale-100"
+        open || navOverlayOpen || stickyBarOpen || customizerOpen ? "opacity-0 pointer-events-none translate-y-4 scale-95" : "opacity-100 translate-y-0 scale-100"
       )}>
         <button
           onClick={openLauncher}

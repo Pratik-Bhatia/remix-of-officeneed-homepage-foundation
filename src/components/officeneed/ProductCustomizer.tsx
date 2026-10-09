@@ -219,6 +219,17 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
     if (open) setMobileStep(1);
   }, [open]);
 
+  // This dialog's own Radix overlay/content sit at z-50, same as every
+  // other Dialog in the app, but the floating chat launcher (ChatWidget.tsx)
+  // is z-[100] with no awareness of ANY dialog -- it was rendering on top
+  // of this one, uncontrolled, same gap already fixed for the mobile nav
+  // drawer and the sign-in modal via their own dedicated events. A third,
+  // independent event (not reusing either of those) so this dialog's state
+  // can't race with theirs; ChatWidget ORs all 3 together.
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent("officeneed:customizer-toggle", { detail: { open } }));
+  }, [open]);
+
   const defaultPreviewImage = selectedVariant?.image?.url || product.images?.[0] || "https://placehold.co/800x1000/f8f9fa/a1a1aa?text=Product+Image";
 
   const [logo, setLogo] = useState<string | null>(null);
@@ -2067,72 +2078,94 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
               <div className="flex flex-col h-full min-h-0">
                 {/* Compact step indicator -- "1 — Logo" / "2 — Printing",
                     plus a "Step N of 2" line for the progress-indicator
-                    requirement. Purely a label; mobileStep (set only by
-                    Continue/Back below) is the single source of truth for
+                    requirement. "1 — Logo" is a real button once Step 2 is
+                    showing (a second way back, per the bug report, besides
+                    the "Back to Logo" control at the bottom of Step 2) --
+                    the current step is never clickable, and Step 2 is never
+                    clickable from Step 1 (no skipping ahead of Continue).
+                    Purely a label/shortcut either way; mobileStep (set only
+                    by Continue/Back) is the single source of truth for
                     which pane shows. */}
                 <div className="shrink-0 px-6 pt-5 pb-4 border-b border-border bg-background">
                   <p className="text-xs font-medium text-muted-foreground mb-2">Step {mobileStep} of 2</p>
                   <div className="flex items-center gap-2 text-sm font-semibold">
-                    <span className={mobileStep === 1 ? "text-foreground" : "text-muted-foreground"}>1 — Logo</span>
+                    {mobileStep === 2 ? (
+                      <button
+                        type="button"
+                        onClick={handleBackToMobileStep1}
+                        className="text-foreground underline underline-offset-2 decoration-muted-foreground/50 hover:decoration-foreground"
+                      >
+                        1 — Logo
+                      </button>
+                    ) : (
+                      <span className="text-foreground">1 — Logo</span>
+                    )}
                     <span className="h-px flex-1 bg-border" aria-hidden />
                     <span className={mobileStep === 2 ? "text-foreground" : "text-muted-foreground"}>2 — Printing</span>
                   </div>
                 </div>
 
-                {/* Track viewport: clips the 2x-wide track so the inactive
-                    pane is never visible and can never cause page-level
-                    horizontal scroll (the dialog itself is already
-                    overflow-x-hidden -- this is the second, inner layer of
-                    that same guarantee). */}
+                {/* Viewport: each pane below is independently positioned
+                    (absolute, inset-0) and slides fully in/out of THIS
+                    box's own bounds -- not a shared double-wide track. Each
+                    pane's width is therefore always just 100% of this
+                    viewport, not a fraction of a fraction, which is both
+                    simpler to reason about and avoids depending on two
+                    nested percentage-width calculations agreeing with each
+                    other. overflow-hidden here (plus the dialog's own
+                    overflow-x-hidden) means the off-screen pane can never
+                    cause page-level horizontal scroll. */}
                 <div className="relative flex-1 min-h-0 overflow-hidden">
+                  {/* Pane 1 — Add & Position Your Logo */}
                   <div
-                    className="flex h-full w-[200%] transition-transform duration-300 ease-out motion-reduce:transition-none motion-reduce:duration-0"
-                    style={{ transform: mobileStep === 2 ? "translateX(-50%)" : "translateX(0%)" }}
+                    ref={mobilePane1Ref}
+                    tabIndex={-1}
+                    aria-hidden={mobileStep !== 1}
+                    inert={mobileStep !== 1}
+                    className="absolute inset-0 flex flex-col overflow-y-auto outline-none transition-transform duration-300 ease-out motion-reduce:transition-none motion-reduce:duration-0"
+                    style={{ transform: mobileStep === 1 ? "translateX(0%)" : "translateX(-100%)" }}
                   >
-                    {/* Pane 1 — Add & Position Your Logo */}
-                    <div
-                      ref={mobilePane1Ref}
-                      tabIndex={-1}
-                      aria-hidden={mobileStep !== 1}
-                      inert={mobileStep !== 1}
-                      className="w-1/2 h-full shrink-0 flex flex-col overflow-y-auto outline-none"
-                    >
-                      {previewPane}
-                      <div className="p-6">
-                        {logoControlsContent}
-                      </div>
-                      <div className="p-6 border-t border-border bg-background mt-auto">
-                        <Button
-                          className="w-full h-14 text-base font-semibold shadow-sm"
-                          size="lg"
-                          onClick={handleContinueToMobileStep2}
-                        >
-                          Continue
-                        </Button>
-                      </div>
+                    {previewPane}
+                    <div className="p-6">
+                      {logoControlsContent}
                     </div>
+                    <div className="p-6 border-t border-border bg-background mt-auto">
+                      <Button
+                        className="w-full h-14 text-base font-semibold shadow-sm"
+                        size="lg"
+                        onClick={handleContinueToMobileStep2}
+                      >
+                        Continue
+                      </Button>
+                    </div>
+                  </div>
 
-                    {/* Pane 2 — Printing Method & Quantity */}
-                    <div
-                      ref={mobilePane2Ref}
-                      tabIndex={-1}
-                      aria-hidden={mobileStep !== 2}
-                      inert={mobileStep !== 2}
-                      className="w-1/2 h-full shrink-0 flex flex-col overflow-y-auto outline-none"
-                    >
-                      <div className="p-6 pb-0">
-                        <button
-                          type="button"
-                          onClick={handleBackToMobileStep1}
-                          className="flex items-center text-sm font-medium text-muted-foreground hover:text-foreground"
-                        >
-                          <ArrowLeft className="w-4 h-4 mr-2" />
-                          Back
-                        </button>
-                      </div>
-                      <div className="p-6">
-                        {footerControlsContent}
-                      </div>
+                  {/* Pane 2 — Printing Method & Quantity */}
+                  <div
+                    ref={mobilePane2Ref}
+                    tabIndex={-1}
+                    aria-hidden={mobileStep !== 2}
+                    inert={mobileStep !== 2}
+                    className="absolute inset-0 flex flex-col overflow-y-auto outline-none transition-transform duration-300 ease-out motion-reduce:transition-none motion-reduce:duration-0"
+                    style={{ transform: mobileStep === 2 ? "translateX(0%)" : "translateX(100%)" }}
+                  >
+                    <div className="p-6">
+                      {footerControlsContent}
+                    </div>
+                    {/* "← Back to Logo", near the bottom alongside Request
+                        a Quote -- this is a navigation-only action, never a
+                        quote submission (that's still only the "Request a
+                        Quote" button inside footerControlsContent, via the
+                        unchanged handleProceedToQuote). */}
+                    <div className="px-6 pb-6">
+                      <button
+                        type="button"
+                        onClick={handleBackToMobileStep1}
+                        className="flex w-full items-center justify-center text-sm font-medium text-muted-foreground hover:text-foreground"
+                      >
+                        <ArrowLeft className="w-4 h-4 mr-2" />
+                        Back to Logo
+                      </button>
                     </div>
                   </div>
                 </div>
