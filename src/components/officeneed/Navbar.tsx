@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { lockScroll, unlockScroll } from "@/lib/scroll-lock";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Menu, MessageSquare, Search, User, X, ChevronDown } from "lucide-react";
+import { Menu, MessageSquare, Search, User, X, ChevronDown, ChevronRight } from "lucide-react";
 import logoUrl from "@/assets/officeneed-logo.png";
 import { primaryNavCategories as navCategories, navItemTarget, navCategoryTarget, getLiveNavLabel } from "@/lib/navigation";
 import { useShopifyCollections } from "@/lib/shopify-overlay";
@@ -355,23 +355,39 @@ export function Navbar() {
             >
               Blog
             </Link>
-            <button
-              type="button"
-              aria-label="Account"
-              onClick={() => {
-                setMobileOpen(false);
-                status === "in" ? navigate({ to: "/account" }) : setAuthOpen(true);
-              }}
-              className={cn(
-                "flex min-h-12 w-full items-center gap-3 text-sm text-foreground/80 transition-[opacity,transform] duration-[420ms] ease-[cubic-bezier(0.22,1,0.36,1)]",
-                mobileOpen ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0",
-              )}
-              style={{ transitionDelay: mobileOpen ? `${120 + navCategories.length * 60}ms` : "0ms" }}
-            >
-              <User className="size-5" strokeWidth={1.6} />
-              Account
-            </button>
           </div>
+
+          {/* Account -- deliberately set apart from the plain informational
+              links above (own margin, soft bg-muted highlight, bold label +
+              supporting line) so sign-in/registration stays discoverable
+              instead of reading as just another secondary link. Reuses the
+              existing design system's own neutral tokens (bg-muted,
+              text-foreground) rather than introducing a new accent color --
+              this app's palette has no blue token anywhere. Same
+              onClick/auth logic as before: unauthenticated taps open the
+              existing CustomerAuthModal (Individual/Corporate), signed-in
+              taps go straight to /account -- nothing about the auth flow
+              itself changed. */}
+          <button
+            type="button"
+            aria-label="Account — sign in, create an account, or view your orders"
+            onClick={() => {
+              setMobileOpen(false);
+              status === "in" ? navigate({ to: "/account" }) : setAuthOpen(true);
+            }}
+            className={cn(
+              "mt-4 flex w-full items-center gap-3 rounded-xl border border-border bg-muted px-4 py-3.5 text-left transition-[opacity,transform] duration-[420ms] ease-[cubic-bezier(0.22,1,0.36,1)] active:bg-secondary",
+              mobileOpen ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0",
+            )}
+            style={{ transitionDelay: mobileOpen ? `${120 + navCategories.length * 60}ms` : "0ms" }}
+          >
+            <User className="size-5 shrink-0 text-foreground" strokeWidth={1.8} />
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-semibold text-foreground">Account</span>
+              <span className="block text-xs text-muted-foreground">Access your orders and saved products.</span>
+            </span>
+            <ChevronRight className="size-4 shrink-0 text-muted-foreground" strokeWidth={1.8} />
+          </button>
         </nav>
       </div>
 
