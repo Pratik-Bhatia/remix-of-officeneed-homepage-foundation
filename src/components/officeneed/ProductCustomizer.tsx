@@ -1735,23 +1735,31 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
             </div>
           );
 
+          // Desktop-only: "Back to Product", the "Customize Product" title
+          // and its description. Split out from logoControlsContent (used
+          // on both branches) rather than removed from it outright, so
+          // desktop keeps this exactly as it was -- only the mobile Step 1
+          // pane omits it now (the dialog's own close "X" and Step 2's
+          // "Back to Logo" already cover exit/back-navigation on mobile).
+          const desktopHeaderBlock = (
+            <DialogHeader className="mb-8">
+              <button
+                type="button"
+                onClick={() => onOpenChange(false)}
+                className="flex items-center text-sm font-medium text-muted-foreground hover:text-foreground mb-6 sm:hidden"
+              >
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Back to Product
+              </button>
+              <DialogTitle className="text-2xl font-bold tracking-tight">Customize Product</DialogTitle>
+              <DialogDescription className="mt-2 text-sm text-muted-foreground leading-relaxed">
+                Add your company branding and see how your corporate gift could look.
+              </DialogDescription>
+            </DialogHeader>
+          );
+
           const logoControlsContent = (
             <>
-                  <DialogHeader className="mb-8">
-                    <button 
-                      type="button" 
-                      onClick={() => onOpenChange(false)}
-                      className="flex items-center text-sm font-medium text-muted-foreground hover:text-foreground mb-6 sm:hidden"
-                    >
-                      <ArrowLeft className="w-4 h-4 mr-2" />
-                      Back to Product
-                    </button>
-                    <DialogTitle className="text-2xl font-bold tracking-tight">Customize Product</DialogTitle>
-                    <DialogDescription className="mt-2 text-sm text-muted-foreground leading-relaxed">
-                      Add your company branding and see how your corporate gift could look.
-                    </DialogDescription>
-                  </DialogHeader>
-
                   <div className="space-y-10">
                     {isMultiComponentGiftSet && (
                       <div className="space-y-2">
@@ -2207,6 +2215,7 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
               <div className="w-full lg:w-[450px] flex flex-col bg-background relative shrink-0 lg:h-full">
                 <div className="flex-1 overflow-y-visible md:overflow-y-auto">
                   <div className="p-6 lg:p-8 lg:pb-4">
+                    {desktopHeaderBlock}
                     {logoControlsContent}
                   </div>
                 </div>
