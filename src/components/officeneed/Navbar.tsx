@@ -332,7 +332,13 @@ export function Navbar() {
             })}
           </ul>
           
-          <div className="my-6 border-t border-border"></div>
+          {/* Section boundary between the category list and the
+              informational links below -- my-6 (48px total) read as an
+              oversized, inconsistent gap compared to every other rhythm in
+              this menu (56px category rows separated by a hairline only,
+              48px link rows 8px apart). Narrower margin keeps the same
+              divider, just proportionate to the rest of the drawer. */}
+          <div className="my-4 border-t border-border"></div>
           <div className="flex flex-col gap-2">
             <Link
               to="/clients"
