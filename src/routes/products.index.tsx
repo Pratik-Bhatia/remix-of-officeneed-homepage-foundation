@@ -319,7 +319,11 @@ function ProductsPage() {
             subcategory nav's own divider below, not before it. */}
         <div className="mx-auto w-full max-w-[1600px] px-5 pt-10 sm:px-8 sm:pt-12 lg:px-12 lg:pt-16">
           <header className="max-w-2xl mb-10">
-            <h1 className="text-4xl sm:text-5xl font-display font-medium leading-tight tracking-tight text-foreground">
+            {/* Responsive mobile scale (≤375px: 28px, 376-430px: 32px,
+                431-767px: 34px), existing desktop size (48px) unchanged
+                from 768px up -- font family/weight/letter-spacing/
+                line-height/color all untouched, only the size steps. */}
+            <h1 className="text-[28px] min-[376px]:text-[32px] min-[431px]:text-[34px] md:text-5xl font-display font-medium leading-tight tracking-tight text-foreground">
               {isAllProducts ? (
                 "All Products"
               ) : missingMapping ? (
