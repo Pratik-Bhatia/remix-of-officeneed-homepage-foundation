@@ -150,12 +150,6 @@
     font-weight: 700;
     letter-spacing: -0.022em;
   }
-
-  :focus-visible {
-    outline: 2px solid var(--color-ring);
-    outline-offset: 3px;
-    border-radius: 2px;
-  }
 }
 
 /* Typography scale */
@@ -463,4 +457,22 @@
 }
 .is-selected svg {
   stroke: #000000 !important;
+}
+
+/* Explicit product decision: no element anywhere on the site shows a
+ * focus outline or ring, for mouse OR keyboard interaction -- not an
+ * oversight, and not something to re-add per-component. This rule is
+ * intentionally outside every @layer block: Tailwind's utility classes
+ * (ring-*, focus:ring-*, focus-visible:ring-*, including ones added to
+ * new components later) live inside @layer utilities, and an unlayered
+ * rule always wins over a layered one regardless of selector specificity
+ * or source order, so this reliably beats all of them without !important
+ * or having to touch every component that happens to add a ring class.
+ */
+*,
+*::before,
+*::after {
+  outline: none;
+  --tw-ring-shadow: 0 0 #0000;
+  --tw-ring-offset-shadow: 0 0 #0000;
 }
