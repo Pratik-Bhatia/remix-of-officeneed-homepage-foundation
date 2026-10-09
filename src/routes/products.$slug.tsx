@@ -770,7 +770,10 @@ function ProductDetail() {
 
             {/* Information */}
             <div className="w-full min-w-0 max-w-full overflow-wrap-break-word">
-              <p className="text-eyebrow text-muted-foreground">
+              {/* Category eyebrow: hidden on mobile only (reclaims the
+                  space above the title so title/price/stock read as one
+                  compact block) -- still rendered at sm+, untouched. */}
+              <p className="hidden sm:block text-eyebrow text-muted-foreground">
                 {collectionsLoading ? (
                   <span className="inline-block h-[1em] w-24 animate-pulse rounded bg-muted align-middle" aria-hidden />
                 ) : (
@@ -780,7 +783,7 @@ function ProductDetail() {
                   })()
                 )}
               </p>
-              <h1 className="mt-2 text-3xl md:text-4xl lg:text-[40px] font-semibold tracking-tight text-foreground leading-[1.1] text-balance">{product.name}</h1>
+              <h1 className="mt-2 text-[20px] sm:text-3xl md:text-4xl lg:text-[40px] font-semibold tracking-tight text-foreground leading-[1.1] text-balance">{product.name}</h1>
               <ProductRatingSummary reviews={reviews} />
               
               <div className="mt-6 flex flex-col space-y-5">
@@ -800,8 +803,9 @@ function ProductDetail() {
                       </p>
                     ) : null}
                   </div>
+                  {/* Product code: hidden on mobile only, sm+ unchanged. */}
                   {skuLabel && (
-                    <p className="mt-1 text-[13px] text-muted-foreground">
+                    <p className="hidden sm:block mt-1 text-[13px] text-muted-foreground">
                       Product code: <span className="tabular-nums">{skuLabel}</span>
                     </p>
                   )}
