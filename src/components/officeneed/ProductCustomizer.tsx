@@ -189,6 +189,36 @@ async function measureVisibleBounds(
 export function ProductCustomizer({ product, selectedVariant, open, onOpenChange }: ProductCustomizerProps) {
   const [step, setStep] = useState<Step>("customize");
 
+  // Below lg (1024px) -- the exact breakpoint the rest of this component's
+  // JSX already splits on (lg:flex-1 / lg:w-[450px] / lg:sticky etc.) -- the
+  // "customize" step renders as a 2-step horizontal slider instead of one
+  // long stack. Lazily initialized from matchMedia rather than defaulting
+  // to false-then-correcting-in-an-effect: this component only ever mounts
+  // after the shopper clicks "Customize This Product" (Dialog unmounts its
+  // content entirely while closed -- see ui/dialog.tsx), so there is no SSR
+  // pass to keep in sync with here, and `window` is always available by the
+  // time this runs.
+  const [isMobileLayout, setIsMobileLayout] = useState(
+    () => typeof window !== "undefined" && window.matchMedia("(max-width: 1023px)").matches,
+  );
+  useEffect(() => {
+    const mql = window.matchMedia("(max-width: 1023px)");
+    const onChange = () => setIsMobileLayout(mql.matches);
+    mql.addEventListener("change", onChange);
+    return () => mql.removeEventListener("change", onChange);
+  }, []);
+
+  // Which of the 2 mobile-only sub-steps of "customize" is showing. Only
+  // read/used by the mobile branch below -- the desktop branch ignores it
+  // entirely, since desktop keeps showing everything in one view.
+  const [mobileStep, setMobileStep] = useState<1 | 2>(1);
+  // Fresh customization session each time the dialog opens -- never resets
+  // logo/position/quantity/printing-method state, only which sub-step is
+  // showing.
+  useEffect(() => {
+    if (open) setMobileStep(1);
+  }, [open]);
+
   const defaultPreviewImage = selectedVariant?.image?.url || product.images?.[0] || "https://placehold.co/800x1000/f8f9fa/a1a1aa?text=Product+Image";
 
   const [logo, setLogo] = useState<string | null>(null);
@@ -425,6 +455,16 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
   const constraintsRef = useRef<HTMLDivElement>(null);
   const previewContainerRef = useRef<HTMLDivElement>(null);
   const productImageRef = useRef<HTMLImageElement>(null);
+  // Mobile 2-step slider only: focus moves to the newly-active pane on
+  // every step change, so keyboard users land somewhere sensible instead
+  // of on a now off-screen, inert element.
+  const mobilePane1Ref = useRef<HTMLDivElement>(null);
+  const mobilePane2Ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!isMobileLayout) return;
+    const target = mobileStep === 1 ? mobilePane1Ref.current : mobilePane2Ref.current;
+    target?.focus();
+  }, [mobileStep, isMobileLayout]);
   const [isSelected, setIsSelected] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [logoPos, setLogoPos] = useState({ x: 0, y: 0 });
@@ -1209,6 +1249,23 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
    * unchanged -- so each capture is the same real, clean, rendered
    * composition the customer saw, per component, not a reconstruction.
    */
+  // Mobile Step 1 -> Step 2. No snapshot capture and no quote submission
+  // happens here -- that's still only handleProceedToQuote (Step 2's
+  // "Request a Quote" button, untouched). Same concurrency guard
+  // handleProceedToQuote already uses, reused for consistency rather than
+  // introducing a new rule: a logo isn't required to continue (the
+  // existing workflow never required one before this change either), but
+  // navigating away while the just-uploaded one is still mid-processing
+  // would leave the live editing buffer in a half-finished state.
+  const handleContinueToMobileStep2 = () => {
+    if (logo && isProcessingLaser) {
+      toast.info("Please wait a moment for your logo to finish processing.");
+      return;
+    }
+    setMobileStep(2);
+  };
+  const handleBackToMobileStep1 = () => setMobileStep(1);
+
   const handleProceedToQuote = async () => {
     if (logo && isProcessingLaser) {
       toast.info("Please wait a moment for your logo to finish processing.");
@@ -1463,14 +1520,30 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[1200px] w-screen h-[100dvh] max-h-none border-0 m-0 p-0 overflow-x-hidden overflow-y-auto flex flex-col rounded-none sm:rounded-2xl md:w-[95vw] md:h-[90vh] md:max-h-[900px] md:overflow-hidden md:border">
-        {step === "customize" && (
-          <div className="flex flex-col lg:flex-row min-h-full">
-            <div 
+      {/* overflow-y was overflow-y-auto below md, md:overflow-hidden at
+          md+ -- below lg the "customize" step used to be one tall column
+          the whole dialog scrolled. The new mobile 2-step slider manages
+          its own internal per-pane scrolling instead (a fixed-height
+          horizontal track, same as the desktop column already did at
+          md+), so overflow-y-hidden now applies at every width; nothing
+          else in this className changed. */}
+      <DialogContent className="max-w-[1200px] w-screen h-[100dvh] max-h-none border-0 m-0 p-0 overflow-x-hidden overflow-y-hidden flex flex-col rounded-none sm:rounded-2xl md:w-[95vw] md:h-[90vh] md:max-h-[900px] md:border">
+        {step === "customize" && (() => {
+          // The 3 pieces below render byte-identically to before this
+          // change -- same elements, classes, refs and handlers, just
+          // captured as local JSX so the mobile 2-step layout further down
+          // can place them into its own pane structure instead of
+          // duplicating ~250 lines of markup (and, critically, instead of
+          // ever mounting two copies at once -- see isMobileLayout above:
+          // exactly one of the two `return`s below actually renders per
+          // render, so previewContainerRef/productImageRef/constraintsRef
+          // are never attached to two DOM nodes at the same time).
+          const previewPane = (
+            <div
               className="w-full lg:flex-1 bg-[#F9FAFB] relative flex items-center justify-center p-4 lg:p-12 border-b lg:border-b-0 lg:border-r border-border min-h-[50vh] lg:min-h-full overflow-hidden"
               onClick={handleCanvasClick}
             >
-              <div 
+              <div
                 ref={previewContainerRef}
                 className="relative w-full h-full max-h-full flex flex-col items-center justify-center bg-[#F9FAFB]"
                 onClick={handleCanvasClick}
@@ -1636,10 +1709,10 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
                 )}
               </div>
             </div>
-            
-            <div className="w-full lg:w-[450px] flex flex-col bg-background relative shrink-0 lg:h-full">
-              <div className="flex-1 overflow-y-visible md:overflow-y-auto">
-                <div className="p-6 lg:p-8 lg:pb-4">
+          );
+
+          const logoControlsContent = (
+            <>
                   <DialogHeader className="mb-8">
                     <button 
                       type="button" 
@@ -1882,10 +1955,11 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
                       </div>
                     </div>
                   </div>
-                </div>
-              </div>
-              
-              <div className="p-6 lg:p-8 border-t border-border bg-background shadow-[0_-4px_20px_-10px_rgba(0,0,0,0.05)] mt-auto lg:sticky lg:bottom-0 lg:z-20">
+            </>
+          );
+
+          const footerControlsContent = (
+            <>
                 <div className="flex items-center justify-between mb-4">
                   <Label className="text-base font-semibold">Quantity</Label>
                   <div className="flex items-center gap-3">
@@ -1985,10 +2059,103 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
                 <p className="text-[11px] text-center text-muted-foreground mt-4 leading-relaxed max-w-[300px] mx-auto">
                   Preview is for visualization purposes. Final branding placement may vary slightly depending on the product and production method.
                 </p>
+            </>
+          );
+
+          if (isMobileLayout) {
+            return (
+              <div className="flex flex-col h-full min-h-0">
+                {/* Compact step indicator -- "1 — Logo" / "2 — Printing",
+                    plus a "Step N of 2" line for the progress-indicator
+                    requirement. Purely a label; mobileStep (set only by
+                    Continue/Back below) is the single source of truth for
+                    which pane shows. */}
+                <div className="shrink-0 px-6 pt-5 pb-4 border-b border-border bg-background">
+                  <p className="text-xs font-medium text-muted-foreground mb-2">Step {mobileStep} of 2</p>
+                  <div className="flex items-center gap-2 text-sm font-semibold">
+                    <span className={mobileStep === 1 ? "text-foreground" : "text-muted-foreground"}>1 — Logo</span>
+                    <span className="h-px flex-1 bg-border" aria-hidden />
+                    <span className={mobileStep === 2 ? "text-foreground" : "text-muted-foreground"}>2 — Printing</span>
+                  </div>
+                </div>
+
+                {/* Track viewport: clips the 2x-wide track so the inactive
+                    pane is never visible and can never cause page-level
+                    horizontal scroll (the dialog itself is already
+                    overflow-x-hidden -- this is the second, inner layer of
+                    that same guarantee). */}
+                <div className="relative flex-1 min-h-0 overflow-hidden">
+                  <div
+                    className="flex h-full w-[200%] transition-transform duration-300 ease-out motion-reduce:transition-none motion-reduce:duration-0"
+                    style={{ transform: mobileStep === 2 ? "translateX(-50%)" : "translateX(0%)" }}
+                  >
+                    {/* Pane 1 — Add & Position Your Logo */}
+                    <div
+                      ref={mobilePane1Ref}
+                      tabIndex={-1}
+                      aria-hidden={mobileStep !== 1}
+                      inert={mobileStep !== 1}
+                      className="w-1/2 h-full shrink-0 flex flex-col overflow-y-auto outline-none"
+                    >
+                      {previewPane}
+                      <div className="p-6">
+                        {logoControlsContent}
+                      </div>
+                      <div className="p-6 border-t border-border bg-background mt-auto">
+                        <Button
+                          className="w-full h-14 text-base font-semibold shadow-sm"
+                          size="lg"
+                          onClick={handleContinueToMobileStep2}
+                        >
+                          Continue
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Pane 2 — Printing Method & Quantity */}
+                    <div
+                      ref={mobilePane2Ref}
+                      tabIndex={-1}
+                      aria-hidden={mobileStep !== 2}
+                      inert={mobileStep !== 2}
+                      className="w-1/2 h-full shrink-0 flex flex-col overflow-y-auto outline-none"
+                    >
+                      <div className="p-6 pb-0">
+                        <button
+                          type="button"
+                          onClick={handleBackToMobileStep1}
+                          className="flex items-center text-sm font-medium text-muted-foreground hover:text-foreground"
+                        >
+                          <ArrowLeft className="w-4 h-4 mr-2" />
+                          Back
+                        </button>
+                      </div>
+                      <div className="p-6">
+                        {footerControlsContent}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          }
+
+          return (
+            <div className="flex flex-col lg:flex-row min-h-full">
+              {previewPane}
+              <div className="w-full lg:w-[450px] flex flex-col bg-background relative shrink-0 lg:h-full">
+                <div className="flex-1 overflow-y-visible md:overflow-y-auto">
+                  <div className="p-6 lg:p-8 lg:pb-4">
+                    {logoControlsContent}
+                  </div>
+                </div>
+                <div className="p-6 lg:p-8 border-t border-border bg-background shadow-[0_-4px_20px_-10px_rgba(0,0,0,0.05)] mt-auto lg:sticky lg:bottom-0 lg:z-20">
+                  {footerControlsContent}
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {step === "quote" && (
           <div className="flex flex-col h-full bg-[#F9FAFB]">
