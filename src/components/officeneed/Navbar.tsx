@@ -312,14 +312,14 @@ export function Navbar() {
                     />
                   </button>
                   {isOpen && (
-                    <ul className="pb-4 pl-1">
+                    <ul className="pb-2">
                       {cat.items.map((item) => (
                         <li key={item}>
                           <Link
                             to="/products"
                             search={navItemTarget(cat.id, item)}
                             onClick={() => setMobileOpen(false)}
-                            className="flex min-h-12 items-center text-[0.875rem] text-muted-foreground transition-colors hover:text-foreground"
+                            className="flex min-h-12 items-center py-3 pl-4 text-[0.875rem] text-muted-foreground transition-colors hover:text-foreground"
                           >
                             {getLiveNavLabel(collections, item)}
                           </Link>
@@ -355,24 +355,23 @@ export function Navbar() {
             >
               Blog
             </Link>
+            <button
+              type="button"
+              aria-label="Account"
+              onClick={() => {
+                setMobileOpen(false);
+                status === "in" ? navigate({ to: "/account" }) : setAuthOpen(true);
+              }}
+              className={cn(
+                "flex min-h-12 w-full items-center gap-3 text-sm text-foreground/80 transition-[opacity,transform] duration-[420ms] ease-[cubic-bezier(0.22,1,0.36,1)]",
+                mobileOpen ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0",
+              )}
+              style={{ transitionDelay: mobileOpen ? `${120 + navCategories.length * 60}ms` : "0ms" }}
+            >
+              <User className="size-5" strokeWidth={1.6} />
+              Account
+            </button>
           </div>
-
-          <button
-            type="button"
-            aria-label="Account"
-            onClick={() => {
-              setMobileOpen(false);
-              status === "in" ? navigate({ to: "/account" }) : setAuthOpen(true);
-            }}
-            className={cn(
-              "mt-8 flex min-h-12 items-center gap-3 text-sm text-foreground/80 transition-[opacity,transform] duration-[420ms] ease-[cubic-bezier(0.22,1,0.36,1)]",
-              mobileOpen ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0",
-            )}
-            style={{ transitionDelay: mobileOpen ? `${120 + navCategories.length * 60}ms` : "0ms" }}
-          >
-            <User className="size-5" strokeWidth={1.6} />
-            Account
-          </button>
         </nav>
       </div>
 
