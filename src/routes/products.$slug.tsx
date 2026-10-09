@@ -881,12 +881,7 @@ function ProductDetail() {
 
                 {/* Quantity and Actions Row */}
                 <div ref={purchaseSectionRef} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-2">
-                  {/* w-36 (144px) at every width, not full-width on mobile
-                      -- a 52px-tall bar stretched edge to edge just to hold
-                      a centered 1-2 digit number read as oversized/empty.
-                      144px sits inside the compact 120-150px range and
-                      still gives the +/- buttons a comfortable tap target. */}
-                  <div className="inline-flex h-[52px] w-36 shrink-0 items-center border border-border bg-transparent rounded-md overflow-hidden">
+                  <div className="inline-flex h-[52px] w-full sm:w-32 shrink-0 items-center border border-border bg-transparent rounded-md overflow-hidden">
                     <button
                       type="button"
                       aria-label="Decrease quantity"
