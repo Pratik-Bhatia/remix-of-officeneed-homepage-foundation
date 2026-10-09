@@ -65,7 +65,13 @@ function IconButton({
 export function Navbar() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [expanded, setExpanded] = useState<string | null>(navCategories[0]?.id ?? null);
+  // No category expanded by default -- was previously seeded with
+  // navCategories[0]'s id, so "Officeneed Exclusive" opened automatically
+  // every time the drawer mounted, and then stayed stuck at whatever the
+  // shopper last expanded (since this state outlives the drawer's own
+  // open/close, the Navbar component never unmounts) on every subsequent
+  // open. Reset to null whenever the drawer closes, below.
+  const [expanded, setExpanded] = useState<string | null>(null);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [searchOpen, setSearchOpen] = useState(false);
@@ -129,6 +135,24 @@ export function Navbar() {
     if (mobileOpen) lockScroll();
     else unlockScroll();
     return () => unlockScroll();
+  }, [mobileOpen]);
+
+  // Collapse any open accordion the moment the drawer closes, so the next
+  // open always starts fully collapsed rather than carrying over whatever
+  // the shopper last expanded (this component never unmounts between
+  // opens, so without this the state would otherwise persist).
+  useEffect(() => {
+    if (!mobileOpen) setExpanded(null);
+  }, [mobileOpen]);
+
+  // Broadcasts the drawer's open/closed state so the floating chat
+  // launcher (a sibling component, not a child, so it can't read this
+  // state directly) can hide itself while the drawer covers the screen --
+  // same lightweight window-event pattern this file already uses for
+  // close-overlays/open-overlays, just mirroring a live boolean instead
+  // of firing a one-shot "close yourself" command.
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent("mobile-nav-toggle", { detail: { open: mobileOpen } }));
   }, [mobileOpen]);
 
   useEffect(() => {

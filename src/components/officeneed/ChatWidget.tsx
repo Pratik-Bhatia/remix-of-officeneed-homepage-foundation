@@ -222,6 +222,20 @@ export function ChatWidget() {
     return () => window.removeEventListener("officeneed:open-chat", onOpen);
   }, []);
 
+  // Hides the floating launcher while the mobile nav drawer is open, so it
+  // can't visually overlap the drawer or intercept taps meant for it --
+  // Navbar.tsx broadcasts its own mobileOpen state via this same event
+  // since it's a sibling component, not a parent, so it can't pass this
+  // down as a prop.
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  useEffect(() => {
+    const onNavToggle = (e: Event) => {
+      setMobileNavOpen(Boolean((e as CustomEvent<{ open: boolean }>).detail?.open));
+    };
+    window.addEventListener("mobile-nav-toggle", onNavToggle);
+    return () => window.removeEventListener("mobile-nav-toggle", onNavToggle);
+  }, []);
+
   // Kick off (or re-seed) the conversation -- generic by default, or
   // context-aware based on the shopper's current page. Runs whenever the
   // widget opens while `!hasAnswered`, i.e. the shopper hasn't yet given a
@@ -770,7 +784,7 @@ export function ChatWidget() {
       {/* Floating Launcher Button -- the single OfficeGPT entry point */}
       <div className={cn(
         "fixed bottom-6 right-6 z-[100] transition-all duration-300",
-        open ? "opacity-0 pointer-events-none translate-y-4 scale-95" : "opacity-100 translate-y-0 scale-100"
+        open || mobileNavOpen ? "opacity-0 pointer-events-none translate-y-4 scale-95" : "opacity-100 translate-y-0 scale-100"
       )}>
         <button
           onClick={openLauncher}
