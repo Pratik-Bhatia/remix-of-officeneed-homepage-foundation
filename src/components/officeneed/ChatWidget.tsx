@@ -222,18 +222,20 @@ export function ChatWidget() {
     return () => window.removeEventListener("officeneed:open-chat", onOpen);
   }, []);
 
-  // Hides the floating launcher while the mobile nav drawer is open, so it
-  // can't visually overlap the drawer or intercept taps meant for it --
-  // Navbar.tsx broadcasts its own mobileOpen state via this same event
-  // since it's a sibling component, not a parent, so it can't pass this
-  // down as a prop.
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  // Hides the floating launcher while Navbar.tsx has a blocking overlay of
+  // its own open (the mobile nav drawer, or the sign-in/register/
+  // forgot-password modal -- both sit at the same z-50 as this launcher's
+  // z-[100], so without this the launcher would render on top of them and
+  // could intercept taps meant for their controls). Navbar.tsx broadcasts
+  // this since it's a sibling component, not a parent, so it can't pass
+  // its overlay state down as a prop.
+  const [navOverlayOpen, setNavOverlayOpen] = useState(false);
   useEffect(() => {
-    const onNavToggle = (e: Event) => {
-      setMobileNavOpen(Boolean((e as CustomEvent<{ open: boolean }>).detail?.open));
+    const onOverlayToggle = (e: Event) => {
+      setNavOverlayOpen(Boolean((e as CustomEvent<{ open: boolean }>).detail?.open));
     };
-    window.addEventListener("mobile-nav-toggle", onNavToggle);
-    return () => window.removeEventListener("mobile-nav-toggle", onNavToggle);
+    window.addEventListener("officeneed:overlay-toggle", onOverlayToggle);
+    return () => window.removeEventListener("officeneed:overlay-toggle", onOverlayToggle);
   }, []);
 
   // Kick off (or re-seed) the conversation -- generic by default, or
@@ -784,7 +786,7 @@ export function ChatWidget() {
       {/* Floating Launcher Button -- the single OfficeGPT entry point */}
       <div className={cn(
         "fixed bottom-6 right-6 z-[100] transition-all duration-300",
-        open || mobileNavOpen ? "opacity-0 pointer-events-none translate-y-4 scale-95" : "opacity-100 translate-y-0 scale-100"
+        open || navOverlayOpen ? "opacity-0 pointer-events-none translate-y-4 scale-95" : "opacity-100 translate-y-0 scale-100"
       )}>
         <button
           onClick={openLauncher}

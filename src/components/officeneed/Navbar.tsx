@@ -145,15 +145,22 @@ export function Navbar() {
     if (!mobileOpen) setExpanded(null);
   }, [mobileOpen]);
 
-  // Broadcasts the drawer's open/closed state so the floating chat
-  // launcher (a sibling component, not a child, so it can't read this
-  // state directly) can hide itself while the drawer covers the screen --
-  // same lightweight window-event pattern this file already uses for
-  // close-overlays/open-overlays, just mirroring a live boolean instead
-  // of firing a one-shot "close yourself" command.
+  // Broadcasts whether ANY blocking overlay this file owns (the mobile
+  // drawer, or the sign-in/register/forgot-password modal -- "forgot" is
+  // just an internal `mode` of the same Dialog, not a separate overlay, so
+  // authOpen alone already covers it) is currently open, so the floating
+  // chat launcher (a sibling component, not a child, so it can't read this
+  // state directly) can hide itself while one of them covers the screen.
+  // A single combined boolean -- rather than one event per overlay --
+  // means switching straight from one overlay to the other never produces
+  // a frame where the launcher flashes back in between them. Same
+  // lightweight window-event pattern this file already uses for
+  // close-overlays/open-overlays, just mirroring a live boolean instead of
+  // firing a one-shot "close yourself" command.
   useEffect(() => {
-    window.dispatchEvent(new CustomEvent("mobile-nav-toggle", { detail: { open: mobileOpen } }));
-  }, [mobileOpen]);
+    const blockingOverlayOpen = mobileOpen || authOpen;
+    window.dispatchEvent(new CustomEvent("officeneed:overlay-toggle", { detail: { open: blockingOverlayOpen } }));
+  }, [mobileOpen, authOpen]);
 
   useEffect(() => {
     const handleCloseOverlays = (e: any) => {
