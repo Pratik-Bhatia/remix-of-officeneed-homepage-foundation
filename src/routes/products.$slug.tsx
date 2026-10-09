@@ -680,8 +680,36 @@ function ProductDetail() {
 
   const activeMedia = gallery[activeImage] ?? gallery[0];
 
-
-
+  // Same availableForSale/selectedVariant branching either way -- only the
+  // label text differs (compact for the mobile price row vs. the original
+  // "Ready to dispatch" copy desktop keeps) -- so there is exactly one
+  // place deciding which state (in stock / out of stock / unknown) is
+  // showing, not two copies that could drift apart.
+  const renderStockStatus = (compact: boolean) => {
+    if (selectedVariant?.availableForSale) {
+      return (
+        <div className="flex items-center gap-2">
+          <div className="size-2 rounded-full bg-green-500 relative">
+            <div className="absolute inset-0 rounded-full bg-green-500 animate-ping opacity-75" />
+          </div>
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-green-700 dark:text-green-500 whitespace-nowrap">
+            {compact ? "In stock" : <>In Stock &bull; Ready to dispatch</>}
+          </span>
+        </div>
+      );
+    }
+    if (selectedVariant && !selectedVariant.availableForSale) {
+      return (
+        <div className="flex items-center gap-2">
+          <div className="size-2 rounded-full bg-red-500" />
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-red-600 whitespace-nowrap">
+            Out of Stock
+          </span>
+        </div>
+      );
+    }
+    return null;
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -800,19 +828,25 @@ function ProductDetail() {
               <div className="mt-6 flex flex-col space-y-5">
                 {/* Price and SKU row */}
                 <div>
-                  <div className="flex flex-wrap items-baseline gap-3">
-                    <p className="text-2xl font-semibold tabular-nums text-foreground tracking-tight">
-                      {pricePending
-                        ? priceSkeleton
-                        : displayPrice
-                          ? `${!selectedVariant && product.startingPrice ? "From " : ""}${displayPrice}`
-                          : "Price on enquiry"}
-                    </p>
-                    {showCompareAt ? (
-                      <p className="text-sm tabular-nums text-muted-foreground line-through">
-                        {formatMoney(compareAmount * qtyMultiplier, currency)}
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex flex-wrap items-baseline gap-3 min-w-0">
+                      <p className="text-2xl font-semibold tabular-nums text-foreground tracking-tight">
+                        {pricePending
+                          ? priceSkeleton
+                          : displayPrice
+                            ? `${!selectedVariant && product.startingPrice ? "From " : ""}${displayPrice}`
+                            : "Price on enquiry"}
                       </p>
-                    ) : null}
+                      {showCompareAt ? (
+                        <p className="text-sm tabular-nums text-muted-foreground line-through">
+                          {formatMoney(compareAmount * qtyMultiplier, currency)}
+                        </p>
+                      ) : null}
+                    </div>
+                    {/* Compact stock indicator: mobile only, same row as
+                        the price, right-aligned. Desktop keeps its own
+                        full-text row below (hidden here via sm:hidden). */}
+                    <div className="sm:hidden shrink-0">{renderStockStatus(true)}</div>
                   </div>
                   {/* Product code: hidden on mobile only, sm+ unchanged. */}
                   {skuLabel && (
@@ -822,29 +856,20 @@ function ProductDetail() {
                   )}
                 </div>
 
-                {/* Stock Status */}
-                {selectedVariant?.availableForSale ? (
-                  <div className="flex items-center gap-2">
-                    <div className="size-2 rounded-full bg-green-500 relative">
-                      <div className="absolute inset-0 rounded-full bg-green-500 animate-ping opacity-75" />
-                    </div>
-                    <span className="text-[11px] font-semibold uppercase tracking-wider text-green-700 dark:text-green-500">
-                      In Stock &bull; Ready to dispatch
-                    </span>
-                  </div>
-                ) : selectedVariant && !selectedVariant.availableForSale ? (
-                  <div className="flex items-center gap-2">
-                    <div className="size-2 rounded-full bg-red-500" />
-                    <span className="text-[11px] font-semibold uppercase tracking-wider text-red-600">
-                      Out of Stock
-                    </span>
-                  </div>
-                ) : null}
+                {/* Stock Status -- sm+ only now (full "Ready to dispatch"
+                    text, unchanged markup/position); mobile shows the
+                    compact version inline on the price row above instead. */}
+                <div className="hidden sm:block">{renderStockStatus(false)}</div>
 
                 {/* Variant choice */}
                 {hasVariantChoice ? (
                   <div>
-                    <p className="text-[13px] font-medium text-foreground/80 mb-2" id="variant-label">
+                    {/* sr-only (not hidden) below sm: the label text is
+                        visually redundant once the selected swatch already
+                        shows the color, but aria-labelledby below needs
+                        this element to stay in the accessibility tree --
+                        a display:none target doesn't compute as a label. */}
+                    <p className="sr-only sm:not-sr-only sm:text-[13px] sm:font-medium sm:text-foreground/80 sm:mb-2" id="variant-label">
                       {node?.options?.find((o) => o.name.toLowerCase() !== "title")?.name ?? "Options"}
                       {selectedVariant ? (
                         <span className="ml-1 font-normal text-muted-foreground">— {selectedVariant.title}</span>
