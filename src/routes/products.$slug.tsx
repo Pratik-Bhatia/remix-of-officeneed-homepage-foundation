@@ -783,7 +783,18 @@ function ProductDetail() {
                   })()
                 )}
               </p>
-              <h1 className="mt-2 text-[20px] sm:text-3xl md:text-4xl lg:text-[40px] font-semibold tracking-tight text-foreground leading-[1.1] text-balance">{product.name}</h1>
+              {/* [text-wrap:wrap] below sm, sm:text-balance at sm+ (was
+                  unconditional text-balance): text-wrap:balance picks the
+                  wrap point that makes ALL lines a similar length, not the
+                  point that uses the most available width -- confirmed
+                  live (375px, "Premium A5 Notebook Diary & Metal Pen Gift
+                  Set") that it was breaking after "Notebook" with ~100px
+                  of unused width on that line, purely to even out line 2,
+                  while plain greedy wrapping packs "Diary &" onto line 1
+                  too, using the actual available width. No width/max-width
+                  constraint anywhere in this element or its ancestors was
+                  involved. Desktop/tablet keep text-balance unchanged. */}
+              <h1 className="mt-2 text-[20px] sm:text-3xl md:text-4xl lg:text-[40px] font-semibold tracking-tight text-foreground leading-[1.1] [text-wrap:wrap] sm:text-balance">{product.name}</h1>
               <ProductRatingSummary reviews={reviews} />
               
               <div className="mt-6 flex flex-col space-y-5">
