@@ -1554,9 +1554,22 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
               className="w-full lg:flex-1 bg-[#F9FAFB] relative flex items-center justify-center p-4 lg:p-12 border-b lg:border-b-0 lg:border-r border-border min-h-[50vh] lg:min-h-full overflow-hidden"
               onClick={handleCanvasClick}
             >
+              {/* absolute inset-0, not "relative w-full h-full": this div's
+                  parent (previewPane, just above) gets its height from
+                  min-h-[50vh]/lg:min-h-full -- CSS only treats an ancestor's
+                  height as "definite" for a DESCENDANT's percentage height
+                  to resolve against when that height comes from an
+                  explicit `height`, not `min-height` alone (confirmed live:
+                  h-full was computing to 0px here once this became the
+                  mobile layout's own standalone preview region, collapsing
+                  the image to nothing). inset-0 sidesteps that rule
+                  entirely -- an absolutely positioned element's containing
+                  block is the nearest positioned ancestor's actual
+                  rendered padding box, not a percentage resolved against a
+                  "specified" height. */}
               <div
                 ref={previewContainerRef}
-                className="relative w-full h-full max-h-full flex flex-col items-center justify-center bg-[#F9FAFB]"
+                className="absolute inset-0 max-h-full flex flex-col items-center justify-center bg-[#F9FAFB]"
                 onClick={handleCanvasClick}
               >
                 <img
