@@ -496,7 +496,20 @@ export const setupB2BCompany = createServerFn({ method: "POST" })
           input: {
             name: `${data.companyName} - Head Office`,
             taxRegistrationId: data.gstNumber,
-            buyerExperienceConfiguration: { editableShippingAddress: false },
+            // editableShippingAddress: when no address is being assigned
+            // below (the common case now that registration no longer
+            // collects one up front), the location would otherwise have NO
+            // address and no way for the customer to enter one -- confirmed
+            // live that this is what forces Shopify's B2B checkout into
+            // "Submit for review" (no Razorpay/payment UI) instead of the
+            // normal payment flow, since Shopify has no address to attach a
+            // payment to. Setting this true lets the customer supply their
+            // own delivery address directly in Shopify's checkout. When an
+            // address IS being assigned below, keep it locked (false) --
+            // original intent (commit 9c0162c): checkout should show the
+            // merchant-registered business address, not let the buyer
+            // silently override it.
+            buyerExperienceConfiguration: { editableShippingAddress: !data.address },
           },
         });
         if (locationResult.errors?.length) {
@@ -544,7 +557,9 @@ export const setupB2BCompany = createServerFn({ method: "POST" })
           companyLocation: {
             name: `${data.companyName} - Head Office`,
             taxRegistrationId: data.gstNumber,
-            buyerExperienceConfiguration: { editableShippingAddress: false },
+            // See the matching comment in the self-heal branch above --
+            // same reasoning, same condition.
+            buyerExperienceConfiguration: { editableShippingAddress: !data.address },
           },
         },
       });
