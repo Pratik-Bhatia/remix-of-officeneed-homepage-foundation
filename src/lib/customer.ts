@@ -20,6 +20,11 @@ export interface CustomerAddress {
   address2?: string | null;
   city?: string | null;
   province?: string | null;
+  /** The actual Shopify province CODE (e.g. "MH"), separate from `province`
+   * (the display name, e.g. "Maharashtra") -- CartDeliveryAddressInput's
+   * provinceCode field needs the code, not the name. Prefer this over
+   * `province` wherever an address is being sent back to Shopify. */
+  provinceCode?: string | null;
   zip?: string | null;
   country?: string | null;
   phone?: string | null;
@@ -56,6 +61,15 @@ export interface Customer {
   defaultAddress: CustomerAddress | null;
   addresses: CustomerAddress[];
   orders: CustomerOrder[];
+  /** The shipping address from this customer's most recently PROCESSED
+   * order (sortKey: PROCESSED_AT, not Shopify's default ID-order, which
+   * isn't guaranteed chronological) -- structured, not the display-string
+   * version CustomerOrder.shippingAddress already carries. Null if they
+   * have no orders, or that order had no shipping address (e.g. a
+   * digital-only order). This is the one Shopify-native source for "the
+   * address actually used for delivery last time" -- Shopify has no
+   * separate "last used" timestamp on a saved CustomerAddress itself. */
+  mostRecentOrderAddress: CustomerAddress | null;
 }
 
 
@@ -116,9 +130,9 @@ const CUSTOMER_QUERY = `
       firstName
       lastName
       phone
-      defaultAddress { id firstName lastName company address1 address2 city province zip country phone }
-      addresses(first: 5) { edges { node { id firstName lastName company address1 address2 city province zip country phone } } }
-      orders(first: 25, reverse: true) {
+      defaultAddress { id firstName lastName company address1 address2 city province provinceCode zip country phone }
+      addresses(first: 5) { edges { node { id firstName lastName company address1 address2 city province provinceCode zip country phone } } }
+      orders(first: 25, sortKey: PROCESSED_AT, reverse: true) {
         edges {
           node {
             id
@@ -131,7 +145,7 @@ const CUSTOMER_QUERY = `
             currentSubtotalPrice { amount currencyCode }
             totalShippingPrice { amount currencyCode }
             currentTotalTax { amount currencyCode }
-            shippingAddress { firstName lastName address1 address2 city province zip country }
+            shippingAddress { firstName lastName address1 address2 city province provinceCode zip country phone }
             lineItems(first: 25) {
               edges {
                 node {
@@ -204,6 +218,7 @@ export async function fetchCustomer(token: string): Promise<Customer | null> {
     phone: c.phone,
     defaultAddress: c.defaultAddress,
     addresses: c.addresses.edges.map((e) => e.node),
+    mostRecentOrderAddress: c.orders.edges[0]?.node.shippingAddress ?? null,
     orders: c.orders.edges.map(({ node }) => ({
       id: node.id,
       name: node.name,

@@ -4,13 +4,12 @@ import { ShoppingBag, Loader2 } from "lucide-react";
 import { Navbar } from "@/components/officeneed/Navbar";
 import { Footer } from "@/components/officeneed/Footer";
 import { useCartStore } from "@/stores/cartStore";
-import { useB2BStore } from "@/stores/b2bStore";
 import { trackInitiateCheckout } from "@/lib/meta-pixel";
 import { formatMoney } from "@/lib/shopify";
 import { CartLineItem } from "@/components/officeneed/CartLineItem";
 import { CartProfileLinks } from "@/components/officeneed/CartProfileLinks";
 import { DiscountCodeInput } from "@/components/officeneed/DiscountCodeInput";
-import { B2BDeliveryAddress } from "@/components/officeneed/B2BDeliveryAddress";
+import { DeliveryAddressSelector } from "@/components/officeneed/DeliveryAddressSelector";
 
 export const Route = createFileRoute("/cart")({
   head: () => ({
@@ -37,7 +36,6 @@ function CartPage() {
   const updateQuantity = useCartStore((s) => s.updateQuantity);
   const removeItem = useCartStore((s) => s.removeItem);
   const prepareCheckout = useCartStore((s) => s.prepareCheckout);
-  const b2bStatus = useB2BStore((s) => s.status);
   const [preparing, setPreparing] = useState(false);
 
   const cost = useCartStore((s) => s.cost);
@@ -56,8 +54,8 @@ function CartPage() {
     // prepareCheckout() below only ever needed cartId + buyerIdentity
     // (customerAccessToken + companyLocationId, resolved from the
     // customer's own Company Contact relationship) to return a valid
-    // checkout URL -- a B2BDeliveryAddress pre-fill (still offered below,
-    // still optional) was never one of its requirements.
+    // checkout URL -- a DeliveryAddressSelector pre-fill (still offered
+    // below, still optional) was never one of its requirements.
     // Open the tab synchronously so popup blockers allow it, then point it
     // at the checkout URL once the signed-in customer is attached.
     const win = window.open("", "_blank");
@@ -122,7 +120,7 @@ function CartPage() {
               </div>
 
               <div className="w-full shrink-0 lg:w-80 space-y-6">
-                {b2bStatus === "b2b" ? <B2BDeliveryAddress /> : null}
+                <DeliveryAddressSelector />
 
                 <div className="rounded-2xl border border-border p-6 space-y-5">
                   <DiscountCodeInput />

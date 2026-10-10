@@ -42,9 +42,9 @@ export function CartDrawer({ triggerClassName }: { triggerClassName?: string }) 
   const handleCheckout = async () => {
     // No delivery-address requirement here, for B2B or B2C: Shopify's own
     // hosted checkout collects shipping/billing exactly as it always has.
-    // A B2B buyer's optional one-time-use delivery address (set via the
-    // full cart page's B2BDeliveryAddress, if they choose to) is picked
-    // up automatically through prepareCheckout()/applyCart() below when
+    // A buyer's optional delivery address (set via the full cart page's
+    // DeliveryAddressSelector, if they choose to) is picked up
+    // automatically through prepareCheckout()/applyCart() below when
     // present -- it was never required for prepareCheckout() to return a
     // valid checkout URL, since that only needs cartId + buyerIdentity
     // (customerAccessToken + companyLocationId, resolved from the

@@ -43,10 +43,11 @@ export interface CartCost {
   total: { amount: string; currencyCode: string } | null;
 }
 
-/** A one-time delivery address set on the cart for this order only (via
+/** A delivery address set on the cart for this order only (via
  * cartDeliveryAddressesReplace) -- independent of the B2B Company
  * Location's registered business address, which this never reads from or
- * writes to. See B2BDeliveryAddress.tsx for the UI that collects this. */
+ * writes to. Shown to both B2B and B2C signed-in shoppers. See
+ * DeliveryAddressSelector.tsx for the UI that collects this. */
 export interface CartDeliveryAddress {
   firstName: string | null;
   lastName: string | null;
@@ -437,10 +438,18 @@ interface CartStore {
   /** Attach the signed-in customer to the cart, then return a fresh checkout URL. */
   prepareCheckout: () => Promise<string | null>;
   /** Sets (or replaces) this order's one-time delivery address via
-   * cartDeliveryAddressesReplace. Independent of buyerIdentity/B2B pricing
-   * and of the Company Location's registered address -- see
-   * B2BDeliveryAddress.tsx for the UI that calls this. */
+   * cartDeliveryAddressesReplace, by typing out the address fields inline
+   * (oneTimeUse: true -- never saved to the customer's own address book).
+   * Independent of buyerIdentity/B2B pricing and of the Company Location's
+   * registered address -- see DeliveryAddressSelector.tsx for the UI that
+   * calls this (new address, or an address copied from a past order). */
   setDeliveryAddress: (address: DeliveryAddressInput) => Promise<boolean>;
+  /** Same cart field as setDeliveryAddress, but for picking one of the
+   * signed-in customer's OWN saved addresses (a real CustomerAddress id) --
+   * uses copyFromCustomerAddressId + oneTimeUse: false instead of
+   * retyping the address inline, which is Shopify's documented way to
+   * reference (not copy-and-detach) a saved address on the cart. */
+  setDeliveryAddressFromSaved: (customerAddressId: string) => Promise<boolean>;
 }
 
 export const useCartStore = create<CartStore>()(
@@ -800,6 +809,41 @@ export const useCartStore = create<CartStore>()(
           } catch (error) {
             console.error("Failed to set delivery address:", error);
             toast.error("Couldn't save this delivery address. Please try again.");
+            return false;
+          } finally {
+            set({ isLoading: false });
+          }
+        },
+
+        setDeliveryAddressFromSaved: async (customerAddressId) => {
+          const { cartId } = get();
+          if (!cartId) return false;
+          set({ isLoading: true });
+          try {
+            const data = await storefrontApiRequest(CART_DELIVERY_ADDRESSES_REPLACE_MUTATION, {
+              cartId,
+              addresses: [
+                {
+                  address: { copyFromCustomerAddressId: customerAddressId },
+                  selected: true,
+                  oneTimeUse: false,
+                },
+              ],
+            });
+            const payload = data?.data?.cartDeliveryAddressesReplace;
+            const errors: UserError[] = payload?.userErrors ?? [];
+            if (isCartNotFoundError(errors)) {
+              get().clearCart();
+              return false;
+            }
+            if (reportProblems(errors)) return false;
+            const cart = payload?.cart;
+            if (!cart) return false;
+            applyCart(cart);
+            return true;
+          } catch (error) {
+            console.error("Failed to set delivery address from saved address:", error);
+            toast.error("Couldn't use this saved address. Please try again.");
             return false;
           } finally {
             set({ isLoading: false });
