@@ -13,7 +13,6 @@ import { signInCustomer, registerCustomer, requestPasswordRecovery, getCustomerT
 import { saveBusinessRegistration } from "@/lib/business-registration.functions";
 import { setupB2BCompany } from "@/lib/b2b-company-setup.functions";
 import { refreshSaves } from "@/lib/saves";
-import { useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { splitFullName } from "@/lib/name-utils";
 import { isValidGstin } from "@/lib/gst";
@@ -103,7 +102,6 @@ export function CustomerAuthModal({
   // account to business (from the account page). Identity comes only from
   // the existing session token, so no email/password fields are shown.
   const [upgrade, setUpgrade] = useState(false);
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
 
   // ROOT CAUSE of stale mode/tab/error state surviving a close+reopen:
@@ -360,21 +358,32 @@ export function CustomerAuthModal({
       // "unnecessary redirect" this was explicitly asked not to do.
       if (!embedded) onOpenChange(false);
       await refreshSaves(true);
-      // Sign-in still goes to /account -- that destination IS what signing
-      // in from the header icon/CartProfileLinks explicitly asks for, and
-      // this behavior must stay exactly as it was. Registration (Individual
-      // or Corporate, upgrade included) must NOT navigate at all: this
-      // modal is an overlay on top of whatever route the shopper was
-      // already browsing (a product page, a collection, mid-cart) when
-      // they opened it -- that route was never left, so simply not
-      // calling navigate() here is what "stay on the same page" means.
+      // Neither sign-in NOR register navigates anymore (this used to
+      // hardcode `navigate({ to: "/account" })` for sign-in only -- that
+      // was the same "redirects you away from what you were doing"
+      // problem register already got fixed for, just not yet applied
+      // here). In every non-embedded case this modal is an overlay on top
+      // of whatever route the shopper was already on (a product page, a
+      // collection, mid-cart, the homepage) -- that route was never left,
+      // so simply never calling navigate() here is what "stay on the same
+      // page" means, for B2C and B2B alike, sign-in and register alike.
+      //
+      // The one case that DOES land a shopper on /account -- visiting
+      // /account (or /account/orders, /account/profile, ...) directly
+      // while signed out -- was never this modal's job to redirect for at
+      // all: `embedded` mode renders this exact form inline on that same
+      // route instead of as a Radix Dialog (see AuthSurface above), and
+      // the `!embedded` guard already skips every line in this block, so
+      // signing in there just re-renders that same already-correct route
+      // with status flipped to "in" -- no navigate() ever needed or
+      // called for that path, before or after this change.
+      //
       // Corporate pricing still resolves correctly without a navigation:
       // the B2B store reset()/resolve() and queryClient.invalidateQueries
       // above already ran before this line, so any already-mounted price
       // display on the current page (e.g. useB2BPriceOverlayMap on a PDP)
       // picks up the new contextual price via its own React Query
       // invalidation, with no route change required to trigger it.
-      if (!embedded && mode === "signin") navigate({ to: "/account" });
     } catch (error) {
       // An email that's already registered should send the shopper to
       // sign in, not leave them stuck on a failed "Create Account" form.
