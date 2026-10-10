@@ -494,7 +494,7 @@ export const setupB2BCompany = createServerFn({ method: "POST" })
         }>(COMPANY_LOCATION_CREATE_MUTATION, {
           companyId,
           input: {
-            name: `${data.companyName} - Head Office`,
+            name: data.companyName,
             taxRegistrationId: data.gstNumber,
             // editableShippingAddress: when no address is being assigned
             // below (the common case now that registration no longer
@@ -555,7 +555,7 @@ export const setupB2BCompany = createServerFn({ method: "POST" })
         input: {
           company: { name: data.companyName, externalId: data.gstNumber },
           companyLocation: {
-            name: `${data.companyName} - Head Office`,
+            name: data.companyName,
             taxRegistrationId: data.gstNumber,
             // See the matching comment in the self-heal branch above --
             // same reasoning, same condition.
