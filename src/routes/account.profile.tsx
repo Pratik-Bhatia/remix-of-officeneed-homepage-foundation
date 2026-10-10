@@ -24,6 +24,27 @@ import {
 import { useCustomerContext } from "@/lib/customer-context";
 import { useB2BStore } from "@/stores/b2bStore";
 import { getB2BLocationDetails, updateB2BLocationDetails, type B2BLocationDetails } from "@/lib/b2b-location.functions";
+import { normalizeIndianPhone } from "@/lib/contact-phone";
+
+/** Phone is optional on every form on this page -- empty input returns
+ * null (unchanged, matches each form's prior "omit if empty" behavior).
+ * A non-empty value that doesn't parse as a valid Indian mobile number
+ * (normalizeIndianPhone already tolerates ordinary/non-breaking spaces,
+ * hyphens, and a redundant +91/91/0 prefix -- see its own doc comment)
+ * throws rather than being sent as-is; every call site below is already
+ * inside a try/catch that shows error.message via toast, the same
+ * convention this file already uses for every other submission failure,
+ * so this needs no new error-display plumbing. Shared here rather than
+ * reimplemented per form, and reusing the exact same regex/normalization
+ * CustomerAuthModal.tsx's registration forms rely on, so a number that
+ * passes registration can't later fail here (or vice versa). */
+function requirePhoneOrNull(raw: string): string | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const normalized = normalizeIndianPhone(trimmed);
+  if (!normalized) throw new Error("Enter a valid 10-digit Indian mobile number.");
+  return `+${normalized}`;
+}
 
 export const Route = createFileRoute("/account/profile")({
   component: ProfilePage,
@@ -84,6 +105,16 @@ function AddressFormDialog({
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
+    // Validated before setBusy/the try block below -- a bad phone number
+    // should never flash the saving spinner for a submission that was
+    // never going to be sent.
+    let phone: string | null;
+    try {
+      phone = requirePhoneOrNull(String(form.get("phone") ?? ""));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Enter a valid phone number.");
+      return;
+    }
     const input: CustomerAddressInput = {
       firstName: String(form.get("firstName") ?? "").trim() || null,
       lastName: String(form.get("lastName") ?? "").trim() || null,
@@ -94,7 +125,7 @@ function AddressFormDialog({
       province: String(form.get("province") ?? "").trim() || null,
       zip: String(form.get("zip") ?? "").trim() || null,
       country: String(form.get("country") ?? "").trim() || null,
-      phone: String(form.get("phone") ?? "").trim() || null,
+      phone,
     };
     setBusy(true);
     try {
@@ -174,7 +205,7 @@ function BusinessDetailsFormDialog({
     const form = new FormData(event.currentTarget);
     setBusy(true);
     try {
-      const phone = String(form.get("phone") ?? "").trim();
+      const phone = requirePhoneOrNull(String(form.get("phone") ?? ""));
       const address2 = String(form.get("address2") ?? "").trim();
       const updated = await updateB2BLocationDetails({
         data: {
@@ -345,7 +376,10 @@ function ProfilePage() {
       await updateCustomer(token, {
         firstName: String(form.get("firstName") ?? "").trim(),
         lastName: String(form.get("lastName") ?? "").trim(),
-        phone: String(form.get("phone") ?? "").trim(),
+        // "" (not null) to match this field's prior behavior of always
+        // sending something, even empty -- requirePhoneOrNull still
+        // throws into the catch below for a non-empty, invalid value.
+        phone: requirePhoneOrNull(String(form.get("phone") ?? "")) ?? "",
       });
       await reload();
       toast.success("Your account details have been saved.");

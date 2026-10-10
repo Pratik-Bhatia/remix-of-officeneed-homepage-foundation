@@ -17,6 +17,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { splitFullName } from "@/lib/name-utils";
 import { isValidGstin } from "@/lib/gst";
+import { normalizeIndianPhone } from "@/lib/contact-phone";
 import { useB2BStore } from "@/stores/b2bStore";
 
 /**
@@ -77,6 +78,14 @@ export function CustomerAuthModal({
   // keystroke, so the error doesn't flicker while the shopper is still
   // mid-typing their GSTIN.
   const [gstError, setGstError] = useState<string | null>(null);
+  // Same "inline, field-level, re-validated on every submit attempt" shape
+  // as gstError -- see normalizeIndianPhone's own doc comment
+  // (src/lib/contact-phone.ts) for exactly what it accepts (spaces,
+  // non-breaking spaces, hyphens, a redundant +91/91/0 prefix) and what it
+  // normalizes to. Reused as-is rather than re-implemented here, so this
+  // form and every other phone field in the app (account.profile.tsx)
+  // apply the identical rule.
+  const [phoneError, setPhoneError] = useState<string | null>(null);
   // Which tab is selected is PURELY a UI entry point -- it is NEVER sent to
   // Shopify, never read by signInCustomer/registerCustomer, and never sets
   // any pricing flag. Whether someone actually gets B2B pricing is
@@ -127,6 +136,7 @@ export function CustomerAuthModal({
       setMode(signedIn ? "register" : "signin");
       setEntryType(signedIn ? "company" : "customer");
       setGstError(null);
+      setPhoneError(null);
       setRecoverySent(false);
     }
     wasOpen.current = open;
@@ -143,6 +153,7 @@ export function CustomerAuthModal({
     setMode("signin");
     setEntryType("customer");
     setGstError(null);
+    setPhoneError(null);
     setRecoverySent(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -175,6 +186,7 @@ export function CustomerAuthModal({
 
     const password = String(form.get("password") ?? "");
     setGstError(null);
+    setPhoneError(null);
 
     // Defensive, not just reactive: in normal use the modal is never
     // opened while already signed in (both window.dispatchEvent(new
@@ -195,6 +207,17 @@ export function CustomerAuthModal({
       }
       if (!isValidGstin(gstNumberRaw)) {
         setGstError("Enter a valid 15-character GSTIN (e.g. 22AAAAA0000A1Z5).");
+        return;
+      }
+      // Phone is required on this form (unlike the optional phone fields
+      // in account.profile.tsx) -- normalizeIndianPhone already strips
+      // ordinary/non-breaking spaces and hyphens and tolerates a redundant
+      // +91/91/0 prefix (autofill's most common formatting quirks), so a
+      // null result here means the 10-digit number itself genuinely isn't
+      // valid, not just oddly formatted -- never silently coerced, the
+      // shopper is asked to fix it.
+      if (!normalizeIndianPhone(String(form.get("phone") ?? ""))) {
+        setPhoneError("Enter a valid 10-digit Indian mobile number.");
         return;
       }
     }
@@ -230,7 +253,16 @@ export function CustomerAuthModal({
         if (!upgrade && password !== confirmPassword) throw new Error("Passwords don't match.");
         const fullName = String(form.get("fullName") ?? "").trim();
         const companyName = String(form.get("companyName") ?? "").trim();
-        const phone = String(form.get("phone") ?? "").trim();
+        // Already validated non-null above (entryType==="company" &&
+        // mode==="register" always covers this branch, upgrade included --
+        // see the guard a few lines up) -- `?? ""` only guards the type,
+        // never actually hit in normal flow. Submitted in E.164 (+91...),
+        // the format Shopify's customerCreate/company-contact phone fields
+        // expect, not whatever raw formatting the shopper typed/autofilled.
+        const phone = (() => {
+          const normalized = normalizeIndianPhone(String(form.get("phone") ?? ""));
+          return normalized ? `+${normalized}` : "";
+        })();
         const gstNumber = String(form.get("gstNumber") ?? "").trim();
         const addressLine1 = String(form.get("addressLine1") ?? "").trim();
         const addressLine2 = String(form.get("addressLine2") ?? "").trim();
@@ -328,7 +360,21 @@ export function CustomerAuthModal({
       // "unnecessary redirect" this was explicitly asked not to do.
       if (!embedded) onOpenChange(false);
       await refreshSaves(true);
-      if (!embedded) navigate({ to: "/account" });
+      // Sign-in still goes to /account -- that destination IS what signing
+      // in from the header icon/CartProfileLinks explicitly asks for, and
+      // this behavior must stay exactly as it was. Registration (Individual
+      // or Corporate, upgrade included) must NOT navigate at all: this
+      // modal is an overlay on top of whatever route the shopper was
+      // already browsing (a product page, a collection, mid-cart) when
+      // they opened it -- that route was never left, so simply not
+      // calling navigate() here is what "stay on the same page" means.
+      // Corporate pricing still resolves correctly without a navigation:
+      // the B2B store reset()/resolve() and queryClient.invalidateQueries
+      // above already ran before this line, so any already-mounted price
+      // display on the current page (e.g. useB2BPriceOverlayMap on a PDP)
+      // picks up the new contextual price via its own React Query
+      // invalidation, with no route change required to trigger it.
+      if (!embedded && mode === "signin") navigate({ to: "/account" });
     } catch (error) {
       // An email that's already registered should send the shopper to
       // sign in, not leave them stuck on a failed "Create Account" form.
@@ -490,6 +536,7 @@ export function CustomerAuthModal({
                   setEntryType(v as "customer" | "company");
                   setMode("signin");
                   setGstError(null);
+                  setPhoneError(null);
                 }}
                 className="w-full"
               >
@@ -593,6 +640,7 @@ export function CustomerAuthModal({
                   setEntryType(v as "customer" | "company");
                   setMode("signin");
                   setGstError(null);
+                  setPhoneError(null);
                 }}
                 className="w-full"
               >
@@ -631,7 +679,18 @@ export function CustomerAuthModal({
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="phone">Phone Number</Label>
-                        <Input id="phone" name="phone" type="tel" required autoComplete="tel" defaultValue="+91 " placeholder="+91 98765 43210" />
+                        <Input
+                          id="phone"
+                          name="phone"
+                          type="tel"
+                          required
+                          autoComplete="tel"
+                          defaultValue="+91 "
+                          placeholder="+91 98765 43210"
+                          aria-invalid={phoneError ? true : undefined}
+                          onChange={() => { if (phoneError) setPhoneError(null); }}
+                        />
+                        {phoneError ? <p className="text-sm text-destructive">{phoneError}</p> : null}
                       </div>
                     </div>
                     <div className="space-y-2">
@@ -727,6 +786,7 @@ export function CustomerAuthModal({
                 setEntryType(v as "customer" | "company");
                 setMode("signin");
                 setGstError(null);
+                setPhoneError(null);
               }}
               className="w-full"
             >
@@ -771,7 +831,18 @@ export function CustomerAuthModal({
                     )}
                     <div className="space-y-2">
                       <Label htmlFor="phone">Phone Number</Label>
-                      <Input id="phone" name="phone" type="tel" required autoComplete="tel" defaultValue="+91 " placeholder="+91 98765 43210" />
+                      <Input
+                        id="phone"
+                        name="phone"
+                        type="tel"
+                        required
+                        autoComplete="tel"
+                        defaultValue="+91 "
+                        placeholder="+91 98765 43210"
+                        aria-invalid={phoneError ? true : undefined}
+                        onChange={() => { if (phoneError) setPhoneError(null); }}
+                      />
+                      {phoneError ? <p className="text-sm text-destructive">{phoneError}</p> : null}
                     </div>
                   </div>
                   <div className="space-y-2">
@@ -866,6 +937,7 @@ export function CustomerAuthModal({
             className="text-primary hover:underline font-medium"
             onClick={() => {
               setGstError(null);
+              setPhoneError(null);
               if (mode === "forgot") {
                 setRecoverySent(false);
                 setMode("signin");
