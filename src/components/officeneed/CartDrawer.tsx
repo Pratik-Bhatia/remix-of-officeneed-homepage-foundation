@@ -1,9 +1,8 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import { Loader2, ShoppingBag, X } from "lucide-react";
 import { useCartStore } from "@/stores/cartStore";
-import { useB2BStore } from "@/stores/b2bStore";
 import { trackInitiateCheckout } from "@/lib/meta-pixel";
 import { cn } from "@/lib/utils";
 import { formatMoney } from "@/lib/shopify";
@@ -19,13 +18,10 @@ export function CartDrawer({ triggerClassName }: { triggerClassName?: string }) 
   const removeItem = useCartStore((s) => s.removeItem);
   const syncCart = useCartStore((s) => s.syncCart);
   const prepareCheckout = useCartStore((s) => s.prepareCheckout);
-  const deliveryAddress = useCartStore((s) => s.deliveryAddress);
-  const b2bStatus = useB2BStore((s) => s.status);
   const cost = useCartStore((s) => s.cost);
   const isLoading = useCartStore((s) => s.isLoading);
   const isSyncing = useCartStore((s) => s.isSyncing);
   const [preparing, setPreparing] = useState(false);
-  const navigate = useNavigate();
 
   const [mounted, setMounted] = useState(false);
 
@@ -44,13 +40,15 @@ export function CartDrawer({ triggerClassName }: { triggerClassName?: string }) 
   const finalTotal = cost.total ? parseFloat(cost.total.amount) : discountedSubtotal;
 
   const handleCheckout = async () => {
-    // B2B buyers choose their delivery address on the full cart page --
-    // the drawer doesn't duplicate that UI, it just hands off to it.
-    if (b2bStatus === "b2b" && !deliveryAddress) {
-      setIsOpen(false);
-      navigate({ to: "/cart" });
-      return;
-    }
+    // No delivery-address requirement here, for B2B or B2C: Shopify's own
+    // hosted checkout collects shipping/billing exactly as it always has.
+    // A B2B buyer's optional one-time-use delivery address (set via the
+    // full cart page's B2BDeliveryAddress, if they choose to) is picked
+    // up automatically through prepareCheckout()/applyCart() below when
+    // present -- it was never required for prepareCheckout() to return a
+    // valid checkout URL, since that only needs cartId + buyerIdentity
+    // (customerAccessToken + companyLocationId, resolved from the
+    // customer's own Company Contact relationship, not from this address).
     const win = window.open("", "_blank");
     setPreparing(true);
     try {

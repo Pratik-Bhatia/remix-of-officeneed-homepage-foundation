@@ -381,8 +381,6 @@ function ProductDetail() {
   const addItem = useCartStore((s) => s.addItem);
   const items = useCartStore((s) => s.items);
   const prepareCheckout = useCartStore((s) => s.prepareCheckout);
-  const deliveryAddress = useCartStore((s) => s.deliveryAddress);
-  const b2bStatus = useB2BStore((s) => s.status);
 
   const min = product.minimumOrderQuantity || 1;
   const step = 1;
@@ -571,17 +569,16 @@ function ProductDetail() {
   // Buy Now: ensures the selected variant is in the cart (adding it only
   // if it isn't there yet, so a repeat click doesn't silently bump the
   // quantity right before checkout), then hands off to the exact same
-  // checkout mechanism CartDrawer's own Checkout button uses --
-  // including the B2B "pick a delivery address on /cart first" guard.
+  // checkout mechanism CartDrawer's own Checkout button uses. No
+  // delivery-address requirement, for B2B or B2C: Shopify's own hosted
+  // checkout collects shipping/billing exactly as it always has --
+  // prepareCheckout() below only ever needed cartId + buyerIdentity to
+  // return a valid checkout URL, never a cart-level delivery address.
   const handleBuyNowCheckout = async () => {
     if (!validatePurchasable()) return;
     if (!isItemInCart) {
       const ok = await addCurrentVariantToCart();
       if (!ok) return;
-    }
-    if (b2bStatus === "b2b" && !deliveryAddress) {
-      navigate({ to: "/cart" });
-      return;
     }
     const win = window.open("", "_blank");
     try {

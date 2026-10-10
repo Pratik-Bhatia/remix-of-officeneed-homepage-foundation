@@ -3,7 +3,6 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { ShoppingBag, Loader2 } from "lucide-react";
 import { Navbar } from "@/components/officeneed/Navbar";
 import { Footer } from "@/components/officeneed/Footer";
-import { toast } from "sonner";
 import { useCartStore } from "@/stores/cartStore";
 import { useB2BStore } from "@/stores/b2bStore";
 import { trackInitiateCheckout } from "@/lib/meta-pixel";
@@ -38,7 +37,6 @@ function CartPage() {
   const updateQuantity = useCartStore((s) => s.updateQuantity);
   const removeItem = useCartStore((s) => s.removeItem);
   const prepareCheckout = useCartStore((s) => s.prepareCheckout);
-  const deliveryAddress = useCartStore((s) => s.deliveryAddress);
   const b2bStatus = useB2BStore((s) => s.status);
   const [preparing, setPreparing] = useState(false);
 
@@ -53,12 +51,13 @@ function CartPage() {
   const discount = Math.max(0, totalPrice - subtotal);
 
   const handleCheckout = async () => {
-    // B2B buyers must choose where this order ships before checkout -- the
-    // Company Location's registered address is never used as a fallback.
-    if (b2bStatus === "b2b" && !deliveryAddress) {
-      toast.error("Please add a delivery address for this order first.");
-      return;
-    }
+    // No delivery-address requirement here, for B2B or B2C: Shopify's own
+    // hosted checkout collects shipping/billing exactly as it always has.
+    // prepareCheckout() below only ever needed cartId + buyerIdentity
+    // (customerAccessToken + companyLocationId, resolved from the
+    // customer's own Company Contact relationship) to return a valid
+    // checkout URL -- a B2BDeliveryAddress pre-fill (still offered below,
+    // still optional) was never one of its requirements.
     // Open the tab synchronously so popup blockers allow it, then point it
     // at the checkout URL once the signed-in customer is attached.
     const win = window.open("", "_blank");
@@ -141,7 +140,7 @@ function CartPage() {
                   ) : null}
                   <button
                     onClick={handleCheckout}
-                    disabled={isLoading || isSyncing || preparing || (b2bStatus === "b2b" && !deliveryAddress)}
+                    disabled={isLoading || isSyncing || preparing}
                     className="flex w-full items-center justify-center gap-2 rounded-full bg-foreground py-3.5 text-[15px] font-medium text-background transition-colors hover:bg-foreground/90 disabled:opacity-50"
                   >
                     {isLoading || isSyncing || preparing ? <Loader2 className="size-4 animate-spin" /> : "Checkout"}
