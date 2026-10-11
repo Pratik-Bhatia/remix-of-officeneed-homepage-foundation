@@ -75,6 +75,7 @@ export function mergeProduct(product: Product, node?: ShopifyProductNode): Produ
   const variants = node.variants?.edges?.map((e) => e.node) ?? [];
   const available = variants.some((v) => v.availableForSale);
   const amount = parseFloat(node.priceRange?.minVariantPrice?.amount ?? "0");
+  const variantSkuList = Array.from(new Set(variants.map((v) => v.sku).filter((s): s is string => !!s)));
 
   return {
     ...product,
@@ -87,6 +88,7 @@ export function mergeProduct(product: Product, node?: ShopifyProductNode): Produ
       ? { priceAmount: amount, currencyCode: node.priceRange.minVariantPrice.currencyCode }
       : {}),
     ...(variants[0]?.sku ? { sku: variants[0].sku } : {}),
+    ...(variantSkuList.length ? { variantSkus: variantSkuList } : {}),
     ...(description
       ? {
           description,
@@ -416,6 +418,7 @@ export function shopifyNodeToProduct(node: ShopifyProductNode): Product {
 
   const amount = parseFloat(node.priceRange?.minVariantPrice?.amount ?? "0");
   const variants = node.variants?.edges?.map((e) => e.node) ?? [];
+  const variantSkuList = Array.from(new Set(variants.map((v) => v.sku).filter((s): s is string => !!s)));
 
   return {
     collectionHandles,
@@ -439,6 +442,7 @@ export function shopifyNodeToProduct(node: ShopifyProductNode): Product {
       ? { priceAmount: amount, currencyCode: node.priceRange.minVariantPrice.currencyCode }
       : {}),
     ...(variants[0]?.sku ? { sku: variants[0].sku } : {}),
+    ...(variantSkuList.length ? { variantSkus: variantSkuList } : {}),
     category,
     subcategories: [sub],
     filterAttributes: deriveFilterAttributes(node, mainCategory),

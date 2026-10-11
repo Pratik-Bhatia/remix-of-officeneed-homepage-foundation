@@ -43,7 +43,13 @@ export type Product = {
     gift_suitable?: boolean;
   };
   startingPrice?: boolean;
+  /** The default (first) variant's SKU -- kept for existing callers. */
   sku?: string;
+  /** Every distinct variant's SKU, not just the default one in `sku` --
+   * e.g. a gift set's Blue variant can carry a different product code
+   * ("H927") than its Black variant ("H926"), and a shopper searching
+   * either one should find this product. See search.ts. */
+  variantSkus?: string[];
   availability?: string;
   /** First image is the primary image */
   images: string[];

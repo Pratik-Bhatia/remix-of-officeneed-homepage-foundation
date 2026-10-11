@@ -62,6 +62,22 @@
  *    Edit-distance tolerance scales with word length (0 for <=3 chars, 1
  *    for 4-6, 2 for 7+), the same convention behind Elasticsearch's "AUTO"
  *    fuzziness, so short words like "pen"/"bag"/"ink" never fuzzy-match.
+ *
+ * 7. Product codes (SKU, variant SKU, and a code embedded in the title,
+ *    e.g. "...Gift Set - H926") get one extra allowance ordinary words
+ *    don't: a query token that contains a digit ("926") may match as a
+ *    SUBSTRING of a title/handle/SKU word, not just a whole word or
+ *    prefix -- so searching the bare numeric portion of a code still
+ *    finds it even though "926" is not a prefix of "h926" (only "h92" is).
+ *    This is deliberately NOT extended to ordinary all-letter tokens or to
+ *    the weaker tags/details/vendor/category/description fields: that's
+ *    exactly the "ink" matching inside "drinkware" shape of false positive
+ *    rule 1 above already closed off, and a digit-bearing token is not
+ *    natural-language text, so it doesn't reopen that risk. SKU itself is
+ *    indexed from every distinct variant SKU, not just the product's
+ *    default one, since different variants of the same product can carry
+ *    different codes (a gift set's Black and Blue variants, "H926" and
+ *    "H927").
  */
 import type { Product } from "./products";
 
@@ -85,8 +101,9 @@ const WEIGHT = {
   titleProximity: 120, // max bonus; decays with distance between matched title words
   splitRecombinationTitle: 240,
 
-  // Tier 1 (title/type/variant) -- IDF-scaled.
+  // Tier 1 (title/type/variant/SKU) -- IDF-scaled.
   tokenInTitle: 90,
+  tokenInSku: 90,
   tokenInType: 80,
   tokenInVariants: 70,
 
@@ -167,14 +184,31 @@ function expandTokenVariants(token: string): string[] {
   return [...variants];
 }
 
+/** A query token shaped like a product code/model number rather than an
+ * ordinary word -- contains at least one digit ("926", "h926"). Only
+ * tokens like this are ever allowed the substring allowance below; plain
+ * words never are (see point 7 in the file header). */
+function isCodeLikeToken(token: string): boolean {
+  return /\d/.test(token);
+}
+
 /** Whole-word-or-prefix match against a pre-split word list. This is the
  * single primitive every field check goes through -- it's what makes "ink"
  * match a field word "ink" or "inks", but NOT the middle of "drinkware".
  * Prefix matching (not just equality) is kept because it's what makes
  * partial typing ("note" -> "notebook") work, which is expected, normal
- * e-commerce search behavior. */
-function wordListHasAny(words: readonly string[], variants: readonly string[]): boolean {
-  return words.some((w) => variants.some((v) => w === v || w.startsWith(v)));
+ * e-commerce search behavior.
+ *
+ * `allowSubstring` additionally lets the variant match anywhere INSIDE a
+ * field word, not just as its prefix -- only ever passed true for a
+ * code-like token (see isCodeLikeToken) against an identifier field
+ * (title/handle/SKU), so that searching "926" finds a word "h926" even
+ * though "926" isn't a prefix of it. Never passed for ordinary words or
+ * for the weaker tags/details/vendor/category/description fields, which
+ * is what keeps this from reopening the "ink"-inside-"drinkware" class of
+ * false positive. */
+function wordListHasAny(words: readonly string[], variants: readonly string[], allowSubstring = false): boolean {
+  return words.some((w) => variants.some((v) => w === v || w.startsWith(v) || (allowSubstring && w.includes(v))));
 }
 
 /** Restricted Damerau-Levenshtein (optimal string alignment): like
@@ -252,6 +286,8 @@ type SearchableFields = {
   variantsWords: string[];
   category: string;
   categoryWords: string[];
+  sku: string;
+  skuWords: string[];
   /** Tier 1-3 fields only (never description/features) -- what "does this
    * catalogue have ANY real evidence for this token" is checked against. */
   highSignalWords: string[];
@@ -274,6 +310,11 @@ export function buildSearchableFields(product: Product): SearchableFields {
   );
   const variants = normalizeSearchText((product.variants ?? []).join(" "));
   const category = normalizeSearchText([product.category, ...(product.subcategories ?? [])].join(" "));
+  // Every distinct variant SKU, plus the default `sku` (in case it's ever
+  // populated without also appearing in variantSkus) -- see the
+  // `variantSkus` field comment in products.ts for why this is a list, not
+  // just the one default SKU.
+  const sku = normalizeSearchText([product.sku, ...(product.variantSkus ?? [])].filter(Boolean).join(" "));
 
   const titleWords = wordsOf(title);
   const handleWords = wordsOf(handle);
@@ -284,16 +325,17 @@ export function buildSearchableFields(product: Product): SearchableFields {
   const detailsWords = wordsOf(details);
   const variantsWords = wordsOf(variants);
   const categoryWords = wordsOf(category);
+  const skuWords = wordsOf(sku);
 
   const highSignalWords = Array.from(
-    new Set([...titleWords, ...handleWords, ...typeWords, ...vendorWords, ...tagsWords, ...detailsWords, ...variantsWords, ...categoryWords].filter((w) => w.length >= 3)),
+    new Set([...titleWords, ...handleWords, ...typeWords, ...vendorWords, ...tagsWords, ...detailsWords, ...variantsWords, ...categoryWords, ...skuWords].filter((w) => w.length >= 3)),
   );
   const allWords = Array.from(new Set([...highSignalWords, ...descriptionWords.filter((w) => w.length >= 3)]));
 
   return {
     title, titleWords, handle, handleWords, description, descriptionWords,
     type, typeWords, vendor, vendorWords, tags, tagsWords, details, detailsWords,
-    variants, variantsWords, category, categoryWords, highSignalWords, allWords,
+    variants, variantsWords, category, categoryWords, sku, skuWords, highSignalWords, allWords,
   };
 }
 
@@ -370,8 +412,10 @@ export function scoreProductSearchMatch(
   for (const token of queryTokens) {
     const variants = expandTokenVariants(token);
     const w = idf(token);
-    const inTitle = wordListHasAny(fields.titleWords, variants);
-    const inHandle = wordListHasAny(fields.handleWords, variants);
+    const codeLike = isCodeLikeToken(token);
+    const inTitle = wordListHasAny(fields.titleWords, variants, codeLike);
+    const inHandle = wordListHasAny(fields.handleWords, variants, codeLike);
+    const inSku = wordListHasAny(fields.skuWords, variants, codeLike);
     const inType = wordListHasAny(fields.typeWords, variants);
     const inVendor = wordListHasAny(fields.vendorWords, variants);
     const inTags = wordListHasAny(fields.tagsWords, variants);
@@ -383,9 +427,10 @@ export function scoreProductSearchMatch(
     if (inTitle) {
       score += WEIGHT.tokenInTitle * w;
       titleTokenHits++;
-      const pos = fields.titleWords.findIndex((tw) => variants.some((v) => tw === v || tw.startsWith(v)));
+      const pos = fields.titleWords.findIndex((tw) => variants.some((v) => tw === v || tw.startsWith(v) || (codeLike && tw.includes(v))));
       if (pos !== -1) titleMatchPositions.push(pos);
     }
+    if (inSku) score += WEIGHT.tokenInSku * w;
     if (inType) score += WEIGHT.tokenInType * w;
     if (inVariants) score += WEIGHT.tokenInVariants * w;
     if (inHandle) score += WEIGHT.tokenInHandle * w;
@@ -395,7 +440,7 @@ export function scoreProductSearchMatch(
     if (inCategory) score += WEIGHT.tokenInCategory * w;
     if (inDescription) score += WEIGHT.tokenInDescription * w;
 
-    let tokenHasHighSignalHit = inTitle || inType || inVariants || inHandle || inTags || inDetails || inVendor || inCategory;
+    let tokenHasHighSignalHit = inTitle || inSku || inType || inVariants || inHandle || inTags || inDetails || inVendor || inCategory;
     const anyDirectHit = tokenHasHighSignalHit || inDescription;
 
     if (!anyDirectHit) {

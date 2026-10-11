@@ -57,7 +57,20 @@ export const Route = createFileRoute("/products/")({
     const rawCollection = typeof search["collection"] === "string" ? search["collection"] : "";
     const rawMissing = typeof search["missingMapping"] === "string" ? search["missingMapping"] : "";
     const rawSort = String(search["sort"] ?? "");
-    const rawQuery = typeof search["q"] === "string" ? (search["q"] as string) : "";
+    // TanStack Router's default search-param codec parses a purely numeric
+    // query string (e.g. "?q=926") into the JS number 926, not the string
+    // "926" -- confirmed live (this is exactly why searching the bare
+    // numeric portion of a product code crashed the page instead of just
+    // finding nothing). A strict `typeof === "string"` check here silently
+    // discarded that case instead of fixing it, and still let a non-string
+    // `q` leak through downstream, crashing `query.trim()`. String(...)
+    // normalizes any primitive the codec can produce for a scalar param
+    // (string or number) into the real text the shopper typed, the same
+    // pattern `rawSort` above already uses -- an object/array (a malformed
+    // `q[]=...`) is rejected, since a query is never anything but text.
+    const rawQueryValue = search["q"];
+    const rawQuery =
+      typeof rawQueryValue === "string" ? rawQueryValue : typeof rawQueryValue === "number" ? String(rawQueryValue) : "";
     const rawF = search["f"] as Record<string, string[]> | undefined;
     
     const result: ProductsSearch = {};
