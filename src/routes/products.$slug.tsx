@@ -1153,8 +1153,8 @@ function ProductDetail() {
           showStickyBar ? "translate-y-0" : "translate-y-full"
         )}
       >
-        <div className="mx-auto w-full max-w-[1600px] px-5 sm:px-8 lg:px-12 py-3 lg:py-4">
-          
+        <div className="mx-auto w-full max-w-[1600px] px-5 sm:px-8 lg:px-12 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] lg:pt-4 lg:pb-4">
+
           {/* Desktop layout */}
           <div className="hidden lg:flex w-full items-center justify-between gap-6">
             <div className="flex items-center gap-4 flex-1 min-w-0">
@@ -1214,59 +1214,75 @@ function ProductDetail() {
           </div>
 
           {/* Mobile layout */}
-          <div className="flex flex-col lg:hidden w-full gap-2.5 py-0.5">
-            <div className="flex items-center gap-3">
-              <img src={activeMedia?.url ?? product.images[0]} className="size-10 shrink-0 rounded-md object-contain bg-secondary/30 border border-border p-0.5" alt="" />
-              <div className="flex-1 min-w-0 flex items-center justify-between gap-3">
-                <p className="text-sm font-medium truncate text-foreground">{product.name}</p>
-                <p className="text-sm font-medium text-foreground shrink-0">{pricePending ? priceSkeleton : displayPrice}</p>
+          <div className="flex flex-col lg:hidden w-full gap-2.5">
+            {/* Product summary -- thumbnail + up-to-2-line title + price.
+                Title and price are stacked, not forced onto one cramped
+                row, so a long product name never pushes the price off to
+                an awkward width or forces truncation mid-word. */}
+            <div className="flex items-start gap-3">
+              <img
+                src={activeMedia?.url ?? product.images[0]}
+                className="size-11 shrink-0 rounded-lg object-contain bg-secondary/30 border border-border p-1"
+                alt=""
+              />
+              <div className="min-w-0 flex-1 pt-0.5">
+                <p className="text-[13px] font-medium leading-snug text-foreground line-clamp-2">{product.name}</p>
+                <p className="mt-0.5 text-sm font-semibold tabular-nums text-foreground">
+                  {pricePending ? priceSkeleton : displayPrice}
+                </p>
               </div>
             </div>
-            <div className="flex items-center gap-2 pl-[52px]">
-              {/* Sticky Bar Quantity Selector Mobile */}
-              <div className="flex h-10 items-center rounded-md border border-border bg-background shrink-0">
+
+            {/* Variant selector -- its own compact, clearly separated row
+                (only rendered when there's an actual choice to make), so
+                it never competes for space with quantity/Add below. */}
+            {hasVariantChoice && (
+              <div className="relative">
+                <select
+                  className="h-9 w-full appearance-none rounded-lg border border-border bg-background pl-3 pr-8 text-sm outline-none focus-visible:ring-1 focus-visible:ring-foreground"
+                  value={selectedVariantId ?? ""}
+                  onChange={(e) => {
+                    const v = variants.find(x => x.id === e.target.value);
+                    if (v) selectVariant(v);
+                  }}
+                >
+                  {variants.map(v => (
+                    <option key={v.id} value={v.id}>{v.title}</option>
+                  ))}
+                </select>
+                <ChevronRight className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none rotate-90" />
+              </div>
+            )}
+
+            {/* Quantity + Add -- the one row these two share, aligned and
+                with room to breathe now that the variant selector (when
+                present) has its own row above. */}
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-11 shrink-0 items-center rounded-lg border border-border bg-background">
                 <button
                   type="button"
                   onClick={() => handleQuantityChange(quantity - 1)}
-                  className="flex h-full w-8 items-center justify-center text-muted-foreground hover:bg-secondary/50 hover:text-foreground transition-colors"
+                  className="flex h-full w-9 items-center justify-center text-muted-foreground hover:bg-secondary/50 hover:text-foreground transition-colors"
                 >
                   <Minus className="size-3.5" strokeWidth={1.5} />
                 </button>
-                <div className="flex h-full w-10 items-center justify-center border-x border-border text-sm font-medium tabular-nums text-foreground">
+                <div className="flex h-full w-9 items-center justify-center border-x border-border text-sm font-medium tabular-nums text-foreground">
                   {quantity}
                 </div>
                 <button
                   type="button"
                   onClick={() => handleQuantityChange(quantity + 1)}
-                  className="flex h-full w-8 items-center justify-center text-muted-foreground hover:bg-secondary/50 hover:text-foreground transition-colors"
+                  className="flex h-full w-9 items-center justify-center text-muted-foreground hover:bg-secondary/50 hover:text-foreground transition-colors"
                 >
                   <Plus className="size-3.5" strokeWidth={1.5} />
                 </button>
               </div>
-
-              {hasVariantChoice && (
-                <div className="relative flex-1">
-                  <select 
-                    className="h-10 w-full pl-3 pr-8 rounded-md border border-border bg-background text-sm appearance-none outline-none focus-visible:ring-1 focus-visible:ring-foreground"
-                    value={selectedVariantId ?? ""}
-                    onChange={(e) => {
-                      const v = variants.find(x => x.id === e.target.value);
-                      if (v) selectVariant(v);
-                    }}
-                  >
-                    {variants.map(v => (
-                      <option key={v.id} value={v.id}>{v.title}</option>
-                    ))}
-                  </select>
-                  <ChevronRight className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none rotate-90" />
-                </div>
-              )}
               <Button
                 onClick={handleAddToCartClick}
                 disabled={isAddingToCart || (!!selectedVariant && !selectedVariant.availableForSale)}
-                className="h-10 flex-[1.5] font-medium"
+                className="h-11 flex-1 font-medium"
               >
-                {isAddingToCart ? <Loader2 className="size-4 animate-spin" /> : selectedVariant && !selectedVariant.availableForSale ? "Sold out" : isItemInCart ? "View Cart" : "Add"}
+                {isAddingToCart ? <Loader2 className="size-4 animate-spin" /> : selectedVariant && !selectedVariant.availableForSale ? "Sold out" : isItemInCart ? "View Cart" : "Add to Cart"}
               </Button>
             </div>
           </div>
