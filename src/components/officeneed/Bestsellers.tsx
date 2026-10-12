@@ -1,23 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { bestsellerFilters, bestsellerProducts, type BestsellerCategory } from "@/lib/bestsellers";
+import { bestsellerFilters, bestsellerProducts, selectBestsellers } from "@/lib/bestsellers";
 import { useShopifyBestsellers, useShopifyCollections } from "@/lib/shopify-overlay";
 import { ProductCard } from "@/components/officeneed/ProductCard";
 import { getLiveNavLabel } from "@/lib/navigation";
 import type { Product } from "@/lib/products";
-
-// Product.category has 2 values ("Printing & Branding", "Officeneed
-// Exclusive") the bestsellers filter row has no dedicated pill for -- bucket
-// those under "Corporate Gifting", same as before this migrated onto the
-// canonical Product type. This is presentation-only (which filter pill a
-// product answers to), so it lives here rather than in the data layer.
-function toFilterCategory(category: Product["category"]): BestsellerCategory {
-  if (category === "Office Stationery" || category === "Computer Peripherals" || category === "Fragrance Gifting") {
-    return category;
-  }
-  return "Corporate Gifting";
-}
 
 export function Bestsellers() {
   const [active, setActive] = useState<(typeof bestsellerFilters)[number]>("All");
@@ -29,7 +17,7 @@ export function Bestsellers() {
   const { collections } = useShopifyCollections();
 
   const products = useMemo(
-    () => (active === "All" ? catalogue : catalogue.filter((p) => toFilterCategory(p.category) === active)).slice(0, 12),
+    () => selectBestsellers(catalogue, active, 12),
     [active, catalogue],
   );
 
