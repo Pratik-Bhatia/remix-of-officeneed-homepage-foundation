@@ -8,7 +8,7 @@ type ToastFn = (message: Parameters<typeof toast.error>[0], data?: Parameters<ty
 const patched = toast as unknown as Record<string, ToastFn> & { __onPatched?: boolean };
 if (!patched.__onPatched) {
   patched.__onPatched = true;
-  const durations: Record<string, number> = { error: 7000, warning: 6000, success: 4000, info: 4500 };
+  const durations: Record<string, number> = { error: 7000, warning: 6000, success: 3500, info: 4500 };
   for (const type of Object.keys(durations)) {
     const original = patched[type]!.bind(toast);
     patched[type] = (message, data) =>
