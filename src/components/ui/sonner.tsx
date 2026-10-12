@@ -10,7 +10,7 @@ if (!patched.__onPatched) {
   patched.__onPatched = true;
   const durations: Record<string, number> = { error: 7000, warning: 6000, success: 4000, info: 4500 };
   for (const type of Object.keys(durations)) {
-    const original = patched[type].bind(toast);
+    const original = patched[type]!.bind(toast);
     patched[type] = (message, data) =>
       original(message, ({
         duration: durations[type],
