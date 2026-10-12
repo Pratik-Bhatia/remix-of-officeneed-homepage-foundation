@@ -2,6 +2,16 @@ import { createStart, createCsrfMiddleware, createMiddleware } from "@tanstack/r
 
 import { attachSupabaseAuth } from "./integrations/supabase/auth-attacher";
 import { renderErrorPage } from "./lib/error-page";
+import { handleAccessGateRequest } from "./lib/access-gate.server";
+
+// Temporary, pre-launch access gate -- see src/lib/access-gate.server.ts
+// for the toggle and full behavior. A no-op (always calls next()) unless
+// OFFICENEED_ACCESS_GATE_ENABLED=true is set in the environment.
+const accessGateMiddleware = createMiddleware().server(async ({ request, pathname, next, handlerType }) => {
+  const gateResponse = await handleAccessGateRequest({ request, pathname, handlerType });
+  if (gateResponse) return gateResponse;
+  return next();
+});
 
 const errorMiddleware = createMiddleware().server(async ({ next }) => {
   try {
@@ -26,6 +36,6 @@ const csrfMiddleware = createCsrfMiddleware({
 });
 
 export const startInstance = createStart(() => ({
-  requestMiddleware: [errorMiddleware, csrfMiddleware],
+  requestMiddleware: [errorMiddleware, accessGateMiddleware, csrfMiddleware],
   functionMiddleware: [attachSupabaseAuth],
 }));
