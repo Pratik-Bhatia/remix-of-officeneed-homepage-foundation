@@ -17,9 +17,9 @@ export const HAPTIC_COOLDOWN_MS = 400;
 let lastFiredAt = -Infinity;
 
 type Env = {
-  navigator?: { vibrate?: (p: number | number[]) => boolean };
-  matchMedia?: (q: string) => { matches: boolean };
-  now?: () => number;
+  navigator?: { vibrate?: ((p: number | number[]) => boolean) | undefined } | undefined;
+  matchMedia?: ((q: string) => { matches: boolean }) | undefined;
+  now?: (() => number) | undefined;
 };
 
 function defaultEnv(): Env {
