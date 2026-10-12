@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { FieldError, focusField } from "@/components/ui/field-error";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import customerAuthLifestyleImage from "@/assets/customer-auth-lifestyle.webp";
@@ -213,10 +214,12 @@ export function CustomerAuthModal({
       const gstNumberRaw = String(form.get("gstNumber") ?? "").trim();
       if (!gstNumberRaw) {
         setGstError("GST number is required.");
+        focusField("gstNumber");
         return;
       }
       if (!isValidGstin(gstNumberRaw)) {
         setGstError("Enter a valid 15-character GSTIN (e.g. 22AAAAA0000A1Z5).");
+        focusField("gstNumber");
         return;
       }
       // Phone is required on this form (unlike the optional phone fields
@@ -228,6 +231,7 @@ export function CustomerAuthModal({
       // shopper is asked to fix it.
       if (!normalizeIndianPhone(String(form.get("phone") ?? ""))) {
         setPhoneError("Enter a valid 10-digit Indian mobile number.");
+        focusField("phone");
         return;
       }
     }
@@ -457,7 +461,11 @@ export function CustomerAuthModal({
         console.error("Sign-in failed:", error);
         toast.error("We couldn't sign you in right now. Please try again in a moment.");
       } else {
-        toast.error(error instanceof Error ? error.message : "Something went wrong. Please try again.");
+        if (error instanceof CustomerAuthError) toast.error(error.message);
+        else {
+          console.error("Account request failed:", error);
+          toast.error("We couldn't complete your request. Please try again.");
+        }
       }
     } finally {
       setBusy(false);
@@ -757,9 +765,10 @@ export function CustomerAuthModal({
                           defaultValue="+91 "
                           placeholder="+91 98765 43210"
                           aria-invalid={phoneError ? true : undefined}
+                          aria-describedby={phoneError ? "phone-error" : undefined}
                           onChange={() => { if (phoneError) setPhoneError(null); }}
                         />
-                        {phoneError ? <p className="text-sm text-destructive">{phoneError}</p> : null}
+                        <FieldError id="phone-error" message={phoneError} />
                       </div>
                     </div>
                     <div className="space-y-2">
@@ -771,9 +780,10 @@ export function CustomerAuthModal({
                         autoComplete="off"
                         placeholder="22AAAAA0000A1Z5"
                         aria-invalid={gstError ? true : undefined}
+                        aria-describedby={gstError ? "gst-error" : undefined}
                         onChange={() => { if (gstError) setGstError(null); }}
                       />
-                      {gstError ? <p className="text-sm text-destructive">{gstError}</p> : null}
+                      <FieldError id="gst-error" message={gstError} />
                     </div>
 
                     {/* Deliberately no Business Address section here --
@@ -909,9 +919,10 @@ export function CustomerAuthModal({
                         defaultValue="+91 "
                         placeholder="+91 98765 43210"
                         aria-invalid={phoneError ? true : undefined}
+                          aria-describedby={phoneError ? "phone-error" : undefined}
                         onChange={() => { if (phoneError) setPhoneError(null); }}
                       />
-                      {phoneError ? <p className="text-sm text-destructive">{phoneError}</p> : null}
+                      <FieldError id="phone-error" message={phoneError} />
                     </div>
                   </div>
                   <div className="space-y-2">
@@ -923,9 +934,10 @@ export function CustomerAuthModal({
                       autoComplete="off"
                       placeholder="22AAAAA0000A1Z5"
                       aria-invalid={gstError ? true : undefined}
+                        aria-describedby={gstError ? "gst-error" : undefined}
                       onChange={() => { if (gstError) setGstError(null); }}
                     />
-                    {gstError ? <p className="text-sm text-destructive">{gstError}</p> : null}
+                    <FieldError id="gst-error" message={gstError} />
                   </div>
 
                   {sectionLabel("Business address")}
