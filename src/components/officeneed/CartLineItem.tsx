@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router";
 import { ShoppingBag, Minus, Plus } from "lucide-react";
 import type { CartItem } from "@/stores/cartStore";
 import { formatMoney } from "@/lib/shopify";
@@ -26,22 +27,55 @@ export function CartLineItem({
   // Black variant added to cart would show the product's default/first
   // image, e.g. Brown, instead of the Black the shopper actually picked).
   const image = item.image ?? item.product?.node?.featuredImage ?? item.product?.node?.images?.edges?.[0]?.node ?? null;
+  const title = item.product?.node?.title ?? "Product";
+  // Shopify's own canonical product handle, carried on every cart line's
+  // product node (both the PDP's addItem() call and the cross-device
+  // adoptCart sync populate it, same as .title/.featuredImage above) --
+  // never derived from the title or hardcoded. Null only if this line
+  // somehow lacks product data entirely, in which case the image/title
+  // just render as plain (non-link) content, same as today.
+  const handle = item.product?.node?.handle ?? null;
+
+  const imageContent = image ? (
+    <img
+      src={image.url}
+      alt={image.altText ?? title}
+      className="size-full object-cover mix-blend-multiply"
+    />
+  ) : (
+    <ShoppingBag className="size-8 text-muted-foreground/20" />
+  );
 
   return (
     <div className="flex gap-5 border-b border-border/50 pb-5 last:border-0 last:pb-0">
-      <div className="size-20 sm:size-24 shrink-0 overflow-hidden rounded-md bg-secondary/30 flex items-center justify-center p-2">
-        {image ? (
-          <img
-            src={image.url}
-            alt={image.altText ?? (item.product?.node?.title ?? "Product")}
-            className="size-full object-cover mix-blend-multiply"
-          />
-        ) : (
-          <ShoppingBag className="size-8 text-muted-foreground/20" />
-        )}
-      </div>
+      {handle ? (
+        <Link
+          to="/products/$slug"
+          params={{ slug: handle }}
+          aria-label={`View ${title}`}
+          className="size-20 sm:size-24 shrink-0 overflow-hidden rounded-md bg-secondary/30 flex items-center justify-center p-2 outline-none transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+        >
+          {imageContent}
+        </Link>
+      ) : (
+        <div className="size-20 sm:size-24 shrink-0 overflow-hidden rounded-md bg-secondary/30 flex items-center justify-center p-2">
+          {imageContent}
+        </div>
+      )}
       <div className="min-w-0 flex-1 flex flex-col justify-center">
-        <h4 className="text-[14px] md:text-[15px] font-medium text-foreground line-clamp-2">{(item.product?.node?.title ?? "Product")}</h4>
+        <h4 className="text-[14px] md:text-[15px] font-medium text-foreground line-clamp-2">
+          {handle ? (
+            <Link
+              to="/products/$slug"
+              params={{ slug: handle }}
+              className="outline-none transition-colors hover:text-foreground/70 focus-visible:underline"
+            >
+              {title}
+            </Link>
+          ) : (
+            title
+          )}
+        </h4>
         {item.selectedOptions.length > 0 ? (
           <p className="text-[11px] text-muted-foreground mt-0.5">
             {item.selectedOptions.map((o) => o.value).join(" | ")}
