@@ -414,6 +414,24 @@ export function CustomerAuthModal({
       // picks up the new contextual price via its own React Query
       // invalidation, with no route change required to trigger it.
     } catch (error) {
+      // The Shopify customer WAS created here -- this is a distinct
+      // outcome from every other error below, which all mean registration
+      // itself failed. Reported as its own case, not folded into the
+      // generic toast, so it never reads like something went wrong.
+      if (error instanceof CustomerAuthError && error.code === "PENDING_ACTIVATION") {
+        toast.success(
+          entryType === "company"
+            ? "Your account has been created. Check your email to activate it, then sign in and add your business details from Account Settings → Business Account."
+            : "Your account has been created. Please check your email to activate it, then sign in.",
+        );
+        // Nothing left to fill in on this form -- activation happens by
+        // email, not here. Signing in now will correctly still say "not
+        // activated yet" (see signInErrorMessage's own CUSTOMER_DISABLED
+        // branch) until they've actually clicked that link, so this isn't
+        // a false promise, just the right screen to land on meanwhile.
+        setMode("signin");
+        return;
+      }
       // An email that's already registered should send the shopper to
       // sign in, not leave them stuck on a failed "Create Account" form.
       if (error instanceof CustomerAuthError && error.code === "TAKEN") {

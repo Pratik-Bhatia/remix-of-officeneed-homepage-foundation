@@ -352,7 +352,30 @@ export async function registerCustomer(input: {
       }
       throw new CustomerAuthError(err.message ?? "Could not create your account.", err.code ?? null);
     }
-    await signInCustomer(input.email, input.password);
+    // customerCreate succeeded -- a real Shopify customer now exists. The
+    // immediate sign-in below is the common case (a new email with no
+    // prior order history on this store) and already works correctly as
+    // written. Some emails -- notably one that already placed a GUEST
+    // order on this store before ever registering, a real and supported
+    // path here -- make Shopify create the account disabled, pending its
+    // own "Customer account invite" activation email, instead of enabling
+    // it immediately (confirmed by signInErrorMessage's existing
+    // CUSTOMER_DISABLED branch above, and documented Shopify behavior for
+    // customerCreate). That is a fundamentally different outcome from
+    // "registration failed" -- the account DOES exist -- so it's reported
+    // as its own distinguishable error code rather than let the raw
+    // sign-in failure read like the whole registration broke.
+    try {
+      await signInCustomer(input.email, input.password);
+    } catch (signInErr) {
+      if (signInErr instanceof CustomerAuthError && signInErr.code === "CUSTOMER_DISABLED") {
+        throw new CustomerAuthError(
+          "Your account has been created. Please check your email to activate it before signing in.",
+          "PENDING_ACTIVATION",
+        );
+      }
+      throw signInErr;
+    }
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
     if (message.includes("unauthenticated_write_customers")) {
