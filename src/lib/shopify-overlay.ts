@@ -640,7 +640,9 @@ export function useShopifyBestsellers(staticItems: Product[] = []): { products: 
   const { data } = useQuery({
     queryKey: ["shopify", "bestsellers", queryKeySuffix],
     queryFn: async () => {
-      const edges = await fetchProducts(50, undefined, buyer);
+      // 250 (one Storefront page) so every main category is represented;
+      // tab/category selection happens in selectBestsellers().
+      const edges = await fetchProducts(250, undefined, buyer);
       return edges.map((e) => e.node);
     },
     staleTime,
