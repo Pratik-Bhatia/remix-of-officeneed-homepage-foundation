@@ -1,7 +1,7 @@
 import { trackViewContent, trackInitiateCheckout } from "@/lib/meta-pixel";
 import { useMemo, useState, useRef, useEffect } from "react";
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
-import { Minus, Plus, ChevronLeft, ChevronRight, Loader2, ZoomIn, X, ShieldCheck, Lock, Award, Truck, BadgeCheck } from "lucide-react";
+import { Minus, Plus, ChevronLeft, ChevronRight, Loader2, ZoomIn, X, ShieldCheck, Lock, Award, Truck, BadgeCheck, Heart } from "lucide-react";
 import { Navbar } from "@/components/officeneed/Navbar";
 import { Footer } from "@/components/officeneed/Footer";
 import { ProductCard } from "@/components/officeneed/ProductCard";
@@ -9,6 +9,7 @@ import { ProductInformation } from "@/components/officeneed/ProductInformation";
 import { ProductReviews, ProductRatingSummary, MOCK_REVIEWS, type Review } from "@/components/officeneed/ProductReviews";
 import { ProductCustomizer } from "@/components/officeneed/ProductCustomizer";
 import { RichText } from "@/components/officeneed/RichText";
+import { VariantSelectorDesktop, VariantSelectorMobile } from "@/components/officeneed/VariantSelector";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { getProductBySlug, getRelatedProducts } from "@/lib/products";
@@ -18,6 +19,8 @@ import { TAXONOMY, resolveLiveTitle } from "@/lib/taxonomy";
 import { useCartStore } from "@/stores/cartStore";
 import { useB2BStore } from "@/stores/b2bStore";
 import { getCustomerToken } from "@/lib/customer";
+import { useSaves } from "@/lib/saves";
+import { setPendingSave } from "@/lib/pending-save";
 import { getB2BPriceOverlay } from "@/lib/b2b-pricing.functions";
 import { applyB2BPriceOverlay, applyB2BPriceOverlayToAll } from "@/lib/b2b-pricing";
 import { createServerOnlyFn } from "@tanstack/react-start";
@@ -312,6 +315,30 @@ function ProductDetail() {
   const purchaseSectionRef = useRef<HTMLDivElement>(null);
   const [showStickyBar, setShowStickyBar] = useState(false);
   const [reviews, setReviews] = useState<Review[]>([]);
+
+  // Wishlist -- same useSaves()/toggleSave() every ProductCard uses, no
+  // second store. Guests get the exact same guest-flow ProductCard.tsx
+  // uses: remember the product, open the existing auth modal, let
+  // CustomerAuthModal complete the save after a successful sign-in.
+  const { savedHandles, toggleSave } = useSaves();
+  const [saveBusy, setSaveBusy] = useState(false);
+  const isSaved = savedHandles.includes(product.slug);
+  const handleToggleSave = async () => {
+    if (!getCustomerToken()) {
+      setPendingSave(product.slug);
+      window.dispatchEvent(new CustomEvent("open-auth-modal"));
+      return;
+    }
+    setSaveBusy(true);
+    try {
+      const result = await toggleSave(product.slug);
+      toast.success(result.saved ? "Saved to your account." : "Removed from your saves.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not update your saves.");
+    } finally {
+      setSaveBusy(false);
+    }
+  };
 
   // WhatsApp browse-abandon trigger (KwikEngage) when the shopper leaves this page.
   useProductBrowseAbandon({ handle: slug, title: product.name });
@@ -789,6 +816,19 @@ function ProductDetail() {
                   >
                     <ZoomIn className="size-5" />
                   </button>
+                  {/* Wishlist -- always interactive, guest or signed-in
+                      (see handleToggleSave above); top-right, clear of the
+                      zoom button and the prev/next arrows. */}
+                  <button
+                    type="button"
+                    onClick={handleToggleSave}
+                    disabled={saveBusy}
+                    aria-label={isSaved ? `Remove ${product.name} from your saves` : `Save ${product.name}`}
+                    aria-pressed={isSaved}
+                    className="absolute top-4 right-4 lg:top-6 lg:right-6 z-10 flex items-center justify-center size-10 lg:size-11 rounded-full bg-background/90 backdrop-blur border border-border text-foreground transition-colors hover:bg-background disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground shadow-sm"
+                  >
+                    <Heart className={cn("size-5", isSaved ? "fill-foreground text-foreground" : "text-muted-foreground")} />
+                  </button>
                 </div>
               </div>
             </div>
@@ -1119,14 +1159,28 @@ function ProductDetail() {
           </div>
 
           {/* Customer Reviews */}
-          <ProductReviews 
-            reviews={reviews} 
+          <ProductReviews
+            reviews={reviews}
             productHandle={slug}
           />
+              </div>
 
-          {/* Related */}
-          {related.length > 0 ? (
-            <section aria-labelledby="related-heading" className="mt-16 sm:mt-24 border-t border-border pt-16 sm:pt-20">
+        {/* Related -- same full-bleed #F5F5F7 section + white-card
+            ProductCard treatment as the main /products listing page (see
+            products.index.tsx's own "Catalogue body" comment): the gray
+            background belongs to an UNconstrained wrapper, with only the
+            inner content (heading + grid) centered/padded to max-w-1600px,
+            which is what makes the color reach the true page edges instead
+            of stopping at the rest of the PDP's own max-width. A sibling
+            of (not nested inside) the max-w-[1600px] div above for exactly
+            that reason. ProductCard gets no imageWellClassName override
+            now, so its image well falls back to its own default white --
+            previously this passed bg-[#F5F5F7], which (combined with the
+            page's plain white background behind it) was the inverse of
+            the intended look. */}
+        {related.length > 0 ? (
+          <section aria-labelledby="related-heading" className="mt-16 bg-[#F5F5F7] sm:mt-24">
+            <div className="mx-auto w-full max-w-[1600px] px-5 py-14 sm:px-8 sm:py-16 lg:px-12 lg:py-20">
               <div className="text-center mb-10">
                 <h2 id="related-heading" className="text-[14px] sm:text-[15px] font-semibold tracking-[0.1em] text-foreground uppercase">
                   Related Products
@@ -1135,14 +1189,14 @@ function ProductDetail() {
                   Explore more products you may like.
                 </p>
               </div>
-              <div className="grid grid-cols-2 gap-x-5 gap-y-10 sm:gap-x-6 md:grid-cols-3 xl:grid-cols-4">
+              <div className="grid grid-cols-2 gap-x-5 gap-y-10 sm:gap-x-6 md:grid-cols-3 lg:grid-cols-4">
                 {related.map((p) => (
-                  <ProductCard key={p.slug} product={p} pricePending={pricePending} imageWellClassName="bg-[#F5F5F7]" />
+                  <ProductCard key={p.slug} product={p} pricePending={pricePending} />
                 ))}
               </div>
-            </section>
-          ) : null}
-              </div>
+            </div>
+          </section>
+        ) : null}
       </main>
       <Footer />
 
@@ -1187,21 +1241,13 @@ function ProductDetail() {
               </div>
 
               {hasVariantChoice && (
-                <div className="relative">
-                  <select 
-                    className="h-11 pl-3 pr-8 rounded-md border border-border bg-background text-sm appearance-none outline-none focus-visible:ring-1 focus-visible:ring-foreground w-[180px] xl:w-[220px]"
-                    value={selectedVariantId ?? ""}
-                    onChange={(e) => {
-                      const v = variants.find(x => x.id === e.target.value);
-                      if (v) selectVariant(v);
-                    }}
-                  >
-                    {variants.map(v => (
-                      <option key={v.id} value={v.id}>{v.title}</option>
-                    ))}
-                  </select>
-                  <ChevronRight className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none rotate-90" />
-                </div>
+                <VariantSelectorDesktop
+                  variants={variants}
+                  selectedVariantId={selectedVariantId}
+                  onSelect={selectVariant}
+                  optionName={node?.options?.find((o) => o.name.toLowerCase() !== "title")?.name ?? "Options"}
+                  triggerClassName="h-11 w-[180px] xl:w-[220px]"
+                />
               )}
               <Button
                 onClick={handleAddToCartClick}
@@ -1237,21 +1283,13 @@ function ProductDetail() {
                 (only rendered when there's an actual choice to make), so
                 it never competes for space with quantity/Add below. */}
             {hasVariantChoice && (
-              <div className="relative">
-                <select
-                  className="h-9 w-full appearance-none rounded-lg border border-border bg-background pl-3 pr-8 text-sm outline-none focus-visible:ring-1 focus-visible:ring-foreground"
-                  value={selectedVariantId ?? ""}
-                  onChange={(e) => {
-                    const v = variants.find(x => x.id === e.target.value);
-                    if (v) selectVariant(v);
-                  }}
-                >
-                  {variants.map(v => (
-                    <option key={v.id} value={v.id}>{v.title}</option>
-                  ))}
-                </select>
-                <ChevronRight className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none rotate-90" />
-              </div>
+              <VariantSelectorMobile
+                variants={variants}
+                selectedVariantId={selectedVariantId}
+                onSelect={selectVariant}
+                optionName={node?.options?.find((o) => o.name.toLowerCase() !== "title")?.name ?? "Options"}
+                triggerClassName="h-9 w-full"
+              />
             )}
 
             {/* Quantity + Add -- the one row these two share, aligned and
