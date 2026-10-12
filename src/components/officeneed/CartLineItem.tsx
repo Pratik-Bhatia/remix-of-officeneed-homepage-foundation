@@ -35,6 +35,15 @@ export function CartLineItem({
   // somehow lacks product data entirely, in which case the image/title
   // just render as plain (non-link) content, same as today.
   const handle = item.product?.node?.handle ?? null;
+  // Shopify's own placeholder for a product with no real variant options
+  // (a single "Title" option whose value is literally "Default Title") --
+  // meaningless to a shopper, so it's filtered out by VALUE, not by
+  // dropping selectedOptions entirely: a genuinely named option (Brown,
+  // Black, a second option like Size) is never touched, even if a future
+  // product happened to name an option "Title" with a real value.
+  const meaningfulOptions = item.selectedOptions.filter(
+    (o) => o.value.trim().toLowerCase() !== "default title",
+  );
 
   const imageContent = image ? (
     <img
@@ -76,9 +85,9 @@ export function CartLineItem({
             title
           )}
         </h4>
-        {item.selectedOptions.length > 0 ? (
+        {meaningfulOptions.length > 0 ? (
           <p className="text-[11px] text-muted-foreground mt-0.5">
-            {item.selectedOptions.map((o) => o.value).join(" | ")}
+            {meaningfulOptions.map((o) => o.value).join(" | ")}
           </p>
         ) : null}
 
