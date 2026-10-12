@@ -30,14 +30,15 @@ function ResetPasswordPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (password !== confirm) {
-      toast.error("Passwords do not match.");
+      toast.error("Your passwords do not match.");
       return;
     }
     setSubmitting(true);
     try {
       const { error } = await supabase.auth.updateUser({ password });
       if (error) {
-        toast.error(error.message);
+        console.error("Password update failed:", error);
+        toast.error(/expired|invalid|session/i.test(error.message) ? "This reset link is invalid or has expired. Please request a new one." : "We couldn't update your password. Please try again.");
         return;
       }
       toast.success("Password updated.");
