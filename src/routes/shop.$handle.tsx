@@ -1,3 +1,4 @@
+import { haptic } from "@/lib/haptics";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
@@ -119,6 +120,7 @@ function ShopProductPage() {
     });
     if (useCartStore.getState().items.some((i) => i.variantId === selected.id)) {
       toast.success("Added to cart", { description: product.title });
+      haptic("success");
     }
   };
 

@@ -1,3 +1,4 @@
+import { haptic } from "@/lib/haptics";
 import { trackLead } from "@/lib/meta-pixel";
 import { toast } from "sonner";
 import { processLogoServer } from "@/lib/image-processing.functions";
@@ -1440,11 +1441,13 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
         trackLead("Corporate Quote", { email: formData.email, phone: formData.phone }, { content_name: product.name });
         setRefNumber(result.refNumber);
         toast.success("Quote request submitted successfully! We will contact you shortly.");
+        haptic("success");
         onOpenChange(false);
         setTimeout(() => setStep("customize"), 300);
     } catch (err: any) {
       console.error(err);
       setErrorMsg(err.message || "Failed to submit quote. Please try again.");
+      haptic("error");
     } finally {
       setIsSubmitting(false);
     }
