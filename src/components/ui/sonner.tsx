@@ -12,10 +12,11 @@ if (!patched.__onPatched) {
   for (const type of Object.keys(durations)) {
     const original = patched[type].bind(toast);
     patched[type] = (message, data) =>
-      original(message, {
+      original(message, ({
         duration: durations[type],
         ...(typeof message === "string" && !data?.id ? { id: `${type}:${message}` } : {}),
         ...data,
+      }) as Parameters<typeof toast.error>[1]);
       });
   }
 }
