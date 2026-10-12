@@ -256,6 +256,19 @@ export function CustomerAuthModal({
             toast.success("Successfully logged in");
           }
         } else {
+          // Same reasoning as the Company branch above: the Individual tab
+          // is just a login form, not a source of truth for account type
+          // (see src/lib/b2b.functions.ts -- classification is derived
+          // solely from the token, server-side). A customer who happens to
+          // be B2B but signed in here must not have account-dependent UI
+          // (pricing, etc.) briefly assume B2C before the same global
+          // resolve() this app always runs has had a chance to finish --
+          // so wait for it here too, exactly like the Company branch,
+          // before declaring success. useB2BPriceOverlayMap already
+          // gates on `resolved` independently of this await; this just
+          // keeps the modal's own success signal honest and consistent.
+          const signedInToken = getCustomerToken();
+          if (signedInToken) await useB2BStore.getState().resolve(signedInToken);
           toast.success("Successfully logged in");
         }
       } else if (entryType === "company") {
