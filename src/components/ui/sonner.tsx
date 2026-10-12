@@ -1,5 +1,24 @@
 import { AlertCircle, CheckCircle2, Info, TriangleAlert } from "lucide-react";
-import { Toaster as Sonner } from "sonner";
+import { Toaster as Sonner, toast } from "sonner";
+
+// Shared behaviour for every toast in the app (same `toast` API as before):
+// errors and warnings stay on screen longer, and an identical message that
+// is already showing is replaced rather than stacked as a duplicate.
+type ToastFn = (message: Parameters<typeof toast.error>[0], data?: Parameters<typeof toast.error>[1]) => string | number;
+const patched = toast as unknown as Record<string, ToastFn> & { __onPatched?: boolean };
+if (!patched.__onPatched) {
+  patched.__onPatched = true;
+  const durations: Record<string, number> = { error: 7000, warning: 6000, success: 4000, info: 4500 };
+  for (const type of Object.keys(durations)) {
+    const original = patched[type]!.bind(toast);
+    patched[type] = (message, data) =>
+      original(message, ({
+        duration: durations[type],
+        ...(typeof message === "string" && !data?.id ? { id: `${type}:${message}` } : {}),
+        ...data,
+      }) as Parameters<typeof toast.error>[1]);
+  }
+}
 
 type ToasterProps = React.ComponentProps<typeof Sonner>;
 
