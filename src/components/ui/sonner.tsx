@@ -17,7 +17,6 @@ if (!patched.__onPatched) {
         ...(typeof message === "string" && !data?.id ? { id: `${type}:${message}` } : {}),
         ...data,
       }) as Parameters<typeof toast.error>[1]);
-      });
   }
 }
 
