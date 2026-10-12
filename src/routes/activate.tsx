@@ -1,3 +1,4 @@
+import { FieldError } from "@/components/ui/field-error";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { Loader2 } from "lucide-react";
@@ -132,7 +133,7 @@ function ActivatePage() {
                 />
               </div>
 
-              {error ? <p className="text-sm text-destructive">{error}</p> : null}
+              <FieldError message={error} />
 
               <Button type="submit" disabled={busy} className="w-full rounded-full">
                 {busy ? <Loader2 className="size-4 mr-2 animate-spin" /> : null}
