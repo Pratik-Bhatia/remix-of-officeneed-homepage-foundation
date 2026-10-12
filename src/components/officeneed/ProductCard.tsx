@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import type { Product } from "@/lib/products";
 import { getCustomerToken } from "@/lib/customer";
 import { useSaves } from "@/lib/saves";
+import { setPendingSave } from "@/lib/pending-save";
 import { cn } from "@/lib/utils";
 import { productBelongsToCategory, getCategoryByTitle, resolveLiveTitle } from "@/lib/taxonomy";
 import { useNormalizedImageScale } from "@/lib/image-content-scale";
@@ -61,7 +62,6 @@ export function ProductCard({
   // Shopify collection title instead of the stable classify()-derived
   // string, which only ever serves as a lookup key here.
   const { collections } = useShopifyCollections();
-  const isSignedIn = typeof window !== "undefined" && Boolean(getCustomerToken());
   const isSaved = savedHandles.includes(product.slug);
 
   // Officeneed Exclusive's source photos have inconsistent product-to-frame
@@ -114,6 +114,22 @@ export function ProductCard({
   const handleToggle = async (event: React.MouseEvent) => {
     event.preventDefault();
     event.stopPropagation();
+
+    // Guest: the save itself needs a real Shopify customer, but the heart
+    // is still fully interactive -- remember which product, then route
+    // through the existing auth modal exactly like every other
+    // sign-in-required action in the app (CartProfileLinks.tsx,
+    // account.tsx). CustomerAuthModal completes this save, at most once,
+    // right after a successful sign-in/registration; closing/cancelling
+    // the modal clears it instead. No navigation happens either way --
+    // the modal is an overlay on this same page, so there's nothing to
+    // "return" to.
+    if (!getCustomerToken()) {
+      setPendingSave(product.slug);
+      window.dispatchEvent(new CustomEvent("open-auth-modal"));
+      return;
+    }
+
     setBusy(true);
     try {
       const result = await toggleSave(product.slug);
@@ -211,19 +227,17 @@ export function ProductCard({
         </div>
       </Link>
 
-      {isSignedIn ? (
-        <button
-          type="button"
-          onClick={handleToggle}
-          disabled={busy}
-          aria-label={isSaved ? `Remove ${product.name} from your saves` : `Save ${product.name}`}
-          aria-pressed={isSaved}
-          className="absolute right-3 top-3 z-20 grid size-9 place-items-center rounded-full border border-border bg-background/85 backdrop-blur transition-colors hover:border-foreground/40 disabled:opacity-60"
-          style={product.price ? undefined : { top: "3rem" }}
-        >
-          <Heart className={cn("size-4", isSaved ? "fill-foreground text-foreground" : "text-muted-foreground")} />
-        </button>
-      ) : null}
+      <button
+        type="button"
+        onClick={handleToggle}
+        disabled={busy}
+        aria-label={isSaved ? `Remove ${product.name} from your saves` : `Save ${product.name}`}
+        aria-pressed={isSaved}
+        className="absolute right-3 top-3 z-20 grid size-9 place-items-center rounded-full border border-border bg-background/85 backdrop-blur transition-colors hover:border-foreground/40 disabled:opacity-60"
+        style={product.price ? undefined : { top: "3rem" }}
+      >
+        <Heart className={cn("size-4", isSaved ? "fill-foreground text-foreground" : "text-muted-foreground")} />
+      </button>
     </div>
   );
 }

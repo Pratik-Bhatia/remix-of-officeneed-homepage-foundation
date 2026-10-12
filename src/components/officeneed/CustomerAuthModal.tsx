@@ -12,7 +12,8 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { signInCustomer, registerCustomer, requestPasswordRecovery, getCustomerToken, CustomerAuthError } from "@/lib/customer";
 import { saveBusinessRegistration } from "@/lib/business-registration.functions";
 import { setupB2BCompany } from "@/lib/b2b-company-setup.functions";
-import { refreshSaves } from "@/lib/saves";
+import { refreshSaves, toggleSave, isHandleSaved } from "@/lib/saves";
+import { takePendingSave, clearPendingSave } from "@/lib/pending-save";
 import { useQueryClient } from "@tanstack/react-query";
 import { splitFullName } from "@/lib/name-utils";
 import { isValidGstin } from "@/lib/gst";
@@ -136,6 +137,17 @@ export function CustomerAuthModal({
       setGstError(null);
       setPhoneError(null);
       setRecoverySent(false);
+    }
+    // Modal closing (backdrop click, Escape, the X) without ever reaching
+    // handleSubmit's success path above -- a cancelled/abandoned auth
+    // attempt. That success path already consumes (and clears) a pending
+    // wishlist save via takePendingSave() the moment it completes, so
+    // this only ever fires for a genuine cancel; clearing it here is what
+    // "closing without selecting leaves the save unchanged" means for a
+    // guest who opened this modal from the heart icon -- otherwise it'd
+    // sit there and get silently replayed on some later, unrelated sign-in.
+    if (!embedded && !open && wasOpen.current) {
+      clearPendingSave();
     }
     wasOpen.current = open;
   }, [open, embedded]);
@@ -358,6 +370,23 @@ export function CustomerAuthModal({
       // "unnecessary redirect" this was explicitly asked not to do.
       if (!embedded) onOpenChange(false);
       await refreshSaves(true);
+      // Complete a guest's pending wishlist save, if the heart icon is
+      // what opened this modal in the first place -- exactly once
+      // (takePendingSave clears it as it reads it, so a second,
+      // unrelated sign-in later in the session can never replay it), and
+      // only if it isn't already saved (this customer could already have
+      // it saved from another device/session -- toggling would un-save
+      // it, which is never the intent here).
+      const pendingSaveHandle = takePendingSave();
+      if (pendingSaveHandle && !isHandleSaved(pendingSaveHandle)) {
+        try {
+          await toggleSave(pendingSaveHandle);
+          toast.success("Saved to your account.");
+        } catch (saveErr) {
+          // Non-fatal: the sign-in/registration itself already succeeded.
+          console.error("Failed to complete pending wishlist save:", saveErr);
+        }
+      }
       // Neither sign-in NOR register navigates anymore (this used to
       // hardcode `navigate({ to: "/account" })` for sign-in only -- that
       // was the same "redirects you away from what you were doing"

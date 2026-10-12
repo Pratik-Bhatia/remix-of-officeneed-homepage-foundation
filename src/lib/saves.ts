@@ -45,6 +45,14 @@ export function clearSaves() {
   emit();
 }
 
+/** Snapshot read of the currently-loaded saved handles -- used to avoid
+ * toggling (and so un-saving) a product that's already saved, e.g. when
+ * completing a pending guest save for a customer who'd already saved it
+ * on another device. Reflects whatever refreshSaves() last loaded. */
+export function isHandleSaved(handle: string): boolean {
+  return handles.includes(handle);
+}
+
 export async function toggleSave(handle: string): Promise<{ saved: boolean }> {
   const token = getCustomerToken();
   if (!token) throw new Error("Sign in to save products.");
