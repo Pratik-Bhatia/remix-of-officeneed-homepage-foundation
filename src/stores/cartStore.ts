@@ -1,3 +1,4 @@
+import { haptic } from "@/lib/haptics";
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { toast } from "sonner";
@@ -518,7 +519,7 @@ export const useCartStore = create<CartStore>()(
               const { valid } = extractLines(cart);
               const line = valid.find((l) => l.merchandise.id === item.variantId);
               if (!line) {
-                toast.error("Sorry, this item is out of stock.");
+                toast.error("Sorry, this item is out of stock."); haptic("error");
                 return;
               }
               set({
@@ -565,7 +566,7 @@ export const useCartStore = create<CartStore>()(
               const { valid } = extractLines(cart);
               const line = valid.find((l) => l.merchandise.id === item.variantId);
               if (!line) {
-                toast.error("Sorry, this item is out of stock.");
+                toast.error("Sorry, this item is out of stock."); haptic("error");
                 return;
               }
               set({ items: [...get().items, { ...item, lineId: line.id, quantity: line.quantity, image: resolveLineImage(line.merchandise.image, item.product?.node) }] });
@@ -573,7 +574,7 @@ export const useCartStore = create<CartStore>()(
             }
           } catch (error) {
             console.error("Failed to add item:", error);
-            toast.error("Couldn't add this item to your bag. Please try again.");
+            toast.error("Couldn't add this item to your bag. Please try again."); haptic("error");
           } finally {
             set({ isLoading: false });
             // Only fire once Shopify has actually accepted the line.

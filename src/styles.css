@@ -497,3 +497,16 @@
   --tw-ring-shadow: 0 0 #0000;
   --tw-ring-offset-shadow: 0 0 #0000;
 }
+
+/* Subtle press feedback for all buttons (visual fallback to haptics). */
+@layer base {
+  button:not(:disabled), [role="button"] {
+    transition: transform 120ms ease;
+  }
+  button:not(:disabled):active, [role="button"]:active {
+    transform: scale(0.97);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    button:not(:disabled):active, [role="button"]:active { transform: none; }
+  }
+}

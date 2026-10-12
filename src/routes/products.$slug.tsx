@@ -1,3 +1,4 @@
+import { haptic } from "@/lib/haptics";
 import { trackViewContent, trackInitiateCheckout } from "@/lib/meta-pixel";
 import { useMemo, useState, useRef, useEffect } from "react";
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
@@ -333,8 +334,10 @@ function ProductDetail() {
     try {
       const result = await toggleSave(product.slug);
       toast.success(result.saved ? "Saved to your account." : "Removed from your saves.");
+      if (result.saved) haptic("success");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not update your saves.");
+      haptic("error");
     } finally {
       setSaveBusy(false);
     }
@@ -475,6 +478,7 @@ function ProductDetail() {
   }, [linkedVariant?.id]);
 
   const selectVariant = (variant: ShopifyVariantNode) => {
+    if (variant.id !== selectedVariantId) haptic("light");
     setSelectedVariantId(variant.id);
     const i = indexForUrl(variant.image?.url);
     if (i >= 0) setActiveImage(i);
@@ -574,6 +578,7 @@ function ProductDetail() {
       return true;
     } catch {
       toast.error("Failed to add to cart");
+      haptic("error");
       return false;
     }
   };
@@ -590,7 +595,10 @@ function ProductDetail() {
     }
     if (!validatePurchasable()) return;
     const ok = await addCurrentVariantToCart();
-    if (ok) toast.success("Added to cart", { description: product.name });
+    if (ok) {
+      toast.success("Added to cart", { description: product.name });
+      haptic("success");
+    }
   };
 
   // Buy Now: ensures the selected variant is in the cart (adding it only

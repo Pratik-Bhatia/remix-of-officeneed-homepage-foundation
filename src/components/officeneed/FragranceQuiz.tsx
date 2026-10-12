@@ -1,3 +1,4 @@
+import { haptic } from "@/lib/haptics";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { ArrowLeft, Check, Sparkles, ChevronRight, X, FlaskConical, Loader2, ShoppingBag } from "lucide-react";
@@ -87,10 +88,12 @@ function QuizAddToCart({ productSlug, productName }: { productSlug: string; prod
       });
       setSuccess(true);
       toast.success("Added to cart", { description: productName });
+      haptic("success");
       setTimeout(() => setSuccess(false), 2000);
     } catch (e) {
       console.error(e);
       toast.error("Failed to add to cart");
+      haptic("error");
     } finally {
       setLoading(false);
     }
