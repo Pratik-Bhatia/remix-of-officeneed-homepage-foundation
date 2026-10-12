@@ -855,6 +855,18 @@ export const useCartStore = create<CartStore>()(
          * totals. Drops lines whose product was deleted or unpublished.
          */
         syncCustomerCart: async (token) => {
+          // Race guard: this function awaits several network calls, and a
+          // NEWER sync for a different customer (or a sign-out) can start
+          // and finish while an OLDER one for a previous identity is still
+          // in flight -- without this, whichever call happens to resolve
+          // LAST would win and overwrite the cart with the wrong
+          // identity's data, even though it's no longer the active one.
+          // `token` is this specific call's identity, captured once at the
+          // start; re-checking it against the live getCustomerToken() after
+          // every await is what lets a stale call recognize it's stale and
+          // bail out before touching any state. Checked at every point
+          // that's about to read `get()`'s current state or call `set()`.
+          const isStale = () => getCustomerToken() !== token;
           set({ isSyncing: true });
           try {
             let remoteId: string | null = null;
@@ -864,9 +876,11 @@ export const useCartStore = create<CartStore>()(
               console.error("Couldn't look up saved bag:", error);
               return;
             }
+            if (isStale()) return;
             const local = get();
             if (remoteId && remoteId !== local.cartId) {
               const data = await storefrontApiRequest(ADOPT_CART_QUERY, { id: remoteId });
+              if (isStale()) return;
               let remote = data?.data?.cart;
               const remoteHasItems = !!remote && extractLines(remote).valid.length > 0;
               if (remote && remoteHasItems) {
@@ -879,13 +893,16 @@ export const useCartStore = create<CartStore>()(
                   .map((i) => ({ quantity: i.quantity, merchandiseId: i.variantId }));
                 if (extra.length) {
                   await storefrontApiRequest(CART_LINES_ADD_MUTATION, { cartId: remoteId, lines: extra });
+                  if (isStale()) return;
                   const again = await storefrontApiRequest(ADOPT_CART_QUERY, { id: remoteId });
+                  if (isStale()) return;
                   remote = again?.data?.cart ?? remote;
                 }
                 storefrontApiRequest(CART_BUYER_IDENTITY_UPDATE_MUTATION, {
                   cartId: remoteId,
                   buyerIdentity: currentBuyerIdentity() ?? { customerAccessToken: token, countryCode: "IN" },
                 }).catch(() => {});
+                if (isStale()) return;
                 set({
                   cartId: remote.id,
                   checkoutUrl: formatCheckoutUrl(remote.checkoutUrl),
@@ -897,6 +914,7 @@ export const useCartStore = create<CartStore>()(
               }
             }
             // No usable saved bag: this device's bag becomes the account's bag.
+            if (isStale()) return;
             const { cartId } = get();
             if (cartId && cartId !== remoteId) {
               saveCustomerCart({ data: { token, cartId } }).catch(() => {});
@@ -908,7 +926,10 @@ export const useCartStore = create<CartStore>()(
           } catch (error) {
             console.error("Failed to sync account bag:", error);
           } finally {
-            set({ isSyncing: false });
+            // A stale call must not flip isSyncing back off after a newer
+            // call has already started its own sync (would show "not
+            // syncing" while the real, current sync is still running).
+            if (!isStale()) set({ isSyncing: false });
           }
         },
 

@@ -17,14 +17,23 @@ export function useCartSync() {
     // Pull the signed-in shopper's bag from their account (cross-device).
     const syncAccount = async () => {
       const token = getCustomerToken();
-      if (!token) {
-        // Signed out on this device: the bag stays saved on the account.
-        if (lastToken) useCartStore.getState().clearCart();
-        lastToken = null;
-        return false;
-      }
       if (token === lastToken) return false;
+      const previousToken = lastToken;
       lastToken = token;
+      // Any identity change -- signing out, OR signing in as a different
+      // customer with no intermediate sign-out (e.g. a second tab that was
+      // already open and still shows a stale sign-in form after another
+      // tab just signed in: officeneed_customer_token is one shared
+      // localStorage key, so that tab's submit overwrites it directly,
+      // previousToken -> a DIFFERENT truthy token, never passing through
+      // null) -- must never let the OLD identity's local cart silently
+      // become the new identity's cart. clearCart() only resets local
+      // state (see cartStore.ts) -- it never deletes the actual Shopify
+      // cart or its Supabase saved-cart mapping, so whichever identity
+      // is now active still gets its own real saved bag back via
+      // syncCustomerCart below (or, for a guest, starts a fresh local one).
+      if (previousToken) useCartStore.getState().clearCart();
+      if (!token) return false;
       await syncCustomerCart(token);
       return true;
     };
