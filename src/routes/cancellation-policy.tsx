@@ -34,7 +34,7 @@ function CancellationPolicyPage() {
                 To cancel your order, please contact our customer support team immediately with your order number. You can reach us via:
               </p>
               <ul className="list-disc pl-6 text-muted-foreground space-y-2">
-                <li>Email: contact@officeneed.in</li>
+                <li>Email: care@officeneed.in</li>
                 
               </ul>
             </section>

@@ -108,7 +108,7 @@ const termsSections: SectionItem[] = [
     title: "Payment Terms",
     content: [
       "Standard commercial payment terms apply as stipulated in your formal quotation, invoice, or enterprise procurement agreement. Unless an approved credit facility has been established in writing, custom-branded orders require an agreed advance payment prior to commencing production.",
-      "Cash on Delivery (COD) is not available; online payment is required for all orders. All invoices are payable in Indian Rupees (INR) via bank transfer, NEFT/RTGS, or approved online corporate payment methods. Late payments may incur interest or delay subsequent shipment schedules.",
+      "Cash on Delivery (COD) is not available; online payment is required for all orders. Payments are made in Indian Rupees (INR) using the online payment methods offered at checkout. Late payments may incur interest or delay subsequent shipment schedules.",
     ],
   },
   {
@@ -215,8 +215,8 @@ const termsSections: SectionItem[] = [
     number: "19",
     title: "Contact Information",
     content: [
-      "For any formal legal notices, clarifications regarding these Terms & Conditions, or corporate compliance inquiries, please contact our administrative team at contact@officeneed.in.",
-      "You may also reach our corporate headquarters by post or phone during official working hours for immediate procurement support.",
+      "For any formal legal notices, clarifications regarding these Terms & Conditions, or corporate compliance inquiries, please contact our administrative team at care@officeneed.in.",
+      "You may also use the enquiry form on our Contact Us page."
     ],
   },
 ];

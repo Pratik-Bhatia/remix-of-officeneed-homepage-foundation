@@ -1,6 +1,6 @@
 export const contactConfig = {
   phone: "+91 8806408055",
-  email: "contact@officeneed.in",
+  email: "care@officeneed.in",
   address: {
     line1: "Model Colony, DBC",
     line2: "Shivajinagar, Pune - 16",

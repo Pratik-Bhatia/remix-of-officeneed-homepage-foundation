@@ -6,9 +6,9 @@ export const Route = createFileRoute('/returns-refunds')({
   component: ReturnsRefundsPage,
   head: () => ({
     meta: [
-      { title: 'Returns, Exchanges & Replacements ? OfficeNeed' },
+      { title: 'Returns, Exchanges & Replacements — Officeneed' },
       { name: 'description', content: 'OfficeNeed has a strict no return, no exchange, and no replacement policy.' },
-      { property: 'og:title', content: 'Returns, Exchanges & Replacements ? OfficeNeed' },
+      { property: 'og:title', content: 'Returns, Exchanges & Replacements — Officeneed' },
       { property: 'og:description', content: 'OfficeNeed has a strict no return, no exchange, and no replacement policy.' },
       { property: 'og:type', content: 'website' },
       { name: 'twitter:card', content: 'summary' },
@@ -42,7 +42,7 @@ function ReturnsRefundsPage() {
             <section>
               <h2 className="text-2xl font-medium mb-4">Contact Us</h2>
               <p className="text-muted-foreground leading-relaxed">
-                For any questions about this policy, contact us at contact@officeneed.in.
+                For any questions about this policy, contact us at care@officeneed.in.
               </p>
             </section>
           </div>

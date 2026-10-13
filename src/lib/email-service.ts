@@ -22,11 +22,11 @@ function getResendClient() {
 }
 
 function getEmailFrom() {
-  return process.env["EMAIL_FROM"] || "OfficeNeed Assistant <contact@officeneed.in>";
+  return process.env["EMAIL_FROM"] || "OfficeNeed Assistant <care@officeneed.in>";
 }
 
 function getInternalEmail() {
-  return process.env["OFFICENEED_ENQUIRY_EMAIL"] || "contact@officeneed.in";
+  return process.env["OFFICENEED_ENQUIRY_EMAIL"] || "care@officeneed.in";
 }
 
 export type EmailAttachment = { filename: string; content: Buffer };
