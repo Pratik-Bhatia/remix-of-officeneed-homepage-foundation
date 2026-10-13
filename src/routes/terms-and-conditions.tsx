@@ -92,7 +92,7 @@ const termsSections: SectionItem[] = [
     title: "Orders & Availability",
     content: [
       "An order is deemed officially confirmed only upon our receipt and written acceptance of a signed Purchase Order (PO) and/or mutually agreed advance payment.",
-      "All products and promotional inventory are subject to stock availability at the time of PO confirmation. In the rare event that an ordered item becomes unavailable, your dedicated account manager will propose an equivalent premium alternative or adjust the order accordingly.",
+      "All products and promotional inventory are subject to stock availability at the time of order confirmation. In the rare event that an ordered item becomes unavailable, our team will contact you to propose an equivalent alternative or adjust the order accordingly.",
     ],
   },
   {
