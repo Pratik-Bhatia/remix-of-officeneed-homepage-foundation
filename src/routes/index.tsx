@@ -37,8 +37,8 @@ function Index() {
         <Hero />
         <InteractiveGiftShowcase />
         <Bestsellers />
-        <ShopByCategory />
         <CorporateGiftingCarousel />
+        <ShopByCategory />
       </main>
       <Footer />
     </div>
