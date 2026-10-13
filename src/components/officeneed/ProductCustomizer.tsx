@@ -1,6 +1,7 @@
 import { haptic } from "@/lib/haptics";
-import { trackLead } from "@/lib/meta-pixel";
+import { trackLead, trackInitiateCheckout } from "@/lib/meta-pixel";
 import { toast } from "sonner";
+import { useCartStore } from "@/stores/cartStore";
 import { processLogoServer } from "@/lib/image-processing.functions";
 ﻿import { useState, useRef, useEffect, useCallback } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -17,6 +18,7 @@ import { motion, useMotionValue } from "motion/react";
 // killing the customization snapshot capture. Same API, drop-in fix.
 import html2canvas from "html2canvas-pro";
 import { submitCorporateQuote } from "@/lib/corporate-quotes.functions";
+import { uploadBuyNowCustomizationAssets } from "@/lib/buy-now-customization.functions";
 import { getBrandingLimits, computeEffectiveMaxScale, computeGeometricMaxScale, computeMinEffectiveScale, scaleToPhysicalMm, widthMmToScale, heightMmToScale, MIN_LOGO_SIZE_MM, GIFT_SET_REFERENCE_WIDTH_MM, CORPORATE_GIFTING_DEFAULT_REFERENCE_WIDTH_MM, type PrintingMethod, type BrandingLimits } from "@/lib/branding-limits";
 import { getPrintableArea } from "@/lib/printable-area";
 
@@ -25,11 +27,21 @@ interface ProductCustomizerProps {
   selectedVariant?: any;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  // The raw Shopify Storefront product node (not the derived catalog
+  // `product` above) -- needed by Buy Now for the exact same cartStore
+  // addItem() shape the product page's own Buy Now button uses. Optional
+  // so this stays backward-compatible with any other caller that doesn't
+  // (yet) pass it; Buy Now simply can't add to cart without it.
+  rawProductNode?: any;
 }
 
 type Step = "customize" | "quote" | "success";
 
-
+// Logo upload is mandatory before a quote can be requested -- these are the
+// only accepted formats (checked on upload, below).
+const ACCEPTED_LOGO_MIME_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/webp"];
+const LOGO_REQUIRED_MESSAGE = "Please upload your company logo to continue.";
+const LOGO_PROCESSING_FAILED_MESSAGE = "Logo processing failed. Please try again or upload a different image.";
 
 const processLogos = (src: string): Promise<{ uvLogo: string; laserLogo: string }> => {
   return new Promise((resolve) => {
@@ -187,7 +199,7 @@ async function measureVisibleBounds(
   });
 }
 
-export function ProductCustomizer({ product, selectedVariant, open, onOpenChange }: ProductCustomizerProps) {
+export function ProductCustomizer({ product, selectedVariant, open, onOpenChange, rawProductNode }: ProductCustomizerProps) {
   const [step, setStep] = useState<Step>("customize");
 
   // Below lg (1024px) -- the exact breakpoint the rest of this component's
@@ -234,6 +246,10 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
   const defaultPreviewImage = selectedVariant?.image?.url || product.images?.[0] || "https://placehold.co/800x1000/f8f9fa/a1a1aa?text=Product+Image";
 
   const [logo, setLogo] = useState<string | null>(null);
+  // Inline validation message shown near the upload area -- a rejected file
+  // type/size, or (set just before "Request a Quote"/submit) the reminder
+  // that a logo is required. Cleared on a valid upload or on removal.
+  const [logoUploadError, setLogoUploadError] = useState<string | null>(null);
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoBase64, setLogoBase64] = useState<string | null>(null);
   const [logoDataUrl, setLogoDataUrl] = useState<string | null>(null);
@@ -392,15 +408,56 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
     setActiveComponentIndex(newIndex);
   };
 
+  // A raw uploaded file (`logo`) is not by itself a VALID, submittable
+  // customization: handleLogoUpload sets `logo` synchronously at file-select
+  // time, then asynchronously processes it server-side (processLogoServer)
+  // into `uvLogo`/`laserLogo` -- the actual images the drag/position overlay
+  // renders (see currentDisplayLogo below) and the PDF/preview embed. If
+  // that processing fails, `logo` stays truthy but `uvLogo`/`laserLogo` stay
+  // null, which previously still satisfied a bare `!logo` check -- letting
+  // "Request a Quote" enable over a blank/broken logo overlay with nothing
+  // real to submit. Every gate below requires the PROCESSED result, not
+  // just the raw selection, for the currently-active component.
+  const hasProcessedLogo = Boolean(logo) && Boolean(uvLogo) && Boolean(laserLogo);
+
   /** For the currently-active component this reads the LIVE flat buffer
    * (componentStates isn't updated until the user switches away); for any
-   * other component it reads its last-saved state. */
+   * other component it reads its last-saved state. Requires the PROCESSED
+   * logo (see hasProcessedLogo above), not just a raw selection, in both
+   * branches -- propagateLogoToOtherComponents only ever writes a saved
+   * component's logo/uvLogo/laserLogo together, on its one success path, so
+   * this is consistent with how that data actually gets there, not a looser
+   * check for other components than the active one. */
   const isComponentCustomized = (index: number): boolean => {
     const comp = giftSetComponentsList[index];
     if (!comp) return false;
-    if (index === activeComponentIndex) return Boolean(logo);
-    return Boolean(componentStates[comp.id]?.logo);
+    if (index === activeComponentIndex) return hasProcessedLogo;
+    const saved = componentStates[comp.id];
+    return Boolean(saved?.logo) && Boolean(saved?.uvLogo) && Boolean(saved?.laserLogo);
   };
+
+  // Whether EVERY customizable component in a gift set already has a fully
+  // processed logo -- not just "at least one" (a single component's logo
+  // being ready is never, by itself, proof the whole set is configured).
+  // In practice this is equivalent to "any" today, since one upload
+  // propagates atomically to every customizable component on its one
+  // success path (propagateLogoToOtherComponents) -- but checking `every`
+  // here, rather than `some`, is what actually keeps that guarantee true
+  // instead of merely assuming it, and fails safe (stays disabled) if a
+  // future change ever makes per-component uploads independent.
+  const customizableComponentIndexes = giftSetComponentsList
+    .map((comp, i) => (comp.customizable ? i : -1))
+    .filter((i) => i >= 0);
+  const isFullyCustomized = isMultiComponentGiftSet
+    ? customizableComponentIndexes.length > 0 && customizableComponentIndexes.every((i) => isComponentCustomized(i))
+    : hasProcessedLogo;
+  // Direct purchase requires a valid logo -- the same gate as Request a
+  // Quote, since this is a mandatory-customization flow (a customer must
+  // not be able to buy without ever configuring their branding through
+  // this modal). The displayed Shopify price already includes branding --
+  // there is no separate charge to confirm, so once a logo is uploaded and
+  // processed, both actions are available on equal footing.
+  const canBuyNow = isFullyCustomized && !isProcessingLaser;
 
   /** The saved (or live, for the active one) state for a given component index -- used by the review list and by the quote-submission loop. */
   const getComponentState = (index: number): ComponentCustomization => {
@@ -747,6 +804,7 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
     requirements: ""
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isBuyingNow, setIsBuyingNow] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [refNumber, setRefNumber] = useState("");
   /**
@@ -1062,15 +1120,22 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (!file.type.startsWith("image/")) {
-        toast.error("Please upload a valid image file (PNG, JPG, SVG).");
+      if (!ACCEPTED_LOGO_MIME_TYPES.includes(file.type)) {
+        const message = "Please upload a valid logo image (PNG, JPG, or WebP).";
+        toast.error(message);
+        setLogoUploadError(message);
+        e.target.value = "";
         return;
       }
       if (file.size > 5 * 1024 * 1024) {
-        toast.error("File is too large (max 5MB).");
+        const message = "File is too large (max 5MB).";
+        toast.error(message);
+        setLogoUploadError(message);
+        e.target.value = "";
         return;
       }
-      
+      setLogoUploadError(null);
+
       setLogoFile(file);
       const url = URL.createObjectURL(file);
       setLogo(url);
@@ -1094,9 +1159,16 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
             toast.error("API Error: " + res.error);
             setUvLogo(null);
             setLaserLogo(null);
+            // Surfaced inline too, not just as a toast that can be missed --
+            // and critically, this is what keeps isFullyCustomized/
+            // hasProcessedLogo false until the customer retries, so neither
+            // "Request a Quote" nor a submission can proceed over a failed,
+            // unprocessed logo (see hasProcessedLogo above handleLogoUpload).
+            setLogoUploadError(LOGO_PROCESSING_FAILED_MESSAGE);
           } else {
             setUvLogo(res.uvLogoUrl);
             setLaserLogo(res.laserLogoUrl);
+            setLogoUploadError(null);
             toast.success("Logo processing complete!");
 
             // -------------------------------------------------------------------
@@ -1153,6 +1225,7 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
           toast.error("Network Error: " + (error.message || String(error)));
           setUvLogo(null);
           setLaserLogo(null);
+          setLogoUploadError(LOGO_PROCESSING_FAILED_MESSAGE);
         } finally {
           setIsProcessingLaser(false);
         }
@@ -1167,6 +1240,7 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
     setLogoBase64(null);
       setLogoDataUrl(null);
       setIsSelected(false);
+      setLogoUploadError(null);
     // Multi-component gift sets: there's one shared logo for the whole set,
     // so removing it clears every component's customization, not just the
     // currently active one.
@@ -1278,56 +1352,89 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
   };
   const handleBackToMobileStep1 = () => setMobileStep(1);
 
+  /**
+   * Captures the real, rendered customization snapshot(s) for whatever is
+   * currently configured -- one image for a single item, or one per
+   * customized gift-set component (switching the active component and
+   * waiting for its real photo to load before each capture, exactly as
+   * before this was factored out). Shared by handleProceedToQuote (quote
+   * flow) and handleBuyNow (direct purchase) so both submission paths
+   * capture the SAME real rendered composition the customer saw, via the
+   * same logic, rather than two independently-maintained copies of this
+   * component-switching dance.
+   */
+  const captureAllCustomizationSnapshots = async (): Promise<{
+    previewBase64: string;
+    giftSetPreviews: Record<string, string>;
+    finalStates: Record<string, ComponentCustomization>;
+  }> => {
+    if (isMultiComponentGiftSet) {
+      const finalStates: Record<string, ComponentCustomization> = { ...componentStates };
+      if (activeComponentIndex !== null) {
+        const currentId = giftSetComponentsList[activeComponentIndex]?.id;
+        if (currentId) finalStates[currentId] = currentFlatComponentState();
+      }
+
+      const previews: Record<string, string> = {};
+      for (let i = 0; i < giftSetComponentsList.length; i++) {
+        const comp = giftSetComponentsList[i]!;
+        const state = finalStates[comp.id];
+        if (!state?.logo) continue;
+        // Always switch explicitly, even if `i` looks like it's already
+        // the active component: `activeComponentIndex` here is a value
+        // closed over when this function started and never updates for
+        // the rest of this call, even though setActiveComponentIndex
+        // below DOES really change the DOM each iteration. Skipping the
+        // switch for whichever component happened to be active when the
+        // user clicked "Request a Quote" meant that component's capture
+        // silently reused whatever photo the PREVIOUS loop iteration had
+        // switched the DOM to -- confirmed live: both components' capture
+        // logged the exact same <img src> (the one from the iteration
+        // before). Unconditionally re-applying state + switching for
+        // every component removes the dependency on that stale value.
+        applyComponentStateToFlatBuffer(state);
+        setActiveComponentIndex(i);
+        await new Promise((r) => setTimeout(r, 50));
+        // Same resolution activeComponentImageUrl itself uses (variant
+        // match, else the component's own base image) -- computed here,
+        // not read back off `activeComponent`, since that's derived from
+        // React state that (per the comment above) this closure won't see
+        // update mid-loop.
+        const expectedSrc = comp.variantImages?.find((v) => v.title === selectedVariant?.title)?.imageUrl
+          ?? comp.imageUrl;
+        await waitForActiveImageLoad(expectedSrc);
+        previews[comp.id] = await captureCustomizationSnapshot();
+      }
+      setComponentPreviews(previews);
+      setFinalComponentStates(finalStates);
+      return { previewBase64: "", giftSetPreviews: previews, finalStates };
+    }
+    const snapshot = await captureCustomizationSnapshot();
+    setCustomizationSnapshot(snapshot);
+    return { previewBase64: snapshot, giftSetPreviews: {}, finalStates: {} };
+  };
+
   const handleProceedToQuote = async () => {
+    // Defense in depth: the "Request a Quote" button is already disabled
+    // without a fully processed logo, but this re-checks the actual state
+    // rather than trusting that disabled attribute alone (e.g. a stray
+    // Enter/Space on a focused-but-disabled control shouldn't be relied on
+    // to be inert across every browser/AT combination). isFullyCustomized,
+    // not a bare logo check -- a raw selection that failed processing (see
+    // hasProcessedLogo) must never be treated as ready to submit, and a
+    // gift set needs every customizable component done, not just one.
+    if (!isFullyCustomized) {
+      setLogoUploadError(logo && !hasProcessedLogo ? LOGO_PROCESSING_FAILED_MESSAGE : LOGO_REQUIRED_MESSAGE);
+      toast.error(logo && !hasProcessedLogo ? LOGO_PROCESSING_FAILED_MESSAGE : LOGO_REQUIRED_MESSAGE);
+      return;
+    }
     if (logo && isProcessingLaser) {
       toast.info("Please wait a moment for your logo to finish processing.");
       return;
     }
     setIsCapturingSnapshot(true);
     try {
-      if (isMultiComponentGiftSet) {
-        const finalStates: Record<string, ComponentCustomization> = { ...componentStates };
-        if (activeComponentIndex !== null) {
-          const currentId = giftSetComponentsList[activeComponentIndex]?.id;
-          if (currentId) finalStates[currentId] = currentFlatComponentState();
-        }
-
-        const previews: Record<string, string> = {};
-        for (let i = 0; i < giftSetComponentsList.length; i++) {
-          const comp = giftSetComponentsList[i]!;
-          const state = finalStates[comp.id];
-          if (!state?.logo) continue;
-          // Always switch explicitly, even if `i` looks like it's already
-          // the active component: `activeComponentIndex` here is a value
-          // closed over when this function started and never updates for
-          // the rest of this call, even though setActiveComponentIndex
-          // below DOES really change the DOM each iteration. Skipping the
-          // switch for whichever component happened to be active when the
-          // user clicked "Request a Quote" meant that component's capture
-          // silently reused whatever photo the PREVIOUS loop iteration had
-          // switched the DOM to -- confirmed live: both components' capture
-          // logged the exact same <img src> (the one from the iteration
-          // before). Unconditionally re-applying state + switching for
-          // every component removes the dependency on that stale value.
-          applyComponentStateToFlatBuffer(state);
-          setActiveComponentIndex(i);
-          await new Promise((r) => setTimeout(r, 50));
-          // Same resolution activeComponentImageUrl itself uses (variant
-          // match, else the component's own base image) -- computed here,
-          // not read back off `activeComponent`, since that's derived from
-          // React state that (per the comment above) this closure won't see
-          // update mid-loop.
-          const expectedSrc = comp.variantImages?.find((v) => v.title === selectedVariant?.title)?.imageUrl
-            ?? comp.imageUrl;
-          await waitForActiveImageLoad(expectedSrc);
-          previews[comp.id] = await captureCustomizationSnapshot();
-        }
-        setComponentPreviews(previews);
-        setFinalComponentStates(finalStates);
-      } else {
-        const snapshot = await captureCustomizationSnapshot();
-        setCustomizationSnapshot(snapshot);
-      }
+      await captureAllCustomizationSnapshots();
       setStep("quote");
     } finally {
       setIsCapturingSnapshot(false);
@@ -1336,6 +1443,27 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
 
   const submitQuote = async (e: React.FormEvent) => {
     e.preventDefault();
+    // Defense in depth, mirroring the check in handleProceedToQuote: a
+    // fully processed logo is already required to reach this form, but this
+    // re-validates against the actual frozen snapshot rather than trusting
+    // that earlier gate alone, per the requirement to not rely only on the
+    // button's disabled state. Requires uvLogo/laserLogo too, not just a
+    // raw logo reference (see hasProcessedLogo) -- and for a gift set,
+    // every customizable component, not just one (see isFullyCustomized).
+    // Sends the user back to fix it rather than silently failing.
+    const hasValidComponentLogo = (comp: GiftSetComponent) => {
+      const state = finalComponentStates[comp.id];
+      return Boolean(state?.logo) && Boolean(state?.uvLogo) && Boolean(state?.laserLogo);
+    };
+    const hasRequiredLogo = isMultiComponentGiftSet
+      ? giftSetComponentsList.filter((c) => c.customizable).every(hasValidComponentLogo)
+      : hasProcessedLogo;
+    if (!hasRequiredLogo) {
+      setLogoUploadError(LOGO_REQUIRED_MESSAGE);
+      toast.error(LOGO_REQUIRED_MESSAGE);
+      setStep("customize");
+      return;
+    }
     setIsSubmitting(true);
     setErrorMsg(null);
     try {
@@ -1450,6 +1578,143 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
       haptic("error");
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  // Buy Now: purchases the Shopify-listed product -- its displayed price
+  // already includes branding/customization, so there is no separate
+  // charge to confirm. Requires a valid uploaded logo, same gate as
+  // Request a Quote (isFullyCustomized/canBuyNow above), since this is a
+  // mandatory-customization flow. Before adding to cart, uploads the logo
+  // and rendered preview (uploadBuyNowCustomizationAssets) and attaches
+  // the result as Shopify cart line attributes, so the real order carries
+  // the branding details -- the only mechanism available to get
+  // customization data onto an order placed through Shopify's own
+  // checkout. Otherwise reuses the exact same cartStore.addItem() +
+  // prepareCheckout() mechanism the product page's own Buy Now button uses
+  // (src/routes/products.$slug.tsx) -- same cart, same Shopify checkout,
+  // nothing new.
+  const handleBuyNow = async () => {
+    if (isBuyingNow) return;
+    // Re-validated here too, not just via the button's disabled state --
+    // same defense-in-depth reasoning as submitQuote's own logo re-check.
+    if (!canBuyNow) {
+      setLogoUploadError(LOGO_REQUIRED_MESSAGE);
+      toast.error(LOGO_REQUIRED_MESSAGE);
+      return;
+    }
+    if (logo && isProcessingLaser) {
+      toast.info("Please wait a moment for your logo to finish processing.");
+      return;
+    }
+    if (!rawProductNode || !selectedVariant) {
+      toast.error("This product is currently available for enquiry only.");
+      return;
+    }
+    if (!selectedVariant.availableForSale) {
+      toast.error("Sorry, this option is out of stock.");
+      return;
+    }
+    setIsBuyingNow(true);
+    const win = window.open("", "_blank");
+    try {
+      // Captures the real rendered customization (same mechanism
+      // handleProceedToQuote uses) -- handleBuyNow can be clicked straight
+      // from step 1, before handleProceedToQuote's own capture would
+      // otherwise have run, so this can't assume customizationSnapshot/
+      // componentPreviews/finalComponentStates are already populated.
+      const { previewBase64, giftSetPreviews, finalStates } = await captureAllCustomizationSnapshots();
+
+      const giftSetCustomizations = isMultiComponentGiftSet
+        ? giftSetComponentsList.map((comp) => {
+            const state = finalStates[comp.id];
+            if (!state?.logo || !state.logoFile || !state.logoBase64) {
+              return { component: comp.name, customized: false as const };
+            }
+            const mm = getComponentDisplayMm(state);
+            return {
+              component: comp.name,
+              customized: true as const,
+              widthMm: mm?.wMm,
+              heightMm: mm?.hMm,
+              previewImage: giftSetPreviews[comp.id] || "",
+            };
+          })
+        : undefined;
+      const primaryCustomized = isMultiComponentGiftSet
+        ? giftSetComponentsList.map((c) => finalStates[c.id]).find((s) => s?.logo)
+        : undefined;
+      const effLogoFile = isMultiComponentGiftSet ? primaryCustomized?.logoFile ?? null : logoFile;
+      const effLogoBase64 = isMultiComponentGiftSet ? primaryCustomized?.logoBase64 ?? null : logoBase64;
+      const effScale = isMultiComponentGiftSet ? primaryCustomized?.logoScale : logoScale[0];
+      const effRotation = isMultiComponentGiftSet ? primaryCustomized?.logoRotation : logoRotation[0];
+
+      // Uploads the logo + rendered preview and returns plain-text cart
+      // line attributes carrying their public URLs -- the only mechanism
+      // available to get customization data onto a real Shopify order
+      // placed through Shopify's own checkout (see
+      // src/lib/buy-now-customization.functions.ts). Never blocks the
+      // purchase: a failed upload just means the order proceeds without
+      // those attributes, logged for follow-up rather than stopping checkout.
+      let lineAttributes: Array<{ key: string; value: string }> = [];
+      try {
+        const assetsResult = await uploadBuyNowCustomizationAssets({
+          data: {
+            printingMethod,
+            ...(effLogoFile && effLogoBase64
+              ? {
+                  logo: {
+                    name: effLogoFile.name,
+                    mimeType: effLogoFile.type,
+                    content: effLogoBase64,
+                    scale: effScale,
+                    rotation: effRotation,
+                    ...(!isMultiComponentGiftSet && isFinite(parseFloat(sizeInputW)) && isFinite(parseFloat(sizeInputH))
+                      ? { widthMm: parseFloat(sizeInputW), heightMm: parseFloat(sizeInputH) }
+                      : {}),
+                  },
+                }
+              : {}),
+            ...(previewBase64 ? { previewImage: previewBase64 } : {}),
+            ...(giftSetCustomizations ? { giftSetCustomizations } : {}),
+          },
+        });
+        if (assetsResult.ok) lineAttributes = assetsResult.attributes;
+      } catch (err) {
+        console.error("Failed to upload Buy Now customization assets:", err);
+      }
+
+      const qty = Math.max(1, parseInt(formData.quantity, 10) || 1);
+      const store = useCartStore.getState();
+      // A customized purchase always adds its own new line (see
+      // CartItem.lineAttributes in cartStore.ts); only a plain repeat visit
+      // with no attributes to attach reuses an existing identical line.
+      const alreadyInCartPlain = !lineAttributes.length && store.items.some((i) => i.variantId === selectedVariant.id && !i.lineAttributes?.length);
+      if (!alreadyInCartPlain) {
+        await store.addItem({
+          product: { node: rawProductNode },
+          variantId: selectedVariant.id,
+          variantTitle: selectedVariant.title,
+          price: selectedVariant.price ?? rawProductNode.priceRange?.minVariantPrice,
+          quantity: qty,
+          selectedOptions: selectedVariant.selectedOptions ?? [],
+          ...(lineAttributes.length ? { lineAttributes } : {}),
+        });
+      }
+      const checkoutUrl = await useCartStore.getState().prepareCheckout();
+      if (!checkoutUrl) {
+        win?.close();
+        toast.error("Couldn't start checkout. Please try again.");
+        return;
+      }
+      trackInitiateCheckout(useCartStore.getState().items);
+      if (win) win.location.href = checkoutUrl;
+      else window.open(checkoutUrl, "_blank");
+    } catch {
+      win?.close();
+      toast.error("Couldn't start checkout. Please try again.");
+    } finally {
+      setIsBuyingNow(false);
     }
   };
 
@@ -1723,9 +1988,9 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
                           <Loader2 className="w-8 h-8 animate-spin text-primary mb-2" />
                           <span className="text-xs font-medium">Processing Logo...</span>
                         </div>
-                      ) : (
+                      ) : hasProcessedLogo ? (
                         <img src={currentDisplayLogo || ""} alt="Custom Logo" crossOrigin="anonymous" className="w-full h-auto object-contain pointer-events-none" style={{ transform: `scaleX(${flipH ? -1 : 1}) scaleY(${flipV ? -1 : 1})`, mixBlendMode: activeMixBlend as any, filter: printingMethod === "Laser Engraving" ? laserDropShadow : "drop-shadow(0 4px 6px -1px rgb(0 0 0 / 0.1))" }} />
-                      )}
+                      ) : null}
                     
                     {isSelected && (
                       <div className="no-capture absolute inset-0 pointer-events-none">
@@ -1845,9 +2110,9 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
                           <span className="text-[13px] text-muted-foreground mt-2 max-w-[240px] leading-relaxed">
                             For best results, use a high-resolution image with a transparent background.
                           </span>
-                          <input 
-                            type="file" 
-                            accept="image/png, image/jpeg, image/svg+xml" 
+                          <input
+                            type="file"
+                            accept="image/png, image/jpeg, image/webp"
                             className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                             onChange={handleLogoUpload}
                           />
@@ -1864,14 +2129,19 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
                             </div>
                             <span className="text-sm font-medium truncate max-w-[150px]">{logoFile?.name || "logo.png"}</span>
                           </div>
-                          <Button variant="ghost" size="icon" onClick={handleRemoveLogo} className="text-muted-foreground hover:text-destructive h-8 w-8">
+                          <Button variant="ghost" size="icon" onClick={handleRemoveLogo} aria-label="Remove logo" className="text-muted-foreground hover:text-destructive h-8 w-8">
                             <X className="w-4 h-4" />
                           </Button>
                         </div>
                       )}
+                      {logoUploadError ? (
+                        <p role="alert" className="text-[13px] text-destructive leading-relaxed">{logoUploadError}</p>
+                      ) : !logo ? (
+                        <p className="text-[13px] text-muted-foreground leading-relaxed">{LOGO_REQUIRED_MESSAGE}</p>
+                      ) : null}
                     </div>
 
-                    <div className={`space-y-5 transition-opacity duration-300 ${!logo ? "opacity-40 pointer-events-none" : "opacity-100"}`}>
+                    <div className={`space-y-5 transition-opacity duration-300 ${!hasProcessedLogo ? "opacity-40 pointer-events-none" : "opacity-100"}`}>
                       <div className="flex items-center gap-3">
                         <div className="flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-bold">2</div>
                         <Label className="text-base font-semibold">Position Your Logo</Label>
@@ -2094,7 +2364,7 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
                   className="w-full text-base h-14 font-semibold shadow-sm"
                   size="lg"
                   onClick={handleProceedToQuote}
-                  disabled={isCapturingSnapshot}
+                  disabled={isCapturingSnapshot || !isFullyCustomized || isProcessingLaser}
                 >
                   {isCapturingSnapshot ? (
                     <>
@@ -2105,7 +2375,24 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
                     "Request a Quote"
                   )}
                 </Button>
-                
+
+                <Button
+                  variant="outline"
+                  className="w-full text-base h-14 font-semibold mt-3"
+                  size="lg"
+                  onClick={handleBuyNow}
+                  disabled={!canBuyNow || isBuyingNow}
+                >
+                  {isBuyingNow ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Starting checkout...
+                    </>
+                  ) : (
+                    "Buy Now"
+                  )}
+                </Button>
+
                 <p className="text-[11px] text-center text-muted-foreground mt-4 leading-relaxed max-w-[300px] mx-auto">
                   Preview is for visualization purposes. Final branding placement may vary slightly depending on the product and production method.
                 </p>
@@ -2390,10 +2677,10 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
                   </div>
                   
                   <div className="pt-6 mt-auto">
-                    <Button 
-                      type="submit" 
-                      form="quote-form" 
-                      className="w-full h-14 text-base font-semibold shadow-sm" 
+                    <Button
+                      type="submit"
+                      form="quote-form"
+                      className="w-full h-14 text-base font-semibold shadow-sm"
                       size="lg"
                       disabled={isSubmitting}
                     >
@@ -2404,6 +2691,23 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
                         </>
                       ) : (
                         "Submit Quote Request"
+                      )}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full h-14 text-base font-semibold mt-3"
+                      size="lg"
+                      onClick={handleBuyNow}
+                      disabled={!canBuyNow || isBuyingNow}
+                    >
+                      {isBuyingNow ? (
+                        <>
+                          <Loader2 className="w-5 h-5 mr-3 animate-spin" />
+                          Starting checkout...
+                        </>
+                      ) : (
+                        "Buy Now"
                       )}
                     </Button>
                     <p className="text-[11px] text-center text-muted-foreground mt-4 leading-relaxed">

@@ -24,6 +24,16 @@ export interface CartItem {
    * Optional on input: addItem() always derives the real value from
    * Shopify's mutation response, so callers never need to supply it. */
   image?: ShopifyImage | null;
+  /** Shopify cart line attributes (line-item properties) -- shown on the
+   * order in Shopify Admin and included in the orders/paid webhook payload
+   * (src/lib/shopify-order-webhook.server.ts reads them back). Used by
+   * ProductCustomizer's Buy Now to carry logo/printing-method/placement
+   * metadata through checkout onto the real order, wherever Shopify
+   * supports it -- plain text key/value pairs only (no images). When
+   * present, addItem() always adds a NEW line rather than merging into an
+   * existing same-variant line, so a customized purchase's attributes are
+   * never silently lost into a prior plain line's quantity bump. */
+  lineAttributes?: Array<{ key: string; value: string }>;
 }
 
 /** Selected-variant image, falling back to the product's featured image,
@@ -500,14 +510,24 @@ export const useCartStore = create<CartStore>()(
           const qtyBefore = get().items.find((i) => i.variantId === item.variantId)?.quantity ?? 0;
           try {
             const { items, cartId, clearCart } = get();
-            const existing = items.find((i) => i.variantId === item.variantId);
+            // A customized purchase (lineAttributes present) always becomes
+            // its own new line rather than merging into a prior plain line
+            // for the same variant -- merging would bump that existing
+            // line's quantity without ever attaching this item's
+            // attributes, silently losing the customization.
+            const existing = item.lineAttributes?.length ? undefined : items.find((i) => i.variantId === item.variantId);
+            const lineInput = {
+              quantity: item.quantity,
+              merchandiseId: item.variantId,
+              ...(item.lineAttributes?.length ? { attributes: item.lineAttributes } : {}),
+            };
 
             if (!cartId) {
               const buyerIdentity = currentBuyerIdentity();
               const attributes = attributionAttributes();
               const data = await storefrontApiRequest(CART_CREATE_MUTATION, {
                 input: {
-                  lines: [{ quantity: item.quantity, merchandiseId: item.variantId }],
+                  lines: [lineInput],
                   ...(buyerIdentity ? { buyerIdentity } : {}),
                   ...(attributes.length ? { attributes } : {}),
                 },
@@ -549,7 +569,7 @@ export const useCartStore = create<CartStore>()(
             } else {
               const data = await storefrontApiRequest(CART_LINES_ADD_MUTATION, {
                 cartId,
-                lines: [{ quantity: item.quantity, merchandiseId: item.variantId }],
+                lines: [lineInput],
               });
               const payload = data?.data?.cartLinesAdd;
               const errors: UserError[] = payload?.userErrors ?? [];

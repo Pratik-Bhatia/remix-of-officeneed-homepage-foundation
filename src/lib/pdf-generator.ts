@@ -128,6 +128,24 @@ export interface CorporateQuotePDFData {
      * rendered composition for that item, never redrawn from x/y/scale. */
     previewImageDataUrl?: string | undefined;
   }> | undefined;
+  /**
+   * ONLY set for the internal Buy Now / paid-order record (never for a
+   * quote request -- generateCorporateQuotePDF's quote-document output is
+   * byte-identical to before whenever this is omitted). Turns the document
+   * into "Internal Order Record" instead of "Quote Request", adds a
+   * payment-status block, and changes the footer disclaimer so it can
+   * never be mistaken for the customer's own invoice/receipt. Set only
+   * after Shopify's own orders/paid webhook has confirmed payment -- see
+   * src/lib/shopify-order-webhook.server.ts, which is the only caller that
+   * ever populates this field.
+   */
+  payment?: {
+    status: "Paid Online";
+    shopifyOrderNumber: string;
+    paymentDate: string;
+    amountPaid: string;
+    transactionReference?: string | undefined;
+  } | undefined;
 }
 
 /**
@@ -161,7 +179,11 @@ export async function generateCorporateQuotePDF(data: CorporateQuotePDFData): Pr
   doc.setFont("Roboto", "normal");
   doc.setTextColor(100, 100, 100);
   currentY = 28;
-  doc.text("Corporate Gifting - Quote Request", marginX, currentY);
+  doc.text(
+    data.payment ? "Corporate Gifting - Internal Order Record" : "Corporate Gifting - Quote Request",
+    marginX,
+    currentY,
+  );
 
   doc.setFontSize(10);
   doc.setTextColor(50, 50, 50);
@@ -172,6 +194,32 @@ export async function generateCorporateQuotePDF(data: CorporateQuotePDFData): Pr
   doc.setDrawColor(220, 220, 220);
   doc.line(marginX, currentY, 190, currentY);
   currentY += 10;
+
+  // Payment-status block -- internal Buy Now order record only. Set
+  // exclusively from a Shopify-confirmed orders/paid webhook (never from
+  // the frontend), so this is never shown unless payment actually
+  // succeeded. Visually distinct (bordered, bold) so it can't be missed or
+  // mistaken for a routine line item.
+  if (data.payment) {
+    doc.setFillColor(236, 253, 243);
+    doc.setDrawColor(34, 139, 87);
+    doc.roundedRect(marginX, currentY, 170, 26, 2, 2, "FD");
+    doc.setFontSize(12);
+    doc.setFont("Roboto", "bold");
+    doc.setTextColor(21, 128, 61);
+    doc.text(`PAID ONLINE`, marginX + 4, currentY + 8);
+    doc.setFontSize(9);
+    doc.setFont("Roboto", "normal");
+    doc.setTextColor(40, 40, 40);
+    doc.text(`Shopify Order: ${sanitizeText(data.payment.shopifyOrderNumber)}`, marginX + 4, currentY + 14);
+    doc.text(`Payment Date: ${sanitizeText(data.payment.paymentDate)}`, marginX + 4, currentY + 19);
+    doc.text(`Amount Paid: ${sanitizeText(data.payment.amountPaid)}`, marginX + 90, currentY + 14);
+    if (data.payment.transactionReference) {
+      doc.text(`Reference: ${sanitizeText(data.payment.transactionReference)}`, marginX + 90, currentY + 19);
+    }
+    doc.setTextColor(0, 0, 0);
+    currentY += 26 + 10;
+  }
 
   // Customer Details & Order Details (two columns)
   doc.setFontSize(12);
@@ -378,7 +426,9 @@ export async function generateCorporateQuotePDF(data: CorporateQuotePDFData): Pr
     doc.setFont("Roboto", "normal");
     doc.setFontSize(8);
     doc.setTextColor(150, 150, 150);
-    const footerText = `Thank you for choosing OfficeNeed. This document is a quote request summary, not a final tax invoice. | Page ${i} of ${pageCount}`;
+    const footerText = data.payment
+      ? `Internal OfficeNeed team record only -- not the customer's invoice or receipt. | Page ${i} of ${pageCount}`
+      : `Thank you for choosing OfficeNeed. This document is a quote request summary, not a final tax invoice. | Page ${i} of ${pageCount}`;
     doc.text(footerText, marginX, 285);
   }
 

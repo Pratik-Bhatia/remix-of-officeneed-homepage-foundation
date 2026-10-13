@@ -3,6 +3,17 @@ import { createStart, createCsrfMiddleware, createMiddleware } from "@tanstack/r
 import { attachSupabaseAuth } from "./integrations/supabase/auth-attacher";
 import { renderErrorPage } from "./lib/error-page";
 import { handleAccessGateRequest } from "./lib/access-gate.server";
+import { handleShopifyOrderWebhookRequest } from "./lib/shopify-order-webhook.server";
+
+// Shopify orders/paid webhook -- see src/lib/shopify-order-webhook.server.ts.
+// Placed ahead of the access gate so a paid order's internal PDF still
+// generates even while the pre-launch gate is enabled; a no-op for every
+// other path.
+const shopifyOrderWebhookMiddleware = createMiddleware().server(async ({ request, pathname, next }) => {
+  const webhookResponse = await handleShopifyOrderWebhookRequest({ request, pathname });
+  if (webhookResponse) return webhookResponse;
+  return next();
+});
 
 // Temporary, pre-launch access gate -- see src/lib/access-gate.server.ts
 // for the toggle and full behavior. A no-op (always calls next()) unless
@@ -36,6 +47,6 @@ const csrfMiddleware = createCsrfMiddleware({
 });
 
 export const startInstance = createStart(() => ({
-  requestMiddleware: [errorMiddleware, accessGateMiddleware, csrfMiddleware],
+  requestMiddleware: [errorMiddleware, shopifyOrderWebhookMiddleware, accessGateMiddleware, csrfMiddleware],
   functionMiddleware: [attachSupabaseAuth],
 }));

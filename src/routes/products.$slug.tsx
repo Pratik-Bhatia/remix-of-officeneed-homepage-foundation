@@ -1061,11 +1061,12 @@ function ProductDetail() {
                 </div>
               )}
               
-              <ProductCustomizer 
-                product={product} 
+              <ProductCustomizer
+                product={product}
                 selectedVariant={selectedVariant}
-                open={customizerOpen} 
-                onOpenChange={setCustomizerOpen} 
+                rawProductNode={node}
+                open={customizerOpen}
+                onOpenChange={setCustomizerOpen}
               />
 
               
