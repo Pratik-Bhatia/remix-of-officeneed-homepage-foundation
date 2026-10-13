@@ -34,9 +34,9 @@ function Index() {
       <Navbar />
       <main>
         <Hero />
+        <ShopByCategory />
         <Bestsellers />
         <CorporateGiftingCarousel />
-        <ShopByCategory />
       </main>
       <Footer />
     </div>
