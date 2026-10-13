@@ -519,7 +519,7 @@ export const useCartStore = create<CartStore>()(
             const lineInput = {
               quantity: item.quantity,
               merchandiseId: item.variantId,
-              ...(item.lineAttributes?.length ? { attributes: item.lineAttributes } : {}),
+              ...(item.lineAttributes?.length ? { attributes: toCheckoutLineAttributes(item.lineAttributes) } : {}),
             };
 
             if (!cartId) {
