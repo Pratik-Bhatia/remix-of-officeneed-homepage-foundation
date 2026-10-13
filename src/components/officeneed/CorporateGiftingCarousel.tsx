@@ -26,7 +26,7 @@ export function CorporateGiftingCarousel() {
   const [canNext, setCanNext] = useState(true);
   const { products: catalogue, pricesReady } = useShopifyBestsellers(bestsellerProducts);
   const products = useMemo(
-    () => selectCorporateGifts(catalogue).map((p) => ({ ...p, badge: undefined })),
+    () => selectCorporateGifts(catalogue).map(({ badge: _badge, ...p }) => p),
     [catalogue],
   );
 
