@@ -6,8 +6,6 @@ import {
   ChevronRight,
   ChevronDown,
   Mail,
-  Phone,
-  MapPin,
   ArrowRight,
   ShieldCheck,
   HelpCircle,
@@ -497,18 +495,6 @@ function TermsAndConditionsPage() {
                         <a href={`mailto:${contactConfig.email}`} className="hover:text-white transition-colors">
                           {contactConfig.email}
                         </a>
-                      </div>
-                      <div className="flex items-center gap-3 text-[15px] text-white/85">
-                        <Phone size={17} className="text-white/60 shrink-0" />
-                        <a href={`tel:${contactConfig.phone}`} className="hover:text-white transition-colors">
-                          {contactConfig.phone}
-                        </a>
-                      </div>
-                      <div className="flex items-start gap-3 text-[15px] text-white/85">
-                        <MapPin size={18} className="text-white/60 shrink-0 mt-0.5" />
-                        <span>
-                          {contactConfig.address.line1}, {contactConfig.address.line2}
-                        </span>
                       </div>
                     </div>
                   </div>
