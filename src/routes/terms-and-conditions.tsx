@@ -486,7 +486,7 @@ function TermsAndConditionsPage() {
                       Officeneed
                     </h3>
                     <p className="text-white/70 text-[15px] leading-relaxed mb-6">
-                      For legal compliance, contractual agreements, or immediate procurement inquiries, reach out to our headquarters.
+                      For legal compliance, contractual agreements, or immediate procurement inquiries, reach out to us.
                     </p>
 
                     <div className="space-y-3.5">
