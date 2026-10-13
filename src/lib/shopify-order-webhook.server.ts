@@ -103,6 +103,8 @@ interface BuyNowCustomizationRecord {
     customized: boolean;
     widthMm?: number;
     heightMm?: number;
+    rotation?: number;
+    flip?: string;
     previewUrl?: string | null;
   }> | null;
 }
@@ -289,13 +291,41 @@ async function processOrderPaid(payload: ShopifyOrderWebhookPayload): Promise<vo
     // the frontend could claim beyond that one opaque reference, which is
     // all that actually landed on the real, paid Shopify order.
     const record = await lookUpCustomizationRecord(client, payload);
-    const [logoImageDataUrl, previewImageDataUrl] = await Promise.all([
+    const customizedComponents = (record?.customization_data ?? []).filter((c) => c.customized);
+    const [logoImageDataUrl, mainPreviewDataUrl, ...componentPreviewDataUrls] = await Promise.all([
       fetchAsDataUrl(record?.logo_url ?? undefined),
       fetchAsDataUrl(record?.preview_image_url ?? undefined),
+      ...customizedComponents.map((c) => fetchAsDataUrl(c.previewUrl ?? undefined)),
     ]);
-    const giftSetComponents = (record?.customization_data ?? [])
-      .filter((c) => c.customized)
-      .map((c) => ({ name: c.component, customized: true as const, variant }));
+    // Each gift-set component carries its OWN captured mockup (uploaded by
+    // Buy Now as previewUrl) plus its placement -- previously these were
+    // dropped here, which left every component as "No captured preview".
+    const giftSetComponents = customizedComponents.map((c, i) => {
+      const previewImageDataUrl = componentPreviewDataUrls[i];
+      if (c.previewUrl && !previewImageDataUrl) {
+        console.error(`[shopify-order-webhook] order ${orderNumber}: component "${c.component}" preview could not be fetched from storage.`);
+      }
+      return {
+        name: c.component,
+        customized: true as const,
+        variant,
+        logoFileName: record?.logo_filename ?? undefined,
+        widthMm: c.widthMm,
+        heightMm: c.heightMm,
+        rotation: c.rotation,
+        flip: c.flip,
+        ...(previewImageDataUrl ? { previewImageDataUrl } : {}),
+      };
+    });
+    // Main "Customization Preview": the single captured mockup if one was
+    // saved; for gift sets (which save per-component mockups only) the
+    // first component's real mockup. Never the bare logo -- that is not a
+    // product preview.
+    const previewImageDataUrl = mainPreviewDataUrl ?? giftSetComponents.find((c) => c.previewImageDataUrl)?.previewImageDataUrl;
+    if (record && !previewImageDataUrl) {
+      console.error(`[shopify-order-webhook] order ${orderNumber}: no customization preview available (record ${record.id}, preview_image_url=${record.preview_image_url ? "set but unfetchable" : "not saved"}).`);
+    }
+    void logoImageDataUrl;
 
     const pdfBuffer = await generateCorporateQuotePDF({
       refNumber: orderNumber,
@@ -322,7 +352,7 @@ async function processOrderPaid(payload: ShopifyOrderWebhookPayload): Promise<vo
             },
           }
         : {}),
-      ...(previewImageDataUrl ? { previewImageDataUrl } : logoImageDataUrl ? { previewImageDataUrl: logoImageDataUrl } : {}),
+      ...(previewImageDataUrl ? { previewImageDataUrl } : {}),
       ...(giftSetComponents.length ? { giftSetComponents } : {}),
       payment: {
         status: "Paid Online",
