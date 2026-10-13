@@ -18,7 +18,7 @@ import { motion, useMotionValue } from "motion/react";
 // killing the customization snapshot capture. Same API, drop-in fix.
 import html2canvas from "html2canvas-pro";
 import { submitCorporateQuote } from "@/lib/corporate-quotes.functions";
-import { uploadBuyNowCustomizationAssets } from "@/lib/buy-now-customization.functions";
+import { saveBuyNowCustomization } from "@/lib/buy-now-customization.functions";
 import { getBrandingLimits, computeEffectiveMaxScale, computeGeometricMaxScale, computeMinEffectiveScale, scaleToPhysicalMm, widthMmToScale, heightMmToScale, MIN_LOGO_SIZE_MM, GIFT_SET_REFERENCE_WIDTH_MM, CORPORATE_GIFTING_DEFAULT_REFERENCE_WIDTH_MM, type PrintingMethod, type BrandingLimits } from "@/lib/branding-limits";
 import { getPrintableArea } from "@/lib/printable-area";
 
@@ -1585,10 +1585,15 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
   // already includes branding/customization, so there is no separate
   // charge to confirm. Requires a valid uploaded logo, same gate as
   // Request a Quote (isFullyCustomized/canBuyNow above), since this is a
-  // mandatory-customization flow. Uploads the logo and rendered preview
-  // (uploadBuyNowCustomizationAssets) and attaches the result as Shopify
-  // cart line attributes, so the real order carries the branding details.
-  // Checkout itself goes through cartStore's createStandaloneCheckout, NOT
+  // mandatory-customization flow. Saves the full customization (logo,
+  // placement, dimensions, printing method, gift-set breakdown) to a
+  // persisted Supabase record BEFORE checkout (saveBuyNowCustomization),
+  // then attaches only that record's compact id as a Shopify cart line
+  // attribute -- the orders/paid webhook
+  // (src/lib/shopify-order-webhook.server.ts) reads that one id back to
+  // look up the full record once payment is verified, rather than trying
+  // to reconstruct structured data from text cart properties. Checkout
+  // itself goes through cartStore's createStandaloneCheckout, NOT
   // addItem()/prepareCheckout() -- a deliberately SEPARATE, throwaway
   // Shopify cart, never the customer's persistent one, so abandoning this
   // checkout can never leave an unexpected item sitting in their regular
@@ -1626,6 +1631,10 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
       // componentPreviews/finalComponentStates are already populated.
       const { previewBase64, giftSetPreviews, finalStates } = await captureAllCustomizationSnapshots();
 
+      // Mirrors submitQuote's own giftSetCustomizations builder exactly
+      // (position/rotation/flip included, not just size) -- the same
+      // structured shape, just persisted to buy_now_customization_records
+      // instead of embedded in a quote-request email/PDF payload directly.
       const giftSetCustomizations = isMultiComponentGiftSet
         ? giftSetComponentsList.map((comp) => {
             const state = finalStates[comp.id];
@@ -1638,6 +1647,9 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
               customized: true as const,
               widthMm: mm?.wMm,
               heightMm: mm?.hMm,
+              position: state.logoPos,
+              rotation: state.logoRotation,
+              flip: state.flipH && state.flipV ? "both" : state.flipH ? "horizontal" : state.flipV ? "vertical" : "none",
               previewImage: giftSetPreviews[comp.id] || "",
             };
           })
@@ -1649,18 +1661,30 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
       const effLogoBase64 = isMultiComponentGiftSet ? primaryCustomized?.logoBase64 ?? null : logoBase64;
       const effScale = isMultiComponentGiftSet ? primaryCustomized?.logoScale : logoScale[0];
       const effRotation = isMultiComponentGiftSet ? primaryCustomized?.logoRotation : logoRotation[0];
+      const effFlipH = isMultiComponentGiftSet ? (primaryCustomized?.flipH ?? false) : flipH;
+      const effFlipV = isMultiComponentGiftSet ? (primaryCustomized?.flipV ?? false) : flipV;
+      const effLogoPos = isMultiComponentGiftSet ? primaryCustomized?.logoPos : logoPos;
 
-      // Uploads the logo + rendered preview and returns plain-text cart
-      // line attributes carrying their public URLs -- the only mechanism
-      // available to get customization data onto a real Shopify order
-      // placed through Shopify's own checkout (see
-      // src/lib/buy-now-customization.functions.ts). Never blocks the
-      // purchase: a failed upload just means the order proceeds without
-      // those attributes, logged for follow-up rather than stopping checkout.
+      const qty = Math.max(1, parseInt(formData.quantity, 10) || 1);
+
+      // Saves the full customization to Supabase BEFORE checkout and
+      // returns only a compact record id -- see
+      // src/lib/buy-now-customization.functions.ts for why (cart
+      // attribute values are length-limited and a poor place to carry
+      // structured placement/dimension data). Never blocks the purchase:
+      // a failed save just means the order proceeds with no record to
+      // attach, logged for follow-up rather than stopping checkout --
+      // the webhook degrades gracefully (order/payment details only, no
+      // branding section) when no record is found for an order, exactly
+      // the "missing customization data" case this is designed to survive.
       let lineAttributes: Array<{ key: string; value: string }> = [];
       try {
-        const assetsResult = await uploadBuyNowCustomizationAssets({
+        const saveResult = await saveBuyNowCustomization({
           data: {
+            variantId: selectedVariant.id,
+            productName: product.name,
+            productVariant: selectedVariant?.title || product.variants?.[0]?.title,
+            quantity: qty,
             printingMethod,
             ...(effLogoFile && effLogoBase64
               ? {
@@ -1670,6 +1694,10 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
                     content: effLogoBase64,
                     scale: effScale,
                     rotation: effRotation,
+                    flipH: effFlipH,
+                    flipV: effFlipV,
+                    x: effLogoPos?.x,
+                    y: effLogoPos?.y,
                     ...(!isMultiComponentGiftSet && isFinite(parseFloat(sizeInputW)) && isFinite(parseFloat(sizeInputH))
                       ? { widthMm: parseFloat(sizeInputW), heightMm: parseFloat(sizeInputH) }
                       : {}),
@@ -1680,12 +1708,16 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
             ...(giftSetCustomizations ? { giftSetCustomizations } : {}),
           },
         });
-        if (assetsResult.ok) lineAttributes = assetsResult.attributes;
+        if (saveResult.ok && saveResult.recordId) {
+          lineAttributes.push({ key: "_Customization Record", value: saveResult.recordId });
+        }
       } catch (err) {
-        console.error("Failed to upload Buy Now customization assets:", err);
+        console.error("Failed to save Buy Now customization:", err);
       }
-
-      const qty = Math.max(1, parseInt(formData.quantity, 10) || 1);
+      // "Printing Method" is the one customer-visible line property
+      // (see cartStore.ts's toCheckoutLineAttributes) -- everything else
+      // is internal via the record reference above.
+      if (printingMethod) lineAttributes.push({ key: "Printing Method", value: printingMethod });
       // A standalone Shopify cart, created fresh for exactly this
       // purchase -- never the customer's persistent cart/items state (see
       // createStandaloneCheckout in cartStore.ts). Abandoning this

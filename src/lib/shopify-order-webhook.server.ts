@@ -69,52 +69,97 @@ interface ShopifyOrderWebhookPayload {
     quantity?: number;
     price?: string;
     // Shopify's name for cart line attributes once they land on the real
-    // order -- this is how ProductCustomizer.tsx's Buy Now customization
-    // metadata (see src/lib/buy-now-customization.functions.ts and
-    // CartItem.lineAttributes in src/stores/cartStore.ts) actually arrives
-    // here: Shopify carries cart line attributes through checkout onto the
-    // order's line_items as `properties`, no separate lookup needed.
+    // order -- this is how the "_Customization Record" reference
+    // (ProductCustomizer.tsx's handleBuyNow, via
+    // src/lib/buy-now-customization.functions.ts) actually arrives here:
+    // Shopify carries cart line attributes through checkout onto the
+    // order's line_items as `properties`. Only that one reference id is
+    // read from here; the full customization lives in Supabase (see
+    // lookUpCustomizationRecord below), not reconstructed from this text.
     properties?: Array<{ name: string; value: string }>;
   }>;
 }
 
-interface ParsedCustomization {
-  printingMethod: string | undefined;
-  logoFileName: string | undefined;
-  logoImageUrl: string | undefined;
-  logoSizeMm: string | undefined;
-  logoRotation: string | undefined;
-  previewImageUrl: string | undefined;
-  giftSetComponents: Array<{ name: string; detail: string }>;
+/** Row shape read back from buy_now_customization_records (see the
+ * matching migration). Nullable fields mirror the nullable DB columns. */
+interface BuyNowCustomizationRecord {
+  id: string;
+  product_name: string | null;
+  product_variant: string | null;
+  quantity: number | null;
+  printing_method: string | null;
+  logo_filename: string | null;
+  logo_url: string | null;
+  logo_width_mm: number | null;
+  logo_height_mm: number | null;
+  logo_position_x: number | null;
+  logo_position_y: number | null;
+  logo_rotation: number | null;
+  logo_flip_horizontal: boolean | null;
+  logo_flip_vertical: boolean | null;
+  preview_image_url: string | null;
+  customization_data: Array<{
+    component: string;
+    customized: boolean;
+    widthMm?: number;
+    heightMm?: number;
+    previewUrl?: string | null;
+  }> | null;
 }
 
-/** Reads back the plain-text cart line attributes Buy Now attached
- * (uploadBuyNowCustomizationAssets) from the order's own line_items --
- * never trusts anything the frontend might claim about customization
- * outside of what Shopify itself carried onto the paid order. Returns
- * undefined if the order has no customization properties at all (a Buy
- * Now purchase always has some, since it requires a valid logo -- absence
- * here just means an older order, or the asset upload failed and the
- * purchase proceeded without attributes). */
-function parseCustomizationFromLineItems(payload: ShopifyOrderWebhookPayload): ParsedCustomization | undefined {
+/** Reads the "_Customization Record" reference Buy Now attached to each
+ * line item (see saveBuyNowCustomization) and looks up the FULL, real
+ * record in Supabase -- never trusts anything the frontend might claim
+ * about customization beyond that one opaque id, which is all Shopify
+ * actually carried through from the cart onto this paid order. Returns
+ * undefined if no reference is present at all (an order placed before
+ * this existed, or the record-save failed and checkout proceeded without
+ * one) OR if the referenced record can't be found (deleted/expired) --
+ * both degrade to "no branding section in the PDF", never a thrown error,
+ * since a plain order summary is still useful to the team either way. */
+async function lookUpCustomizationRecord(
+  client: ReturnType<typeof getUploadClient>,
+  payload: ShopifyOrderWebhookPayload,
+): Promise<BuyNowCustomizationRecord | undefined> {
   const properties = payload.line_items?.flatMap((li) => li.properties ?? []) ?? [];
-  if (properties.length === 0) return undefined;
-  // Internal properties are "_"-prefixed (Shopify hides these from the
-  // customer-facing checkout); older orders used unprefixed names.
-  const get = (name: string) =>
-    properties.find((p) => p.name === `_${name}`)?.value ?? properties.find((p) => p.name === name)?.value;
-  const giftSetComponents = properties
-    .filter((p) => /^_?Component: /.test(p.name))
-    .map((p) => ({ name: p.name.replace(/^_?Component: /, ""), detail: p.value }));
-  return {
-    printingMethod: get("Printing Method"),
-    logoFileName: get("Logo File"),
-    logoImageUrl: get("Logo Image"),
-    logoSizeMm: get("Logo Size (mm)"),
-    logoRotation: get("Logo Rotation"),
-    previewImageUrl: get("Customization Preview"),
-    giftSetComponents,
-  };
+  const recordId = properties.find((p) => p.name === "_Customization Record" || p.name === "Customization Record")?.value;
+  if (!recordId || !client) return undefined;
+  try {
+    const { data, error } = await client.from("buy_now_customization_records").select("*").eq("id", recordId).maybeSingle();
+    if (error) {
+      console.error("[shopify-order-webhook] failed to look up customization record:", error);
+      return undefined;
+    }
+    if (!data) {
+      console.log(`[shopify-order-webhook] no customization record found for id ${recordId} -- proceeding without one.`);
+      return undefined;
+    }
+    return data as BuyNowCustomizationRecord;
+  } catch (err) {
+    console.error("[shopify-order-webhook] exception looking up customization record:", err);
+    return undefined;
+  }
+}
+
+/** Marks the customization record used for this order as fulfilled, so a
+ * later retry/redelivery of the same webhook event (or an unrelated
+ * future order that somehow referenced the same id) can tell it's already
+ * been used -- mirrors markOrderStatus's own idempotency reasoning, just
+ * for the customization record's own lifecycle rather than the PDF-sent
+ * log. Never thrown on failure -- this is a bookkeeping nicety, not a
+ * condition for whether the email already went out (paid_order_internal_pdf_log
+ * is what actually prevents a duplicate email). */
+async function markCustomizationRecordFulfilled(
+  client: ReturnType<typeof getUploadClient>,
+  recordId: string,
+  orderId: string,
+): Promise<void> {
+  if (!client) return;
+  try {
+    await client.from("buy_now_customization_records").update({ status: "fulfilled", shopify_order_id: orderId }).eq("id", recordId);
+  } catch (err) {
+    console.error("[shopify-order-webhook] failed to mark customization record fulfilled:", err);
+  }
 }
 
 /** jsPDF needs image bytes directly (a data: URL), not a remote URL it can
@@ -236,53 +281,49 @@ async function processOrderPaid(payload: ShopifyOrderWebhookPayload): Promise<vo
     const variant = firstLine?.variant_title;
     const quantity = payload.line_items?.reduce((sum, li) => sum + (li.quantity ?? 0), 0) ?? firstLine?.quantity ?? 0;
 
-    // Buy Now attaches customization as cart line attributes, which
-    // Shopify carries through onto the order's line_items as `properties`
-    // (see parseCustomizationFromLineItems) -- this is the ONLY place this
-    // handler ever reads logo/branding details from, never anything the
-    // frontend could claim outside of what actually landed on the real,
-    // paid Shopify order.
-    const customization = parseCustomizationFromLineItems(payload);
+    // Buy Now attaches a compact "_Customization Record" reference as a
+    // cart line attribute, which Shopify carries through onto the order's
+    // line_items as `properties`; this looks that id up and reads the
+    // FULL, real customization from Supabase -- this is the ONLY place
+    // this handler ever reads logo/branding details from, never anything
+    // the frontend could claim beyond that one opaque reference, which is
+    // all that actually landed on the real, paid Shopify order.
+    const record = await lookUpCustomizationRecord(client, payload);
     const [logoImageDataUrl, previewImageDataUrl] = await Promise.all([
-      fetchAsDataUrl(customization?.logoImageUrl),
-      fetchAsDataUrl(customization?.previewImageUrl),
+      fetchAsDataUrl(record?.logo_url ?? undefined),
+      fetchAsDataUrl(record?.preview_image_url ?? undefined),
     ]);
+    const giftSetComponents = (record?.customization_data ?? [])
+      .filter((c) => c.customized)
+      .map((c) => ({ name: c.component, customized: true as const, variant }));
 
     const pdfBuffer = await generateCorporateQuotePDF({
       refNumber: orderNumber,
       date: new Date().toLocaleDateString("en-IN", { year: "numeric", month: "long", day: "numeric" }),
       customer: { name: customerName, company: "—", email: customerEmail, phone: customerPhone },
       order: {
-        productName,
-        variant,
-        quantity,
-        printingMethod: customization?.printingMethod,
+        productName: record?.product_name ?? productName,
+        variant: record?.product_variant ?? variant,
+        quantity: record?.quantity ?? quantity,
+        printingMethod: record?.printing_method ?? undefined,
         location: "—",
       },
-      ...(customization?.logoFileName
+      ...(record?.logo_filename
         ? {
             logo: {
-              fileName: customization.logoFileName,
-              ...(customization.logoSizeMm
-                ? (() => {
-                    const [w, h] = customization.logoSizeMm!.split(" x ").map(Number);
-                    return isFinite(w!) && isFinite(h!) ? { widthMm: w, heightMm: h } : {};
-                  })()
-                : {}),
-              rotation: customization.logoRotation ? parseFloat(customization.logoRotation) : undefined,
+              fileName: record.logo_filename,
+              positionX: record.logo_position_x ?? undefined,
+              positionY: record.logo_position_y ?? undefined,
+              widthMm: record.logo_width_mm ?? undefined,
+              heightMm: record.logo_height_mm ?? undefined,
+              rotation: record.logo_rotation ?? undefined,
+              flipHorizontal: record.logo_flip_horizontal ?? undefined,
+              flipVertical: record.logo_flip_vertical ?? undefined,
             },
           }
         : {}),
       ...(previewImageDataUrl ? { previewImageDataUrl } : logoImageDataUrl ? { previewImageDataUrl: logoImageDataUrl } : {}),
-      ...(customization?.giftSetComponents.length
-        ? {
-            giftSetComponents: customization.giftSetComponents.map((c) => ({
-              name: c.name,
-              customized: true,
-              variant,
-            })),
-          }
-        : {}),
+      ...(giftSetComponents.length ? { giftSetComponents } : {}),
       payment: {
         status: "Paid Online",
         shopifyOrderNumber: orderNumber,
@@ -296,11 +337,11 @@ async function processOrderPaid(payload: ShopifyOrderWebhookPayload): Promise<vo
       <h2>Order Paid Online: ${orderNumber}</h2>
       <p><strong>Status:</strong> Paid Online</p>
       <p><strong>Customer:</strong> ${customerName} (${customerEmail}${customerPhone !== "—" ? `, ${customerPhone}` : ""})</p>
-      <p><strong>Product:</strong> ${productName}${variant ? ` — ${variant}` : ""}</p>
-      <p><strong>Quantity:</strong> ${quantity}</p>
+      <p><strong>Product:</strong> ${record?.product_name ?? productName}${(record?.product_variant ?? variant) ? ` — ${record?.product_variant ?? variant}` : ""}</p>
+      <p><strong>Quantity:</strong> ${record?.quantity ?? quantity}</p>
       <p><strong>Amount Paid:</strong> ${formatAmount(payload.total_price, payload.currency)}</p>
-      ${customization?.logoFileName ? `<p><strong>Logo:</strong> ${customization.logoFileName}${customization.logoSizeMm ? ` (${customization.logoSizeMm} mm)` : ""}</p>` : ""}
-      ${customization?.printingMethod ? `<p><strong>Printing Method:</strong> ${customization.printingMethod}</p>` : ""}
+      ${record?.logo_filename ? `<p><strong>Logo:</strong> ${record.logo_filename}${record.logo_width_mm && record.logo_height_mm ? ` (${record.logo_width_mm.toFixed(1)} x ${record.logo_height_mm.toFixed(1)} mm)` : ""}</p>` : ""}
+      ${record?.printing_method ? `<p><strong>Printing Method:</strong> ${record.printing_method}</p>` : ""}
       <p><em>Internal order record attached as a PDF. This is not the customer's invoice -- it is sent to the OfficeNeed team only.</em></p>
     `;
 
@@ -313,6 +354,7 @@ async function processOrderPaid(payload: ShopifyOrderWebhookPayload): Promise<vo
     if (!sent) throw new Error("sendInternalHtmlEmail returned false (email not configured or send failed).");
 
     await markOrderStatus(client, orderId, "sent");
+    if (record) await markCustomizationRecordFulfilled(client, record.id, orderId);
     console.log(`[shopify-order-webhook] order ${orderNumber}: internal PDF generated and emailed.`);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
