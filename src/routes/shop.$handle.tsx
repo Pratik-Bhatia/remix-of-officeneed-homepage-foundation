@@ -15,23 +15,55 @@ export const Route = createFileRoute("/shop/$handle")({
   validateSearch: (search: Record<string, unknown>): { variant?: string } =>
     search["variant"] != null && String(search["variant"]) !== "" ? { variant: String(search["variant"]) } : {},
   component: ShopProductPage,
-  head: () => ({
-    meta: [
-      { title: "Product | OfficeNeed Shop" },
-      {
-        name: "description",
-        content:
-          "Product details, variants and pricing from the OfficeNeed store, with secure Shopify checkout.",
-      },
-      { property: "og:title", content: "Product | OfficeNeed Shop" },
-      {
-        property: "og:description",
-        content: "Product details, variants and pricing from the OfficeNeed store.",
-      },
-      { property: "og:type", content: "product" },
-      { name: "twitter:card", content: "summary_large_image" },
-    ],
-  }),
+  loader: async ({ params }) => {
+    // Anonymous fetch for page metadata only; the page itself still loads
+    // (and prices) the product client-side exactly as before.
+    try {
+      const product = await fetchProductByHandle(params.handle);
+      if (!product) return { meta: null };
+      const img = product.featuredImage?.url ?? product.images.edges[0]?.node.url ?? null;
+      return {
+        meta: {
+          title: product.title,
+          description: (product.description || `${product.title} from Officeneed.`).replace(/\s+/g, " ").trim().slice(0, 300),
+          image: img,
+        },
+      };
+    } catch {
+      return { meta: null };
+    }
+  },
+  head: ({ params, loaderData }) => {
+    const url = `https://officeneed.store/shop/${params.handle}`;
+    const m = loaderData?.meta ?? null;
+    const title = m ? `${m.title} — Officeneed` : "Product — Officeneed";
+    const description = m?.description ?? "Product details, variants and pricing from Officeneed, with secure checkout.";
+    let image: string | null = null;
+    if (m?.image) {
+      try {
+        const u = new URL(m.image);
+        u.searchParams.set("width", "1200");
+        u.searchParams.set("height", "630");
+        u.searchParams.set("crop", "center");
+        image = u.toString();
+      } catch {
+        image = null;
+      }
+    }
+    return {
+      meta: [
+        { title },
+        { name: "description", content: description },
+        { property: "og:title", content: title },
+        { property: "og:description", content: description },
+        { property: "og:type", content: "product" },
+        { property: "og:url", content: url },
+        { name: "twitter:card", content: image ? "summary_large_image" : "summary" },
+        ...(image ? [{ property: "og:image", content: image }, { name: "twitter:image", content: image }] : []),
+      ],
+      links: [{ rel: "canonical", href: url }],
+    };
+  },
 });
 
 function ShopProductPage() {

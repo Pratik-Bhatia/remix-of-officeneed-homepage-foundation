@@ -26,7 +26,7 @@ function getEmailFrom() {
 }
 
 function getInternalEmail() {
-  return process.env["OFFICENEED_ENQUIRY_EMAIL"] || "contact@officeneed.in";
+  return process.env["OFFICENEED_ENQUIRY_EMAIL"] || "care@officeneed.in";
 }
 
 export type EmailAttachment = { filename: string; content: Buffer };

@@ -6,8 +6,6 @@ import {
   ChevronRight,
   ChevronDown,
   Mail,
-  Phone,
-  MapPin,
   ArrowRight,
   ShieldCheck,
   HelpCircle,
@@ -23,20 +21,15 @@ export const Route = createFileRoute("/terms-and-conditions")({
   component: TermsAndConditionsPage,
   head: () => ({
     meta: [
-      { title: "Terms & Conditions" },
-      {
-        name: "description",
-        content:
-          "Read the Terms & Conditions governing the use of Officeneed's website, products, and services, including ordering, online payments, Pan-India shipping, and our no-returns policy.",
-      },
-      { property: "og:title", content: "Terms & Conditions" },
-      {
-        property: "og:description",
-        content:
-          "Read the Terms & Conditions governing the use of Officeneed's website, products, and services, including ordering, online payments, Pan-India shipping, and our no-returns policy.",
-      },
-      { name: "twitter:title", content: "Terms & Conditions" },
+      { title: 'Terms & Conditions — Officeneed' },
+      { name: 'description', content: 'The terms that apply to using the Officeneed website and buying from us, including ordering, online payment, shipping across India and our no-returns policy.' },
+      { property: 'og:title', content: 'Terms & Conditions — Officeneed' },
+      { property: 'og:description', content: 'The terms that apply to using the Officeneed website and buying from us, including ordering, online payment, shipping across India and our no-returns policy.' },
+      { property: 'og:type', content: 'website' },
+      { property: 'og:url', content: 'https://officeneed.store/terms-and-conditions' },
+      { name: 'twitter:card', content: 'summary' },
     ],
+    links: [{ rel: 'canonical', href: 'https://officeneed.store/terms-and-conditions' }],
   }),
 });
 
@@ -108,7 +101,7 @@ const termsSections: SectionItem[] = [
     title: "Payment Terms",
     content: [
       "Standard commercial payment terms apply as stipulated in your formal quotation, invoice, or enterprise procurement agreement. Unless an approved credit facility has been established in writing, custom-branded orders require an agreed advance payment prior to commencing production.",
-      "Cash on Delivery (COD) is not available; online payment is required for all orders. All invoices are payable in Indian Rupees (INR) via bank transfer, NEFT/RTGS, or approved online corporate payment methods. Late payments may incur interest or delay subsequent shipment schedules.",
+      "Cash on Delivery (COD) is not available; online payment is required for all orders. Payments are made in Indian Rupees (INR) using the online payment methods offered at checkout. Late payments may incur interest or delay subsequent shipment schedules.",
     ],
   },
   {
@@ -215,8 +208,8 @@ const termsSections: SectionItem[] = [
     number: "19",
     title: "Contact Information",
     content: [
-      "For any formal legal notices, clarifications regarding these Terms & Conditions, or corporate compliance inquiries, please contact our administrative team at contact@officeneed.in.",
-      "You may also reach our corporate headquarters by post or phone during official working hours for immediate procurement support.",
+      "For any formal legal notices, clarifications regarding these Terms & Conditions, or corporate compliance inquiries, please contact our administrative team at care@officeneed.in.",
+      "You may also use the enquiry form on our Contact Us page."
     ],
   },
 ];
@@ -488,7 +481,7 @@ function TermsAndConditionsPage() {
                       Officeneed
                     </h3>
                     <p className="text-white/70 text-[15px] leading-relaxed mb-6">
-                      For legal compliance, contractual agreements, or immediate procurement inquiries, reach out to our headquarters.
+                      For legal compliance, contractual agreements, or immediate procurement inquiries, reach out to us.
                     </p>
 
                     <div className="space-y-3.5">
@@ -497,18 +490,6 @@ function TermsAndConditionsPage() {
                         <a href={`mailto:${contactConfig.email}`} className="hover:text-white transition-colors">
                           {contactConfig.email}
                         </a>
-                      </div>
-                      <div className="flex items-center gap-3 text-[15px] text-white/85">
-                        <Phone size={17} className="text-white/60 shrink-0" />
-                        <a href={`tel:${contactConfig.phone}`} className="hover:text-white transition-colors">
-                          {contactConfig.phone}
-                        </a>
-                      </div>
-                      <div className="flex items-start gap-3 text-[15px] text-white/85">
-                        <MapPin size={18} className="text-white/60 shrink-0 mt-0.5" />
-                        <span>
-                          {contactConfig.address.line1}, {contactConfig.address.line2}
-                        </span>
                       </div>
                     </div>
                   </div>

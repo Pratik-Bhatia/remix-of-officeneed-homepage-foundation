@@ -6,13 +6,15 @@ export const Route = createFileRoute('/returns-refunds')({
   component: ReturnsRefundsPage,
   head: () => ({
     meta: [
-      { title: 'Returns, Exchanges & Replacements ? OfficeNeed' },
-      { name: 'description', content: 'OfficeNeed has a strict no return, no exchange, and no replacement policy.' },
-      { property: 'og:title', content: 'Returns, Exchanges & Replacements ? OfficeNeed' },
-      { property: 'og:description', content: 'OfficeNeed has a strict no return, no exchange, and no replacement policy.' },
+      { title: 'Returns, Exchanges & Replacements — Officeneed' },
+      { name: 'description', content: 'Officeneed has a strict no return, no exchange and no replacement policy on all products.' },
+      { property: 'og:title', content: 'Returns, Exchanges & Replacements — Officeneed' },
+      { property: 'og:description', content: 'Officeneed has a strict no return, no exchange and no replacement policy on all products.' },
       { property: 'og:type', content: 'website' },
+      { property: 'og:url', content: 'https://officeneed.store/returns-refunds' },
       { name: 'twitter:card', content: 'summary' },
     ],
+    links: [{ rel: 'canonical', href: 'https://officeneed.store/returns-refunds' }],
   }),
 })
 
@@ -42,7 +44,7 @@ function ReturnsRefundsPage() {
             <section>
               <h2 className="text-2xl font-medium mb-4">Contact Us</h2>
               <p className="text-muted-foreground leading-relaxed">
-                For any questions about this policy, contact us at contact@officeneed.in.
+                For any questions about this policy, contact us at care@officeneed.in.
               </p>
             </section>
           </div>

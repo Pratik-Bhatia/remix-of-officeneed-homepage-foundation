@@ -109,7 +109,8 @@ export function resolveLiveTitle(
 ): string {
   if (!node.handle) return node.title;
   const live = collections.find((c) => c.handle === node.handle);
-  return live?.title ?? node.title;
+  // Display-only spelling fix: the Shopify collection is titled "stationary".
+  return (live?.title ?? node.title).replace(/\bstationary\b/gi, (w) => (w[0] === "S" ? "Stationery" : "stationery"));
 }
 
 /**

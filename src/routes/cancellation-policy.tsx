@@ -6,9 +6,15 @@ export const Route = createFileRoute('/cancellation-policy')({
   component: CancellationPolicyPage,
   head: () => ({
     meta: [
-      { title: 'Cancellation Policy — OfficeNeed' },
-      { name: 'description', content: 'Our order cancellation policy.' },
+      { title: 'Cancellation Policy — Officeneed' },
+      { name: 'description', content: 'How to cancel an Officeneed order before dispatch, and how refunds for cancelled orders are issued.' },
+      { property: 'og:title', content: 'Cancellation Policy — Officeneed' },
+      { property: 'og:description', content: 'How to cancel an Officeneed order before dispatch, and how refunds for cancelled orders are issued.' },
+      { property: 'og:type', content: 'website' },
+      { property: 'og:url', content: 'https://officeneed.store/cancellation-policy' },
+      { name: 'twitter:card', content: 'summary' },
     ],
+    links: [{ rel: 'canonical', href: 'https://officeneed.store/cancellation-policy' }],
   }),
 })
 
@@ -34,7 +40,7 @@ function CancellationPolicyPage() {
                 To cancel your order, please contact our customer support team immediately with your order number. You can reach us via:
               </p>
               <ul className="list-disc pl-6 text-muted-foreground space-y-2">
-                <li>Email: contact@officeneed.in</li>
+                <li>Email: care@officeneed.in</li>
                 
               </ul>
             </section>
