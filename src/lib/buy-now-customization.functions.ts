@@ -92,13 +92,13 @@ export const uploadBuyNowCustomizationAssets = createServerFn({ method: "POST" }
           const { error } = await client.storage.from("corporate-quote-assets").upload(path, buffer, { contentType: data.logo.mimeType });
           if (!error) {
             const { data: publicUrlData } = client.storage.from("corporate-quote-assets").getPublicUrl(path);
-            attributes.push({ key: "Logo File", value: clampAttributeValue(data.logo.name) });
-            attributes.push({ key: "Logo Image", value: clampAttributeValue(publicUrlData.publicUrl) });
+            attributes.push({ key: "_Logo File", value: clampAttributeValue(data.logo.name) });
+            attributes.push({ key: "_Logo Image", value: clampAttributeValue(publicUrlData.publicUrl) });
             if (typeof data.logo.widthMm === "number" && typeof data.logo.heightMm === "number") {
-              attributes.push({ key: "Logo Size (mm)", value: `${data.logo.widthMm.toFixed(1)} x ${data.logo.heightMm.toFixed(1)}` });
+              attributes.push({ key: "_Logo Size (mm)", value: `${data.logo.widthMm.toFixed(1)} x ${data.logo.heightMm.toFixed(1)}` });
             }
             if (typeof data.logo.rotation === "number" && data.logo.rotation !== 0) {
-              attributes.push({ key: "Logo Rotation", value: `${data.logo.rotation}°` });
+              attributes.push({ key: "_Logo Rotation", value: `${data.logo.rotation}°` });
             }
           } else {
             console.error("[BuyNowAssets] logo upload failed:", error);
@@ -113,7 +113,7 @@ export const uploadBuyNowCustomizationAssets = createServerFn({ method: "POST" }
         const { error } = await client.storage.from("corporate-quote-assets").upload(path, buffer, { contentType: "image/png" });
         if (!error) {
           const { data: publicUrlData } = client.storage.from("corporate-quote-assets").getPublicUrl(path);
-          attributes.push({ key: "Customization Preview", value: clampAttributeValue(publicUrlData.publicUrl) });
+          attributes.push({ key: "_Customization Preview", value: clampAttributeValue(publicUrlData.publicUrl) });
         } else {
           console.error("[BuyNowAssets] preview upload failed:", error);
         }
@@ -145,7 +145,7 @@ export const uploadBuyNowCustomizationAssets = createServerFn({ method: "POST" }
           }
           const sizeStr = comp.widthMm && comp.heightMm ? `, ${comp.widthMm.toFixed(1)}x${comp.heightMm.toFixed(1)}mm` : "";
           attributes.push({
-            key: `Component: ${comp.component}`,
+            key: `_Component: ${comp.component}`,
             value: clampAttributeValue(`Customized${sizeStr}${previewUrl ? `, ${previewUrl}` : ""}`),
           });
         }
