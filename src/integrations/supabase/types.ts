@@ -41,6 +41,78 @@ export type Database = {
         }
         Relationships: []
       }
+      buy_now_customization_records: {
+        Row: {
+          created_at: string
+          customization_data: Json | null
+          id: string
+          logo_filename: string | null
+          logo_flip_horizontal: boolean
+          logo_flip_vertical: boolean
+          logo_height_mm: number | null
+          logo_position_x: number | null
+          logo_position_y: number | null
+          logo_rotation: number | null
+          logo_url: string | null
+          logo_width_mm: number | null
+          preview_image_url: string | null
+          printing_method: string | null
+          product_name: string | null
+          product_variant: string | null
+          quantity: number | null
+          shopify_order_id: string | null
+          shopify_variant_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          customization_data?: Json | null
+          id?: string
+          logo_filename?: string | null
+          logo_flip_horizontal?: boolean
+          logo_flip_vertical?: boolean
+          logo_height_mm?: number | null
+          logo_position_x?: number | null
+          logo_position_y?: number | null
+          logo_rotation?: number | null
+          logo_url?: string | null
+          logo_width_mm?: number | null
+          preview_image_url?: string | null
+          printing_method?: string | null
+          product_name?: string | null
+          product_variant?: string | null
+          quantity?: number | null
+          shopify_order_id?: string | null
+          shopify_variant_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          customization_data?: Json | null
+          id?: string
+          logo_filename?: string | null
+          logo_flip_horizontal?: boolean
+          logo_flip_vertical?: boolean
+          logo_height_mm?: number | null
+          logo_position_x?: number | null
+          logo_position_y?: number | null
+          logo_rotation?: number | null
+          logo_url?: string | null
+          logo_width_mm?: number | null
+          preview_image_url?: string | null
+          printing_method?: string | null
+          product_name?: string | null
+          product_variant?: string | null
+          quantity?: number | null
+          shopify_order_id?: string | null
+          shopify_variant_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       corporate_quote_requests: {
         Row: {
           additional_requirements: string | null
@@ -221,6 +293,36 @@ export type Database = {
           id?: string
           product_handle?: string
           shopify_customer_id?: string
+        }
+        Relationships: []
+      }
+      paid_order_internal_pdf_log: {
+        Row: {
+          created_at: string
+          error_message: string | null
+          id: string
+          shopify_order_id: string
+          shopify_order_number: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          shopify_order_id: string
+          shopify_order_number?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          shopify_order_id?: string
+          shopify_order_number?: string | null
+          status?: string
+          updated_at?: string
         }
         Relationships: []
       }
