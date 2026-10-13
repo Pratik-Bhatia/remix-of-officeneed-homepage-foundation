@@ -43,7 +43,7 @@ export function ShopByCategory() {
                 search={target as any}
                 className="group block rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-background"
               >
-                <div className="relative aspect-square w-full overflow-hidden rounded-2xl bg-secondary">
+                <div className="relative aspect-square w-full overflow-hidden rounded-2xl bg-white">
                   {isLoading ? (
                     <div className="h-full w-full animate-pulse bg-muted" aria-hidden />
                   ) : image ? (
@@ -55,7 +55,7 @@ export function ShopByCategory() {
                       className="h-full w-full object-contain p-8 transition-transform duration-500 ease-out group-hover:scale-[1.04] sm:p-10"
                     />
                   ) : (
-                    <div className="h-full w-full bg-secondary" aria-hidden />
+                    <div className="h-full w-full bg-white" aria-hidden />
                   )}
                 </div>
 

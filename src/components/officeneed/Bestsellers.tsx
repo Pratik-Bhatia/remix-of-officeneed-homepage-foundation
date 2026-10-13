@@ -17,7 +17,7 @@ export function Bestsellers() {
   const { collections } = useShopifyCollections();
 
   const products = useMemo(
-    () => selectBestsellers(catalogue, active, 12),
+    () => selectBestsellers(catalogue, active, 12).map(({ badge: _badge, ...p }) => p),
     [active, catalogue],
   );
 
@@ -125,6 +125,7 @@ export function Bestsellers() {
                 product={p}
                 showEyebrow
                 pricePending={!pricesReady}
+                imageWellClassName="bg-[#F5F5F5]"
                 className="w-[74vw] shrink-0 snap-start sm:w-[46vw] md:w-[34vw] lg:w-[calc((100%-4.5rem)/4)]"
               />
             ))}
