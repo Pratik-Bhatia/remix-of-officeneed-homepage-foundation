@@ -56,7 +56,6 @@ const shopLinks = [
 const quickLinks = [
   { label: "Our Story", href: "/about-us" },
   { label: "Our Clients", href: "/clients" },
-  { label: "Blog & Insights", href: "/blog" },
   { label: "FAQs", href: "/faqs" },
   { label: "Contact Us", href: "/contact-us" },
 ];
