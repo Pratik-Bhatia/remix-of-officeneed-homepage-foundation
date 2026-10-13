@@ -342,6 +342,13 @@ test("a Buy Now order for a gift set whose record has a customization_data break
   assert.equal(lastPdfData.giftSetComponents.length, 2, "only the two actually-customized components, not the uncustomized keychain");
   assert.equal(lastPdfData.giftSetComponents[0].name, "A5 Notebook Diary");
   assert.equal(lastPdfData.giftSetComponents[1].name, "Ball Pen");
+  // Regression (order #1013): each component's own saved mockup must be embedded, not dropped.
+  assert.ok(lastPdfData.giftSetComponents[0].previewImageDataUrl?.startsWith("data:image/"), "diary component preview must be embedded");
+  assert.ok(lastPdfData.giftSetComponents[1].previewImageDataUrl?.startsWith("data:image/"), "pen component preview must be embedded");
+  assert.equal(lastPdfData.giftSetComponents[0].widthMm, 30);
+  assert.equal(lastPdfData.giftSetComponents[1].heightMm, 5);
+  // With no single preview saved, the main Customization Preview uses the first component's mockup (never blank).
+  assert.equal(lastPdfData.previewImageDataUrl, lastPdfData.giftSetComponents[0].previewImageDataUrl);
 });
 
 test("an order with NO customization record reference at all (e.g. a non-customizer purchase) still produces a valid PDF, with no invented logo/branding data", async () => {
