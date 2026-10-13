@@ -6,13 +6,15 @@ export const Route = createFileRoute('/shipping-delivery')({
   component: ShippingDeliveryPage,
   head: () => ({
     meta: [
-      { title: 'Shipping & Delivery — OfficeNeed' },
-      { name: 'description', content: 'We currently ship across India only. Orders are dispatched within 24 hours.' },
-      { property: 'og:title', content: 'Shipping & Delivery — OfficeNeed' },
-      { property: 'og:description', content: 'We currently ship across India only. Orders are dispatched within 24 hours.' },
+      { title: 'Shipping & Delivery — Officeneed' },
+      { name: 'description', content: 'Officeneed ships across India only. Read about dispatch, delivery and order tracking.' },
+      { property: 'og:title', content: 'Shipping & Delivery — Officeneed' },
+      { property: 'og:description', content: 'Officeneed ships across India only. Read about dispatch, delivery and order tracking.' },
       { property: 'og:type', content: 'website' },
+      { property: 'og:url', content: 'https://officeneed.store/shipping-delivery' },
       { name: 'twitter:card', content: 'summary' },
     ],
+    links: [{ rel: 'canonical', href: 'https://officeneed.store/shipping-delivery' }],
   }),
 })
 

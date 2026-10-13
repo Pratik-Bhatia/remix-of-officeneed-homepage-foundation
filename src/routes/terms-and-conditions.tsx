@@ -21,20 +21,15 @@ export const Route = createFileRoute("/terms-and-conditions")({
   component: TermsAndConditionsPage,
   head: () => ({
     meta: [
-      { title: "Terms & Conditions" },
-      {
-        name: "description",
-        content:
-          "Read the Terms & Conditions governing the use of Officeneed's website, products, and services, including ordering, online payments, Pan-India shipping, and our no-returns policy.",
-      },
-      { property: "og:title", content: "Terms & Conditions" },
-      {
-        property: "og:description",
-        content:
-          "Read the Terms & Conditions governing the use of Officeneed's website, products, and services, including ordering, online payments, Pan-India shipping, and our no-returns policy.",
-      },
-      { name: "twitter:title", content: "Terms & Conditions" },
+      { title: 'Terms & Conditions — Officeneed' },
+      { name: 'description', content: 'The terms that apply to using the Officeneed website and buying from us, including ordering, online payment, shipping across India and our no-returns policy.' },
+      { property: 'og:title', content: 'Terms & Conditions — Officeneed' },
+      { property: 'og:description', content: 'The terms that apply to using the Officeneed website and buying from us, including ordering, online payment, shipping across India and our no-returns policy.' },
+      { property: 'og:type', content: 'website' },
+      { property: 'og:url', content: 'https://officeneed.store/terms-and-conditions' },
+      { name: 'twitter:card', content: 'summary' },
     ],
+    links: [{ rel: 'canonical', href: 'https://officeneed.store/terms-and-conditions' }],
   }),
 });
 

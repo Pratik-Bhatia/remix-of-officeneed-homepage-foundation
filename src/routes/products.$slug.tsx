@@ -30,7 +30,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useProductBrowseAbandon } from "@/hooks/useProductBrowseAbandon";
 
-const BASE = "https://storeofficeneedversion3.lovable.app";
+const BASE = "https://officeneed.store";
 
 /** Numeric Shopify id from a gid ("gid://shopify/ProductVariant/123" -> "123"). */
 const numericId = (gid: string) => gid.split("/").pop() ?? gid;

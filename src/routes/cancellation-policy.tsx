@@ -6,9 +6,15 @@ export const Route = createFileRoute('/cancellation-policy')({
   component: CancellationPolicyPage,
   head: () => ({
     meta: [
-      { title: 'Cancellation Policy — OfficeNeed' },
-      { name: 'description', content: 'Our order cancellation policy.' },
+      { title: 'Cancellation Policy — Officeneed' },
+      { name: 'description', content: 'How to cancel an Officeneed order before dispatch, and how refunds for cancelled orders are issued.' },
+      { property: 'og:title', content: 'Cancellation Policy — Officeneed' },
+      { property: 'og:description', content: 'How to cancel an Officeneed order before dispatch, and how refunds for cancelled orders are issued.' },
+      { property: 'og:type', content: 'website' },
+      { property: 'og:url', content: 'https://officeneed.store/cancellation-policy' },
+      { name: 'twitter:card', content: 'summary' },
     ],
+    links: [{ rel: 'canonical', href: 'https://officeneed.store/cancellation-policy' }],
   }),
 })
 

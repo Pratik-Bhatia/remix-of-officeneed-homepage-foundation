@@ -7,12 +7,14 @@ export const Route = createFileRoute('/returns-refunds')({
   head: () => ({
     meta: [
       { title: 'Returns, Exchanges & Replacements — Officeneed' },
-      { name: 'description', content: 'OfficeNeed has a strict no return, no exchange, and no replacement policy.' },
+      { name: 'description', content: 'Officeneed has a strict no return, no exchange and no replacement policy on all products.' },
       { property: 'og:title', content: 'Returns, Exchanges & Replacements — Officeneed' },
-      { property: 'og:description', content: 'OfficeNeed has a strict no return, no exchange, and no replacement policy.' },
+      { property: 'og:description', content: 'Officeneed has a strict no return, no exchange and no replacement policy on all products.' },
       { property: 'og:type', content: 'website' },
+      { property: 'og:url', content: 'https://officeneed.store/returns-refunds' },
       { name: 'twitter:card', content: 'summary' },
     ],
+    links: [{ rel: 'canonical', href: 'https://officeneed.store/returns-refunds' }],
   }),
 })
 
