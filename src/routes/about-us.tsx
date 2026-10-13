@@ -1,68 +1,76 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, Link } from '@tanstack/react-router'
 import { Navbar } from '@/components/officeneed/Navbar'
 import { Footer } from '@/components/officeneed/Footer'
+
+const SITE = 'https://officeneed.store'
+const TITLE = 'About Us — Officeneed'
+const DESC = 'Officeneed brings corporate gifting, office stationery, computer peripherals and fragrances together under one supplier for businesses across India.'
 
 export const Route = createFileRoute('/about-us')({
   component: AboutUsPage,
   head: () => ({
     meta: [
-      { title: 'About Us — OfficeNeed' },
-      { name: 'description', content: 'Learn about Officeneed, our story, and our B2B focus.' },
+      { title: TITLE },
+      { name: 'description', content: DESC },
+      { property: 'og:title', content: TITLE },
+      { property: 'og:description', content: DESC },
+      { property: 'og:type', content: 'website' },
+      { property: 'og:url', content: `${SITE}/about-us` },
+      { name: 'twitter:card', content: 'summary' },
     ],
+    links: [{ rel: 'canonical', href: `${SITE}/about-us` }],
   }),
 })
+
+const capabilities = [
+  { title: 'Corporate Gifting', text: 'Gift sets and hampers for employees, clients and events, with logo branding available on selected products.' },
+  { title: 'Office Stationery', text: 'Everyday essentials such as notebooks, pens, files, folders and printing paper.' },
+  { title: 'Computer Peripherals', text: 'Keyboards, mice and accessories from established brands for your workplace.' },
+  { title: 'Fragrances', text: 'Perfumes and gift sets suited to personal use and corporate gifting.' },
+]
 
 function AboutUsPage() {
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <Navbar />
       <main className="flex-1 w-full">
-        {/* Hero Section */}
         <section className="py-20 px-6 max-w-7xl mx-auto">
           <h1 className="text-4xl md:text-5xl font-light mb-6 text-foreground tracking-tight">About Officeneed</h1>
-          <p className="text-xl text-muted-foreground max-w-3xl font-light">We are dedicated to providing premium workspace solutions for B2B clients, elevating the standard of modern corporate environments.</p>
+          <p className="text-xl text-muted-foreground max-w-3xl font-light">One vendor for the products businesses buy every day — from office supplies to corporate gifts.</p>
         </section>
 
-        {/* Our Story & What We Do */}
         <section className="py-16 px-6 max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-16">
           <div>
             <h2 className="text-2xl mb-4 text-foreground font-medium">Our Story</h2>
-            <p className="text-muted-foreground leading-relaxed mb-4">For over 20 years, we've helped businesses simplify procurement. Instead of managing multiple vendors for corporate gifting, printing, office supplies, IT hardware, furniture, and pantry essentials, Officeneed brings everything together under one trusted partner.</p>
-            <p className="text-muted-foreground leading-relaxed">Our goal is simple—to save businesses time, reduce procurement hassles, and deliver reliable products and services that help teams work more efficiently.</p>
+            <p className="text-muted-foreground leading-relaxed mb-4">Instead of managing separate vendors for corporate gifting, office stationery, computer peripherals and fragrances, Officeneed brings them together in one place.</p>
+            <p className="text-muted-foreground leading-relaxed">Our goal is simple — to save businesses time and make buying for the workplace easier.</p>
           </div>
           <div>
             <h2 className="text-2xl mb-4 text-foreground font-medium">What We Do</h2>
-            <p className="text-muted-foreground leading-relaxed">With a reliable supply network and dedicated account managers, we help businesses save time, reduce costs, and focus on what matters most—growing their business.</p>
+            <p className="text-muted-foreground leading-relaxed">Customers can buy online with secure checkout and delivery across India. Registered business accounts can see corporate pricing, and teams can request quotes for bulk or branded orders.</p>
           </div>
         </section>
 
-        {/* Why Officeneed */}
-        <section className="py-16 px-6 max-w-7xl mx-auto bg-secondary/30 rounded-2xl my-10">
-          <div className="max-w-3xl mx-auto text-center">
-            <h2 className="text-3xl mb-6 text-foreground font-medium">Why Officeneed</h2>
-            <p className="text-muted-foreground leading-relaxed mb-8">We combine uncompromising quality with a seamless procurement process. Our dedicated account managers ensure your business receives priority support, competitive pricing, and curated catalogs.</p>
-          </div>
-        </section>
-
-        {/* Our Capabilities */}
         <section className="py-16 px-6 max-w-7xl mx-auto">
-          <h2 className="text-3xl mb-8 text-foreground font-medium text-center">Our Capabilities</h2>
+          <h2 className="text-3xl mb-8 text-foreground font-medium text-center">What We Offer</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-             {['Bulk Procurement', 'Custom Solutions', 'Dedicated Support', 'Fast Fulfillment'].map((capability, idx) => (
-                <div key={idx} className="p-6 border border-border rounded-lg bg-background">
-                   <h3 className="text-lg font-medium mb-2">{capability}</h3>
-                   <p className="text-sm text-muted-foreground">Expertly managed services tailored for corporate efficiency.</p>
-                </div>
-             ))}
+            {capabilities.map((c) => (
+              <div key={c.title} className="p-6 border border-border rounded-lg bg-background">
+                <h3 className="text-lg font-medium mb-2">{c.title}</h3>
+                <p className="text-sm text-muted-foreground">{c.text}</p>
+              </div>
+            ))}
           </div>
         </section>
 
-        {/* CTA */}
         <section className="py-24 px-6 text-center">
           <h2 className="text-3xl font-light mb-6">Ready to elevate your workspace?</h2>
-          <button className="px-8 py-3 bg-foreground text-background rounded-md text-sm font-medium hover:opacity-90 transition-opacity">
+          <Link
+            to="/contact-us"
+            className="inline-block px-8 py-3 bg-foreground text-background rounded-md text-sm font-medium hover:opacity-90 transition-opacity"
+          >
             Contact Our Team
-          </button>
+          </Link>
         </section>
       </main>
       <Footer />
