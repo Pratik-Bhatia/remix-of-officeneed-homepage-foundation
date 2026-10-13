@@ -1001,3 +1001,17 @@ export const useCartStore = create<CartStore>()(
     },
   ),
 );
+
+/**
+ * Single visibility rule for every customized cart line (Buy Now, Add to
+ * Cart, single products and gift sets all pass through addItem): only
+ * "Printing Method" stays customer-visible. Every other key gets a leading
+ * "_", which Shopify checkout treats as a private line property -- still
+ * stored on the order for staff and the paid-order PDF webhook.
+ */
+const CUSTOMER_VISIBLE_LINE_ATTRIBUTES = new Set(["Printing Method"]);
+function toCheckoutLineAttributes(attrs: Array<{ key: string; value: string }>) {
+  return attrs.map((a) =>
+    CUSTOMER_VISIBLE_LINE_ATTRIBUTES.has(a.key) || a.key.startsWith("_") ? a : { ...a, key: `_${a.key}` },
+  );
+}
