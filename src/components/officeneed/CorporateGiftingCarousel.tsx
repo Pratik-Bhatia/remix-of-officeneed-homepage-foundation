@@ -6,11 +6,12 @@ import { ProductCard } from "@/components/officeneed/ProductCard";
 import type { Product } from "@/lib/products";
 
 /**
- * The exact Shopify gift sets chosen for this row (one 4-, 5- and 6-in-1),
+ * The exact Shopify gift sets chosen for this row (one 3-, 4-, 5- and 6-in-1),
  * in display order. Matched by handle; each must still be in Corporate
  * Gifting. Missing/unpublished products are simply skipped -- no fillers.
  */
 export const CORPORATE_GIFT_SET_HANDLES = [
+  "premium-3-in-1-diary-bottle-pen-gift-set",
   "premium-4-in-1-executive-diary-pen-keychain-card-holder-set-1",
   "premium-5-in-1-executive-gift-set",
   "premium-6-in-1-executive-gift-set-with-16gb-pendrive",
