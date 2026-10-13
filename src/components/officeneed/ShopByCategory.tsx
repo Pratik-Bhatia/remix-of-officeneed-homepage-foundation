@@ -23,7 +23,7 @@ export function ShopByCategory() {
   return (
     <section
       aria-labelledby="shop-by-category-heading"
-      className="w-full bg-background py-14 sm:py-16 lg:py-20"
+      className="w-full bg-[#F5F5F5] py-14 sm:py-16 lg:py-20"
     >
       <div className="mx-auto w-full max-w-[1600px] px-5 sm:px-8 lg:px-12">
         <h2 id="shop-by-category-heading" className="text-section">

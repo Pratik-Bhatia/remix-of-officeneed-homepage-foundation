@@ -56,7 +56,7 @@ export function Bestsellers() {
       // #F2F2F2 (a few units darker, no hue), not the requested value --
       // using the literal hex also keeps this in sync with the identical
       // #F5F5F7 catalogue background already used on the /products page.
-      className="w-full bg-[#F5F5F7] py-14 sm:py-16 lg:py-20"
+      className="w-full bg-[#F5F5F5] py-14 sm:py-16 lg:py-20"
     >
       <div className="mx-auto w-full max-w-[1600px]">
         <div className="pl-[30px] pr-5 sm:pl-[42px] sm:pr-8 lg:pl-[58px] lg:pr-12">

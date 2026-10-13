@@ -4,7 +4,7 @@ import { Hero } from "@/components/officeneed/Hero";
 import { InteractiveGiftShowcase } from "@/components/officeneed/InteractiveGiftShowcase";
 import { Bestsellers } from "@/components/officeneed/Bestsellers";
 import { ShopByCategory } from "@/components/officeneed/ShopByCategory";
-import { ShopTheFeed } from "@/components/officeneed/ShopTheFeed";
+import { CorporateGiftingCarousel } from "@/components/officeneed/CorporateGiftingCarousel";
 import { Footer } from "@/components/officeneed/Footer";
 
 export const Route = createFileRoute("/")({
@@ -38,7 +38,7 @@ function Index() {
         <InteractiveGiftShowcase />
         <Bestsellers />
         <ShopByCategory />
-        <ShopTheFeed />
+        <CorporateGiftingCarousel />
       </main>
       <Footer />
     </div>
