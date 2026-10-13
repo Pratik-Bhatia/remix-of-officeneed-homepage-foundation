@@ -5,19 +5,22 @@ import { useShopifyBestsellers } from "@/lib/shopify-overlay";
 import { ProductCard } from "@/components/officeneed/ProductCard";
 import type { Product } from "@/lib/products";
 
-/** Gift sets / hampers / kits are shown first; other Corporate Gifting items fill in. */
-const SET_PATTERN = /\b(gift\s*sets?|sets?|hampers?|kits?|combo|box)\b/i;
+/**
+ * The exact Shopify gift sets chosen for this row (one 4-, 5- and 6-in-1),
+ * in display order. Matched by handle; each must still be in Corporate
+ * Gifting. Missing/unpublished products are simply skipped -- no fillers.
+ */
+export const CORPORATE_GIFT_SET_HANDLES = [
+  "premium-4-in-1-executive-diary-pen-keychain-card-holder-set-1",
+  "premium-5-in-1-executive-gift-set",
+  "premium-6-in-1-executive-gift-set-with-16gb-pendrive",
+] as const;
 
-export function selectCorporateGifts(products: Product[], limit = 12): Product[] {
-  const seen = new Set<string>();
-  const eligible = products.filter((p) => {
-    if (seen.has(p.slug) || !inBestsellerCategory(p, "Corporate Gifting")) return false;
-    seen.add(p.slug);
-    return true;
+export function selectCorporateGifts(products: Product[]): Product[] {
+  return CORPORATE_GIFT_SET_HANDLES.flatMap((handle) => {
+    const p = products.find((x) => x.slug === handle);
+    return p && inBestsellerCategory(p, "Corporate Gifting") ? [p] : [];
   });
-  const sets = eligible.filter((p) => SET_PATTERN.test(p.name));
-  const rest = eligible.filter((p) => !SET_PATTERN.test(p.name));
-  return [...sets, ...rest].slice(0, limit);
 }
 
 export function CorporateGiftingCarousel() {
