@@ -99,10 +99,13 @@ interface ParsedCustomization {
 function parseCustomizationFromLineItems(payload: ShopifyOrderWebhookPayload): ParsedCustomization | undefined {
   const properties = payload.line_items?.flatMap((li) => li.properties ?? []) ?? [];
   if (properties.length === 0) return undefined;
-  const get = (name: string) => properties.find((p) => p.name === name)?.value;
+  // Internal properties are "_"-prefixed (Shopify hides these from the
+  // customer-facing checkout); older orders used unprefixed names.
+  const get = (name: string) =>
+    properties.find((p) => p.name === `_${name}`)?.value ?? properties.find((p) => p.name === name)?.value;
   const giftSetComponents = properties
-    .filter((p) => p.name.startsWith("Component: "))
-    .map((p) => ({ name: p.name.replace(/^Component: /, ""), detail: p.value }));
+    .filter((p) => /^_?Component: /.test(p.name))
+    .map((p) => ({ name: p.name.replace(/^_?Component: /, ""), detail: p.value }));
   return {
     printingMethod: get("Printing Method"),
     logoFileName: get("Logo File"),
