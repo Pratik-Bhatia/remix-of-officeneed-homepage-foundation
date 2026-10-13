@@ -57,7 +57,7 @@ export function CorporateGiftingCarousel() {
   if (products.length === 0) return null;
 
   return (
-    <section aria-labelledby="corporate-gifts-heading" className="w-full bg-background py-14 sm:py-16 lg:py-20">
+    <section aria-labelledby="corporate-gifts-heading" className="w-full bg-[#F5F5F5] py-14 sm:py-16 lg:py-20">
       <div className="mx-auto w-full max-w-[1600px] pl-[30px] pr-5 sm:pl-[42px] sm:pr-8 lg:pl-[58px] lg:pr-12">
         <div className="flex items-end justify-between gap-4">
           <div>
