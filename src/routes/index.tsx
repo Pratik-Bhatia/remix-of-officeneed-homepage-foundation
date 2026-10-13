@@ -1,7 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Navbar } from "@/components/officeneed/Navbar";
 import { Hero } from "@/components/officeneed/Hero";
-import { InteractiveGiftShowcase } from "@/components/officeneed/InteractiveGiftShowcase";
 import { Bestsellers } from "@/components/officeneed/Bestsellers";
 import { ShopByCategory } from "@/components/officeneed/ShopByCategory";
 import { CorporateGiftingCarousel } from "@/components/officeneed/CorporateGiftingCarousel";
@@ -35,7 +34,6 @@ function Index() {
       <Navbar />
       <main>
         <Hero />
-        <InteractiveGiftShowcase />
         <Bestsellers />
         <CorporateGiftingCarousel />
         <ShopByCategory />
