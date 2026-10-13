@@ -4,15 +4,25 @@ import { Footer } from "@/components/officeneed/Footer";
 
 import { motion } from "motion/react";
 
+const SITE = "https://officeneed.store";
+const TITLE = "Privacy Policy — Officeneed";
+const DESC = "How Officeneed collects, uses and shares information when you browse, create an account, place an order or send us an enquiry.";
+const LAST_UPDATED = "13 October 2026";
+
 export const Route = createFileRoute("/privacy-policy")({
   component: PrivacyPolicyPage,
   head: () => ({
     meta: [
-      { title: "Privacy Policy" },
-      { name: "description", content: "Read Officeneed's Privacy Policy to understand how we collect, use, and protect your information when you interact with our website and services." },
-      { property: "og:title", content: "Privacy Policy" },
-      { name: "twitter:title", content: "Privacy Policy" },
+      { title: TITLE },
+      { name: "description", content: DESC },
+      { property: "og:title", content: TITLE },
+      { property: "og:description", content: DESC },
+      { property: "og:type", content: "website" },
+      { property: "og:url", content: `${SITE}/privacy-policy` },
+      { name: "twitter:card", content: "summary" },
+      { name: "twitter:title", content: TITLE },
     ],
+    links: [{ rel: "canonical", href: `${SITE}/privacy-policy` }],
   }),
 });
 
@@ -68,62 +78,68 @@ function PrivacyPolicyPage() {
         <div className="mx-auto max-w-[850px] px-6 md:px-10">
           <div className="prose prose-lg mx-auto max-w-none text-[rgb(15_17_23_/_0.7)] prose-headings:text-foreground prose-headings:font-bold prose-h2:mt-12 prose-h2:mb-6 prose-h2:text-[24px] prose-h2:tracking-tight md:prose-h2:text-[28px] prose-p:mb-6 prose-p:leading-[1.8] prose-p:text-[16px] prose-li:text-[16px] prose-li:marker:text-foreground prose-a:text-foreground hover:prose-a:text-black">
             
-            <p><strong>Last Updated: {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</strong></p>
+            <p><strong>Last Updated: {LAST_UPDATED}</strong></p>
 
             <h2>Introduction</h2>
             <p>
-              Welcome to Officeneed. We are committed to protecting your personal information and your right to privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you visit our website, submit quote requests, download catalogues, or engage with our corporate procurement services.
+              This Privacy Policy explains what information Officeneed collects when you use this website, why we use it, and who we share it with.
             </p>
 
             <h2>Information We Collect</h2>
-            <p>
-              We collect information that you voluntarily provide to us when you express an interest in obtaining information about our services, when you participate in activities on the website, or otherwise when you contact us. The personal information that we collect depends on the context of your interactions with us and the website, the choices you make, and the products and features you use.
-            </p>
             <ul>
-              <li><strong>Contact Information:</strong> Name, job title, company name, email address, and phone number when you fill out contact forms or quote requests.</li>
-              <li><strong>Business Information:</strong> Details regarding your procurement needs, bulk ordering requirements, and customization preferences.</li>
-              <li><strong>Usage Data:</strong> Information automatically collected when you navigate through the site (e.g., IP addresses, browser types, and pages visited).</li>
+              <li><strong>Account information:</strong> when you create a customer or business account, your name, email address, phone number and saved addresses. Business accounts also provide company name, GSTIN and business address.</li>
+              <li><strong>Order information:</strong> items in your bag, delivery details and order history.</li>
+              <li><strong>Enquiries and quote requests:</strong> the name, company, email, phone number and message you submit through our contact, product enquiry, chat assistant or corporate quote forms, and any files or logos you upload with them.</li>
+              <li><strong>Newsletter:</strong> the email address you enter in the newsletter sign-up.</li>
+              <li><strong>Product reviews:</strong> your name, email address, rating and review text. Your email is not shown publicly.</li>
+              <li><strong>Saved products:</strong> the products you save to your account.</li>
+              <li><strong>Usage information:</strong> pages and products viewed, items added to the bag, and campaign or referral details in the link you arrived from, collected through cookies and similar technologies.</li>
             </ul>
 
             <h2>How We Use Information</h2>
-            <p>
-              We use personal information collected via our website for a variety of business purposes described below. We process your personal information for these purposes in reliance on our legitimate business interests, in order to enter into or perform a contract with you, with your consent, and/or for compliance with our legal obligations.
-            </p>
             <ul>
-              <li>To facilitate corporate account creation and logon processes.</li>
-              <li>To fulfill and manage your orders, payments, and corporate gifting deliveries.</li>
-              <li>To respond to your inquiries, quote requests, and offer tailored procurement solutions.</li>
-              <li>To send you marketing and promotional communications (if you have opted in).</li>
+              <li>To create and manage your account, including corporate pricing for approved business accounts.</li>
+              <li>To process your bag, checkout and orders.</li>
+              <li>To respond to enquiries and quote requests, including sending you a confirmation email with a summary of your request.</li>
+              <li>To publish approved product reviews.</li>
+              <li>To measure and improve our website and advertising.</li>
+              <li>If you are signed in with a phone number, to send you a WhatsApp reminder about a product you viewed.</li>
             </ul>
 
-            <h2>Cookies & Analytics</h2>
-            <p>
-              We may use cookies and similar tracking technologies to access or store information. You can set your browser to refuse all or some browser cookies or to alert you when websites set or access cookies. If you disable or refuse cookies, please note that some parts of this website may become inaccessible or not function properly. We utilize these tools primarily to understand website traffic patterns, optimize user experience, and ensure our catalogue downloads function seamlessly.
-            </p>
+            <h2>Service Providers</h2>
+            <p>We share information with the following providers only as needed to run this website:</p>
+            <ul>
+              <li><strong>Shopify</strong> — product catalogue, customer and business accounts, bag, checkout and orders. Payments are handled on the checkout page by the payment provider configured there; we do not receive or store your card details.</li>
+              <li><strong>Lovable Cloud</strong> — stores enquiries, quote requests, uploaded files, reviews, saved products and business account details.</li>
+              <li><strong>Resend</strong> — sends enquiry and quote confirmation emails and internal notifications.</li>
+              <li><strong>Meta (Facebook)</strong> — the Meta Pixel and Conversions API record events such as page views, add to cart, checkout started and enquiries, to measure our advertising. Where available, a scrambled (hashed) version of your email or phone number may be sent to help match these events.</li>
+              <li><strong>Remove.bg</strong> — if you upload a logo to preview a branded product, the image is sent to this service to remove its background.</li>
+              <li><strong>KwikEngage</strong> — sends WhatsApp messages on our behalf.</li>
+            </ul>
 
-            <h2>Third-Party Services</h2>
+            <h2>Cookies</h2>
             <p>
-              We may share your data with third-party vendors, service providers, contractors, or agents who perform services for us or on our behalf and require access to such information to do that work. Examples include: logistics and delivery partners executing Pan-India shipping, payment processors, and customer relationship management (CRM) tools used to manage your corporate account.
+              We use cookies and browser storage to keep you signed in, remember your bag and record the analytics and advertising events described above. You can block or delete cookies in your browser settings, but parts of the website, such as the bag and sign-in, may then stop working.
             </p>
 
             <h2>Data Security</h2>
             <p>
-              We have implemented appropriate technical and organizational security measures designed to protect the security of any personal information we process. However, despite our safeguards and efforts to secure your information, no electronic transmission over the Internet or information storage technology can be guaranteed to be 100% secure, so we cannot promise or guarantee that hackers, cybercriminals, or other unauthorized third parties will not be able to defeat our security.
+              We take reasonable steps to protect your information, but no method of transmission or storage over the internet is completely secure.
             </p>
 
             <h2>Your Rights</h2>
             <p>
-              Depending on your location, you may have certain rights regarding your personal information, including the right to request access to the data we collect from you, change that information, or delete it in some circumstances. To request to review, update, or delete your personal information, please submit a request using our contact information below.
+              You can view and update your account details from your account page. To request access to, correction of or deletion of your information, email us using the contact details below.
             </p>
 
             <h2>Contact Information</h2>
             <p>
-              If you have questions or comments about this policy, you may email us at care@officeneed.in or contact us by post at our corporate headquarters in Maharashtra, India. If you need immediate assistance regarding an active corporate order, please reach out to your dedicated account manager.
+              If you have questions about this policy, email us at care@officeneed.in.
             </p>
 
             <h2>Updates to this Policy</h2>
             <p>
-              We may update this privacy notice from time to time. The updated version will be indicated by an updated "Last Updated" date and the updated version will be effective as soon as it is accessible. We encourage you to review this privacy notice frequently to be informed of how we are protecting your information.
+              We may update this policy from time to time. The "Last Updated" date at the top shows when it was last changed.
             </p>
 
           </div>
