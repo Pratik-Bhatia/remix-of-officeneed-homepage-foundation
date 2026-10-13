@@ -888,23 +888,12 @@ function ProductDetail() {
                         </p>
                       ) : null}
                     </div>
-                    {/* Compact stock indicator: mobile only, same row as
-                        the price, right-aligned. Desktop keeps its own
-                        full-text row below (hidden here via sm:hidden). */}
+                    {/* Stock indicator on the price row: compact on mobile,
+                        full "Ready to dispatch" text on sm+. */}
                     <div className="sm:hidden shrink-0">{renderStockStatus(true)}</div>
+                    <div className="hidden sm:block shrink-0">{renderStockStatus(false)}</div>
                   </div>
-                  {/* Product code: hidden on mobile only, sm+ unchanged. */}
-                  {skuLabel && (
-                    <p className="hidden sm:block mt-1 text-[13px] text-muted-foreground">
-                      Product code: <span className="tabular-nums">{skuLabel}</span>
-                    </p>
-                  )}
                 </div>
-
-                {/* Stock Status -- sm+ only now (full "Ready to dispatch"
-                    text, unchanged markup/position); mobile shows the
-                    compact version inline on the price row above instead. */}
-                <div className="hidden sm:block">{renderStockStatus(false)}</div>
 
                 {/* Variant choice */}
                 {hasVariantChoice ? (
