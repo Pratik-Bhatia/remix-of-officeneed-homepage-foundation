@@ -448,6 +448,21 @@ interface CartStore {
   removeDiscountCode: (code: string) => Promise<void>;
   /** Attach the signed-in customer to the cart, then return a fresh checkout URL. */
   prepareCheckout: () => Promise<string | null>;
+  /**
+   * Buy Now: creates a brand-new, standalone Shopify cart for exactly this
+   * one line and returns its checkout URL -- WITHOUT ever touching this
+   * store's own cartId/items/checkoutUrl state or the customer's saved
+   * cart (customer_carts / saveCustomerCart). The regular persistent cart
+   * (items/cartId above) is completely untouched by this call, in both
+   * directions: nothing here is read from it, and nothing it does writes
+   * back to it. If the shopper abandons this checkout, there is nothing
+   * to roll back -- the throwaway cart this created was never linked to
+   * their persistent cart or saved cart record in the first place, so
+   * returning to the site shows their cart exactly as it was before Buy
+   * Now was clicked. Returns null on any failure (reported via toast
+   * inside this function, same pattern as addItem/prepareCheckout).
+   */
+  createStandaloneCheckout: (item: Omit<CartItem, "lineId">) => Promise<string | null>;
   /** Sets (or replaces) this order's one-time delivery address via
    * cartDeliveryAddressesReplace, by typing out the address fields inline
    * (oneTimeUse: true -- never saved to the customer's own address book).
@@ -786,6 +801,60 @@ export const useCartStore = create<CartStore>()(
           } catch (error) {
             console.error("Failed to attach customer to cart:", error);
             return checkoutUrl;
+          }
+        },
+
+        createStandaloneCheckout: async (item) => {
+          try {
+            const buyerIdentity = currentBuyerIdentity();
+            const attributes = attributionAttributes();
+            const lineInput = {
+              quantity: item.quantity,
+              merchandiseId: item.variantId,
+              ...(item.lineAttributes?.length ? { attributes: item.lineAttributes } : {}),
+            };
+            const createData = await storefrontApiRequest(CART_CREATE_MUTATION, {
+              input: {
+                lines: [lineInput],
+                ...(buyerIdentity ? { buyerIdentity } : {}),
+                ...(attributes.length ? { attributes } : {}),
+              },
+            });
+            const createPayload = createData?.data?.cartCreate;
+            if (reportProblems(createPayload?.userErrors ?? [], createPayload?.warnings ?? [])) return null;
+            let cart = createPayload?.cart;
+            if (!cart) return null;
+            const { valid } = extractLines(cart);
+            if (!valid.some((l) => l.merchandise.id === item.variantId)) {
+              toast.error("Sorry, this item is out of stock.");
+              haptic("error");
+              return null;
+            }
+
+            // Same "attach buyer identity right before handoff" step
+            // prepareCheckout does for the persistent cart -- a company
+            // location can affect computed pricing, so this is re-applied
+            // on this brand-new cart too rather than trusting cartCreate's
+            // own buyerIdentity input alone to have already repriced it.
+            if (buyerIdentity) {
+              const updateData = await storefrontApiRequest(CART_BUYER_IDENTITY_UPDATE_MUTATION, {
+                cartId: cart.id,
+                buyerIdentity,
+              });
+              const updateErrors: UserError[] = updateData?.data?.cartBuyerIdentityUpdate?.userErrors ?? [];
+              if (updateErrors.length === 0 && updateData?.data?.cartBuyerIdentityUpdate?.cart) {
+                cart = updateData.data.cartBuyerIdentityUpdate.cart;
+              }
+              // A failure here just means checkout proceeds with the
+              // cartCreate-time buyerIdentity/pricing instead -- never a
+              // reason to fail the whole purchase.
+            }
+
+            return formatCheckoutUrl(cart.checkoutUrl);
+          } catch (error) {
+            console.error("Failed to create standalone checkout:", error);
+            toast.error("Couldn't start checkout. Please try again.");
+            return null;
           }
         },
 

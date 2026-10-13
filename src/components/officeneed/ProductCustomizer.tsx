@@ -1585,15 +1585,16 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
   // already includes branding/customization, so there is no separate
   // charge to confirm. Requires a valid uploaded logo, same gate as
   // Request a Quote (isFullyCustomized/canBuyNow above), since this is a
-  // mandatory-customization flow. Before adding to cart, uploads the logo
-  // and rendered preview (uploadBuyNowCustomizationAssets) and attaches
-  // the result as Shopify cart line attributes, so the real order carries
-  // the branding details -- the only mechanism available to get
-  // customization data onto an order placed through Shopify's own
-  // checkout. Otherwise reuses the exact same cartStore.addItem() +
-  // prepareCheckout() mechanism the product page's own Buy Now button uses
-  // (src/routes/products.$slug.tsx) -- same cart, same Shopify checkout,
-  // nothing new.
+  // mandatory-customization flow. Uploads the logo and rendered preview
+  // (uploadBuyNowCustomizationAssets) and attaches the result as Shopify
+  // cart line attributes, so the real order carries the branding details.
+  // Checkout itself goes through cartStore's createStandaloneCheckout, NOT
+  // addItem()/prepareCheckout() -- a deliberately SEPARATE, throwaway
+  // Shopify cart, never the customer's persistent one, so abandoning this
+  // checkout can never leave an unexpected item sitting in their regular
+  // cart when they come back (see createStandaloneCheckout's own comment
+  // in cartStore.ts). Add to Cart / the product page's own Buy Now button
+  // are unaffected -- they still use the persistent cart exactly as before.
   const handleBuyNow = async () => {
     if (isBuyingNow) return;
     // Re-validated here too, not just via the button's disabled state --
@@ -1685,29 +1686,25 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
       }
 
       const qty = Math.max(1, parseInt(formData.quantity, 10) || 1);
-      const store = useCartStore.getState();
-      // A customized purchase always adds its own new line (see
-      // CartItem.lineAttributes in cartStore.ts); only a plain repeat visit
-      // with no attributes to attach reuses an existing identical line.
-      const alreadyInCartPlain = !lineAttributes.length && store.items.some((i) => i.variantId === selectedVariant.id && !i.lineAttributes?.length);
-      if (!alreadyInCartPlain) {
-        await store.addItem({
-          product: { node: rawProductNode },
-          variantId: selectedVariant.id,
-          variantTitle: selectedVariant.title,
-          price: selectedVariant.price ?? rawProductNode.priceRange?.minVariantPrice,
-          quantity: qty,
-          selectedOptions: selectedVariant.selectedOptions ?? [],
-          ...(lineAttributes.length ? { lineAttributes } : {}),
-        });
-      }
-      const checkoutUrl = await useCartStore.getState().prepareCheckout();
+      // A standalone Shopify cart, created fresh for exactly this
+      // purchase -- never the customer's persistent cart/items state (see
+      // createStandaloneCheckout in cartStore.ts). Abandoning this
+      // checkout leaves their regular cart completely untouched, since it
+      // was never written to in the first place; nothing to roll back.
+      const checkoutUrl = await useCartStore.getState().createStandaloneCheckout({
+        product: { node: rawProductNode },
+        variantId: selectedVariant.id,
+        variantTitle: selectedVariant.title,
+        price: selectedVariant.price ?? rawProductNode.priceRange?.minVariantPrice,
+        quantity: qty,
+        selectedOptions: selectedVariant.selectedOptions ?? [],
+        ...(lineAttributes.length ? { lineAttributes } : {}),
+      });
       if (!checkoutUrl) {
         win?.close();
-        toast.error("Couldn't start checkout. Please try again.");
         return;
       }
-      trackInitiateCheckout(useCartStore.getState().items);
+      trackInitiateCheckout([{ variantId: selectedVariant.id, quantity: qty, price: selectedVariant.price ?? rawProductNode.priceRange?.minVariantPrice }]);
       if (win) win.location.href = checkoutUrl;
       else window.open(checkoutUrl, "_blank");
     } catch {
