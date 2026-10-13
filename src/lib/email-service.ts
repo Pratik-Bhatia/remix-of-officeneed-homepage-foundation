@@ -22,7 +22,7 @@ function getResendClient() {
 }
 
 function getEmailFrom() {
-  return process.env["EMAIL_FROM"] || "OfficeNeed Assistant <care@officeneed.in>";
+  return process.env["EMAIL_FROM"] || "OfficeNeed Assistant <contact@officeneed.in>";
 }
 
 function getInternalEmail() {
