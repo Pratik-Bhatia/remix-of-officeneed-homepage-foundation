@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { lockScroll, unlockScroll } from "@/lib/scroll-lock";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Menu, MessageSquare, Search, User, X, ChevronDown, ChevronRight } from "lucide-react";
-import logoUrl from "@/assets/officeneed-logo.png";
+import logoUrl from "@/assets/officeneed-logo.svg";
 import { primaryNavCategories as navCategories, navItemTarget, navCategoryTarget, getLiveNavLabel } from "@/lib/navigation";
 import { useShopifyCollections } from "@/lib/shopify-overlay";
 import { CartDrawer } from "@/components/officeneed/CartDrawer";
@@ -26,10 +26,10 @@ function Logo({ className }: { className?: string }) {
     >
       <img
         src={logoUrl}
-        alt="OfficeNeed"
-        width={640}
-        height={122}
-        className={cn("h-5 w-auto sm:h-7", className)}
+        alt="Officeneed — Expect More"
+        width={150}
+        height={37.5}
+        className={cn("block h-auto w-[120px] object-contain md:w-[135px] xl:w-[150px]", className)}
       />
     </Link>
   );
