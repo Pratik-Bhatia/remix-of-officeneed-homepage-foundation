@@ -26,6 +26,7 @@ import { useShopifyCatalogue, useShopifyCollections, shopifyCatalogueQueryOption
 import { useBuyerContext } from "@/hooks/useBuyerContext";
 import { useB2BStore } from "@/stores/b2bStore";
 import { getDisplayCategoryLabel, getOfficeGptContextCategory } from "@/lib/taxonomy";
+import { ASSISTANT_NAME } from "@/config/assistant";
 import { submitEnquiry } from "@/lib/enquiries.functions";
 import { rememberContactPhone } from "@/lib/contact-phone";
 
@@ -45,7 +46,7 @@ let seq = 0;
 const uid = () => `m${++seq}`;
 
 const GREETING =
-  "Hi! I'm OfficeGPT. I'll help you find the right products for your requirement.";
+  `Hi! I'm ${ASSISTANT_NAME}. I'll help you find the right products for your requirement.`;
 
 /**
  * Optional payload for the shared `officeneed:open-chat` event, letting a
@@ -820,7 +821,7 @@ export function ChatWidget() {
         <button
           onClick={openLauncher}
           className="group flex items-center justify-center size-14 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-          aria-label="Open OfficeGPT"
+          aria-label={`Open ${ASSISTANT_NAME}`}
         >
           <AiAssistantIcon className="size-full rounded-full" />
         </button>
@@ -838,7 +839,7 @@ export function ChatWidget() {
         <div
           role="dialog"
           aria-modal="false"
-          aria-label="OfficeNeed OfficeGPT"
+          aria-label={`Officeneed ${ASSISTANT_NAME}`}
           aria-hidden={!open}
           className={cn(
             "flex h-[100dvh] w-full flex-col overflow-hidden bg-background sm:h-[650px] sm:w-[420px] sm:rounded-2xl sm:border sm:border-border sm:shadow-[0_20px_40px_-15px_rgba(0,0,0,0.1)]",
@@ -849,7 +850,7 @@ export function ChatWidget() {
             <div className="flex items-center gap-3">
               <img src={logoUrl} alt="" width={640} height={122} className="h-4 w-auto object-contain" />
               <div className="leading-tight border-l border-border pl-3">
-                <p className="text-sm font-semibold text-foreground">OfficeGPT</p>
+                <p className="text-sm font-semibold text-foreground">{ASSISTANT_NAME}</p>
                 <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">AI Shopping Guide</p>
               </div>
             </div>
