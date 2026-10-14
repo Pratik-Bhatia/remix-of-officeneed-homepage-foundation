@@ -18,6 +18,7 @@ import { useCustomer, signOutCustomer } from "@/lib/customer";
 import { CustomerContext } from "@/lib/customer-context";
 import { clearSaves, refreshSaves } from "@/lib/saves";
 import { cn } from "@/lib/utils";
+import { getApplicationDraft } from "@/lib/business-application-draft";
 import { useB2BStore } from "@/stores/b2bStore";
 
 export const Route = createFileRoute("/account")({
@@ -51,19 +52,25 @@ function B2BAccountStatus() {
   const locations = useB2BStore((s) => s.locations);
   const companyLocationId = useB2BStore((s) => s.companyLocationId);
   const selectLocation = useB2BStore((s) => s.selectLocation);
+  const b2bCustomerId = useB2BStore((s) => s.customerId);
   const queryClient = useQueryClient();
 
   if (b2bStatus === "b2c") {
+    // A failed earlier application (account created, application never
+    // saved) keeps a persistent "finish" prompt until it succeeds.
+    const hasDraft = !!getApplicationDraft(b2bCustomerId);
     return (
       <div className="mt-4 mb-6 flex flex-wrap items-center gap-3 rounded-xl border border-border bg-background px-4 py-3 text-sm">
         <Building2 className="size-4 shrink-0 text-muted-foreground" />
-        <span className="text-muted-foreground">Buying for a company?</span>
+        <span className="text-muted-foreground">
+          {hasDraft ? "Your business application wasn't submitted yet." : "Buying for a company?"}
+        </span>
         <button
           type="button"
           className="font-medium text-primary hover:underline"
           onClick={() => window.dispatchEvent(new Event("open-auth-modal"))}
         >
-          Register my business
+          {hasDraft ? "Finish your business application" : "Register my business"}
         </button>
       </div>
     );

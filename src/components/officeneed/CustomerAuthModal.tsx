@@ -19,6 +19,7 @@ import { splitFullName } from "@/lib/name-utils";
 import { isValidGstin } from "@/lib/gst";
 import { normalizeIndianPhone } from "@/lib/contact-phone";
 import { useB2BStore } from "@/stores/b2bStore";
+import { submitBusinessApplication, saveApplicationDraft, clearApplicationDraft, getApplicationDraft, type BusinessApplicationDraft } from "@/lib/business-application-draft";
 
 /**
  * The ONLY thing that differs between the global modal and the embedded
@@ -103,6 +104,10 @@ export function CustomerAuthModal({
   // account to business (from the account page). Identity comes only from
   // the existing session token, so no email/password fields are shown.
   const [upgrade, setUpgrade] = useState(false);
+  // Prefills the upgrade form with a previously failed application (see
+  // src/lib/business-application-draft.ts) so the customer can just retry.
+  const b2bCustomerId = useB2BStore((s) => s.customerId);
+  const draftPrefill = upgrade ? getApplicationDraft(b2bCustomerId) : null;
   const queryClient = useQueryClient();
 
   // ROOT CAUSE of stale mode/tab/error state surviving a close+reopen:
@@ -318,8 +323,7 @@ export function CustomerAuthModal({
         // application was submitted when it wasn't.
         const token = getCustomerToken();
         if (token) {
-          const payload = {
-            token,
+          const draft: BusinessApplicationDraft = {
             companyName,
             gstNumber,
             contactName: fullName,
@@ -330,13 +334,22 @@ export function CustomerAuthModal({
             ...(addressLine1 ? { address: { addressLine1, ...(addressLine2 ? { addressLine2 } : {}), city, state, pin, country } } : {}),
           };
           // One application per customer (upsert on customer id), so a
-          // retry updates the same row and never creates a duplicate.
+          // retry updates the same row and never creates a duplicate. A
+          // retry never calls registerCustomer again.
           const submitApplication = async (): Promise<void> => {
-            try {
-              await saveBusinessRegistration({ data: payload });
+            const outcome = await submitBusinessApplication(
+              (d) => saveBusinessRegistration({ data: { token, ...d } }),
+              draft,
+            );
+            await useB2BStore.getState().resolve(token).catch(() => {});
+            const customerId = useB2BStore.getState().customerId;
+            if (outcome === "submitted") {
+              clearApplicationDraft(customerId);
               toast.success("Account created. Your business application is pending review. You'll see standard prices until it's approved.");
-            } catch (saveErr) {
-              console.error("Failed to save business registration details:", saveErr);
+            } else {
+              // Keeps a "Finish your business application" banner on the
+              // account page until it succeeds.
+              if (customerId) saveApplicationDraft(customerId, draft);
               toast.error("Your account is ready, but your business application didn't go through.", {
                 duration: Infinity,
                 action: { label: "Retry", onClick: () => { void submitApplication(); } },
@@ -724,11 +737,11 @@ export function CustomerAuthModal({
                     <div className="grid gap-4 sm:grid-cols-2">
                       <div className="space-y-2">
                         <Label htmlFor="fullName">Full Name</Label>
-                        <Input id="fullName" name="fullName" autoComplete="name" required />
+                        <Input id="fullName" name="fullName" autoComplete="name" required defaultValue={draftPrefill?.contactName ?? ""} />
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="companyName">Company Name</Label>
-                        <Input id="companyName" name="companyName" autoComplete="organization" required />
+                        <Input id="companyName" name="companyName" autoComplete="organization" required defaultValue={draftPrefill?.companyName ?? ""} />
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="email">Email</Label>
@@ -742,7 +755,7 @@ export function CustomerAuthModal({
                           type="tel"
                           required
                           autoComplete="tel"
-                          defaultValue="+91 "
+                          defaultValue={draftPrefill?.phone ?? "+91 "}
                           placeholder="+91 98765 43210"
                           aria-invalid={phoneError ? true : undefined}
                           aria-describedby={phoneError ? "phone-error" : undefined}
@@ -756,6 +769,7 @@ export function CustomerAuthModal({
                       <Input
                         id="gstNumber"
                         name="gstNumber"
+                      defaultValue={draftPrefill?.gstNumber ?? ""}
                         required
                         autoComplete="off"
                         placeholder="22AAAAA0000A1Z5"
@@ -876,11 +890,11 @@ export function CustomerAuthModal({
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
                       <Label htmlFor="fullName">Full Name</Label>
-                      <Input id="fullName" name="fullName" autoComplete="name" required />
+                      <Input id="fullName" name="fullName" autoComplete="name" required defaultValue={draftPrefill?.contactName ?? ""} />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="companyName">Company Name</Label>
-                      <Input id="companyName" name="companyName" autoComplete="organization" required />
+                      <Input id="companyName" name="companyName" autoComplete="organization" required defaultValue={draftPrefill?.companyName ?? ""} />
                     </div>
                     {upgrade ? null : (
                     <div className="space-y-2">
@@ -896,7 +910,7 @@ export function CustomerAuthModal({
                         type="tel"
                         required
                         autoComplete="tel"
-                        defaultValue="+91 "
+                        defaultValue={draftPrefill?.phone ?? "+91 "}
                         placeholder="+91 98765 43210"
                         aria-invalid={phoneError ? true : undefined}
                           aria-describedby={phoneError ? "phone-error" : undefined}
@@ -910,6 +924,7 @@ export function CustomerAuthModal({
                     <Input
                       id="gstNumber"
                       name="gstNumber"
+                      defaultValue={draftPrefill?.gstNumber ?? ""}
                       required
                       autoComplete="off"
                       placeholder="22AAAAA0000A1Z5"
@@ -923,24 +938,24 @@ export function CustomerAuthModal({
                   {sectionLabel("Business address")}
                   <div className="space-y-2">
                     <Label htmlFor="addressLine1">Address Line 1</Label>
-                    <Input id="addressLine1" name="addressLine1" required autoComplete="address-line1" />
+                    <Input id="addressLine1" name="addressLine1" required autoComplete="address-line1" defaultValue={draftPrefill?.address?.addressLine1 ?? ""} />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="addressLine2">Address Line 2 (optional)</Label>
-                    <Input id="addressLine2" name="addressLine2" autoComplete="address-line2" />
+                    <Input id="addressLine2" name="addressLine2" autoComplete="address-line2" defaultValue={draftPrefill?.address?.addressLine2 ?? ""} />
                   </div>
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
                       <Label htmlFor="city">City</Label>
-                      <Input id="city" name="city" required autoComplete="address-level2" />
+                      <Input id="city" name="city" required autoComplete="address-level2" defaultValue={draftPrefill?.address?.city ?? ""} />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="state">State</Label>
-                      <Input id="state" name="state" required autoComplete="address-level1" />
+                      <Input id="state" name="state" required autoComplete="address-level1" defaultValue={draftPrefill?.address?.state ?? ""} />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="pin">PIN / Postal Code</Label>
-                      <Input id="pin" name="pin" required autoComplete="postal-code" inputMode="numeric" />
+                      <Input id="pin" name="pin" required autoComplete="postal-code" inputMode="numeric" defaultValue={draftPrefill?.address?.pin ?? ""} />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="country">Country</Label>
