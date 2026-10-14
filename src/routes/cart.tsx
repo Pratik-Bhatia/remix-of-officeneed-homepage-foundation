@@ -14,7 +14,7 @@ import { DeliveryAddressSelector } from "@/components/officeneed/DeliveryAddress
 export const Route = createFileRoute("/cart")({
   head: () => ({
     meta: [
-      { title: "Your Bag — OfficeNeed" },
+      { title: "Your Bag — Officeneed" },
       { name: "description", content: "Review the items in your Officeneed bag before checkout." },
       { name: "robots", content: "noindex" },
     ],

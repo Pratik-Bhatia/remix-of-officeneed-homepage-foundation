@@ -6,8 +6,8 @@ export const Route = createFileRoute('/faqs')({
   component: FaqsPage,
   head: () => ({
     meta: [
-      { title: 'FAQs & Buying Guides — OfficeNeed' },
-      { name: 'description', content: 'Frequently asked questions and guides for OfficeNeed.' },
+      { title: 'FAQs & Buying Guides — Officeneed' },
+      { name: 'description', content: 'Frequently asked questions and guides for Officeneed.' },
     ],
   }),
 })

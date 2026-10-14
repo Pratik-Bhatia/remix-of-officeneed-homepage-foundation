@@ -41,7 +41,7 @@ export function AuthModal({ open, onOpenChange }: { open: boolean; onOpenChange:
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Sign in to OfficeNeed</DialogTitle>
+          <DialogTitle>Sign in to Officeneed</DialogTitle>
           <DialogDescription>
             Welcome back! Please sign in to continue.
           </DialogDescription>

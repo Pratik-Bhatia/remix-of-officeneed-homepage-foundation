@@ -286,7 +286,7 @@ export function Footer() {
             <div className="md:col-span-2 lg:col-span-1 lg:border-l lg:border-background/15 lg:pl-14">
               <img
                 src={logoInverse}
-                alt="OfficeNeed — Expect More..."
+                alt="Officeneed — Expect More..."
                 className="h-10 w-auto sm:h-12"
               />
               <p className="mt-6 max-w-md font-heading text-lg font-semibold leading-snug tracking-tight text-background sm:text-xl">
@@ -351,7 +351,7 @@ export function Footer() {
                 />
                 <button
                   type="submit"
-                  aria-label="Subscribe to the OfficeNeed newsletter"
+                  aria-label="Subscribe to the Officeneed newsletter"
                   className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-background text-foreground transition-opacity hover:opacity-85 disabled:opacity-50"
                 >
                   <ArrowRight className="h-5 w-5" strokeWidth={1.75} />
@@ -365,7 +365,7 @@ export function Footer() {
                       href={href}
                       target="_blank"
                       rel="noreferrer noopener"
-                      aria-label={`OfficeNeed on ${label}`}
+                      aria-label={`Officeneed on ${label}`}
                       className="inline-flex text-background/80 transition-colors hover:text-background"
                     >
                       <Icon className="h-5 w-5" strokeWidth={1.6} />
@@ -382,7 +382,7 @@ export function Footer() {
           <div className="mx-auto flex max-w-[1400px] flex-col gap-6 px-5 py-7 sm:px-8 lg:flex-row lg:items-center lg:justify-between lg:px-12">
             <div className="space-y-3">
               <p className="text-xs text-background/75 sm:text-sm">
-                © 2026 OfficeNeed. All rights reserved.
+                © 2026 Officeneed. All rights reserved.
               </p>
               <ul className="flex flex-wrap gap-x-6 gap-y-2">
                 {bottomLinks.map(({ label, href }) => (

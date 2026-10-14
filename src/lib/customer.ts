@@ -459,7 +459,7 @@ export async function activateCustomer(activationUrl: string, password: string):
       throw new CustomerAuthError("This account has already been activated. Please sign in instead.", err.code);
     }
     if (err?.code === "TOKEN_INVALID" || err?.code === "NOT_FOUND") {
-      throw new CustomerAuthError("This activation link is invalid or has expired. Please contact OfficeNeed for a new one.", err.code);
+      throw new CustomerAuthError("This activation link is invalid or has expired. Please contact Officeneed for a new one.", err.code);
     }
     throw new CustomerAuthError(err?.message ?? "Could not activate your account.", err?.code ?? null);
   }

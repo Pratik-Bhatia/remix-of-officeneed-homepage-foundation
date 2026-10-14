@@ -355,7 +355,7 @@ function parseGiftSetComponents(node: ShopifyProductNode): Product["giftSetCompo
             }));
           } else {
             console.warn(
-              `[OfficeNeed] gift-set component "${name}": variant_images/variant_titles length mismatch -- ignoring variant images for this component.`,
+              `[Officeneed] gift-set component "${name}": variant_images/variant_titles length mismatch -- ignoring variant images for this component.`,
             );
           }
         } catch {
@@ -396,7 +396,7 @@ export function shopifyNodeToProduct(node: ShopifyProductNode): Product {
   const description = (node.description ?? "").trim();
   const summary = description
     ? truncateWords(description.replace(/\s+/g, " "), 150)
-    : `${node.title}  available through OfficeNeed.`;
+    : `${node.title}  available through Officeneed.`;
 
   const hasSchema = hasStructuredSchema(mainCategory);
   const extracted = extractStructuredData(node.descriptionHtml || "", hasSchema);

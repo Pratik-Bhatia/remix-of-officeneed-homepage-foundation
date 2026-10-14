@@ -14,7 +14,7 @@ export const navCategories: NavCategory[] = [
   {
     id: "officeneed-exclusive",
     label: "Officeneed Exclusive",
-    blurb: "Made for OfficeNeed. Available nowhere else.",
+    blurb: "Made for Officeneed. Available nowhere else.",
     items: ["Featured Exclusives", "New Exclusives"],
   },
   {

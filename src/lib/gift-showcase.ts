@@ -92,7 +92,7 @@ export const giftHampers: GiftHamper[] = [
     description: "Our best-selling everyday corporate gift set.",
     image: hamperSignature,
     imageAlt:
-      "OfficeNeed 6-in-1 executive gift set: an open terracotta gift box containing a keychain, pen, leather card holder, pendrive and an insulated bottle, beside a tan leather diary and the individual gift items laid out in front of the box.",
+      "Officeneed 6-in-1 executive gift set: an open terracotta gift box containing a keychain, pen, leather card holder, pendrive and an insulated bottle, beside a tan leather diary and the individual gift items laid out in front of the box.",
     imageWidth: 1536,
     imageHeight: 1024,
     shopifyCollectionHandle: "signature-hamper",

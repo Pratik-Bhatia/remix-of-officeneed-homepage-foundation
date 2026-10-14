@@ -168,7 +168,7 @@ export const Route = createFileRoute("/products/$slug")({
   head: ({ params, loaderData, match }) => {
     if (!loaderData) {
       return {
-        meta: [{ title: "Product unavailable — OfficeNeed" }, { name: "robots", content: "noindex" }],
+        meta: [{ title: "Product unavailable — Officeneed" }, { name: "robots", content: "noindex" }],
       };
     }
     const p = loaderData.product;
@@ -181,7 +181,7 @@ export const Route = createFileRoute("/products/$slug")({
       shareVariant && shareVariant.title && shareVariant.title.toLowerCase() !== "default title"
         ? shareVariant.title
         : null;
-    const title = variantLabel ? `${p.name} – ${variantLabel} — OfficeNeed` : `${p.name} — OfficeNeed`;
+    const title = variantLabel ? `${p.name} – ${variantLabel} — Officeneed` : `${p.name} — Officeneed`;
     const description = variantLabel && shareVariant
       ? `${p.name} (${variantLabel}) — ${formatMoney(shareVariant.price.amount, shareVariant.price.currencyCode)}. ${p.summary}`.slice(0, 300)
       : p.summary;

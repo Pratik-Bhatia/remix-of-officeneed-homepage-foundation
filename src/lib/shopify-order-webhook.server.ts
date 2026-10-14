@@ -387,13 +387,13 @@ async function processOrderPaid(payload: ShopifyOrderWebhookPayload): Promise<vo
              : ""}`
         : ""}
       ${record?.printing_method ? `<p><strong>Printing Method:</strong> ${record.printing_method}</p>` : ""}
-      <p><em>Internal order record attached as a PDF. This is not the customer's invoice -- it is sent to the OfficeNeed team only.</em></p>
+      <p><em>Internal order record attached as a PDF. This is not the customer's invoice -- it is sent to the Officeneed team only.</em></p>
     `;
 
     const sent = await sendInternalHtmlEmail(
       `Paid Online Order: ${orderNumber} — ${productName}`,
       html,
-      [{ filename: `OfficeNeed-Order-${orderNumber}.pdf`, content: pdfBuffer }],
+      [{ filename: `Officeneed-Order-${orderNumber}.pdf`, content: pdfBuffer }],
     );
 
     if (!sent) throw new Error("sendInternalHtmlEmail returned false (email not configured or send failed).");

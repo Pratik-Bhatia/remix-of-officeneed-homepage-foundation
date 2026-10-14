@@ -328,7 +328,7 @@ export const submitCorporateQuote = createServerFn({ method: "POST" })
         if (pdfError instanceof Error) console.error(pdfError.stack);
       }
       const pdfAttachments = pdfBuffer
-        ? [{ filename: `OfficeNeed-Quote-${refNumber}.pdf`, content: pdfBuffer }]
+        ? [{ filename: `Officeneed-Quote-${refNumber}.pdf`, content: pdfBuffer }]
         : undefined;
       console.log(`[QuotePDF] ${refNumber}: attachment object created=${Boolean(pdfAttachments)}`);
 

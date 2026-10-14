@@ -27,7 +27,7 @@ import type { ProductSort } from "@/lib/products";
 import { useShopifyCatalogue, useShopifyCollections } from "@/lib/shopify-overlay";
 import { getCategoryByHandle, TAXONOMY, MAIN_CATEGORIES, resolveLiveTitle, isLiveCollection, type MainCategory } from "@/lib/taxonomy";
 
-const TITLE = "Products — OfficeNeed";
+const TITLE = "Products — Officeneed";
 const DESCRIPTION =
   "Explore business essentials, gifting solutions, technology, office supplies and more — sourced through one trusted partner.";
 

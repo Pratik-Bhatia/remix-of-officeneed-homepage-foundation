@@ -9,16 +9,16 @@ export const Route = createFileRoute("/shop/")({
   component: ShopPage,
   head: () => ({
     meta: [
-      { title: "Shop Office Stationery & Corporate Gifts | OfficeNeed" },
+      { title: "Shop Office Stationery & Corporate Gifts | Officeneed" },
       {
         name: "description",
         content:
-          "Browse the full OfficeNeed catalogue — stationery, hardware, fragrances and curated corporate gifting, with secure Shopify checkout.",
+          "Browse the full Officeneed catalogue — stationery, hardware, fragrances and curated corporate gifting, with secure Shopify checkout.",
       },
-      { property: "og:title", content: "Shop Office Stationery & Corporate Gifts | OfficeNeed" },
+      { property: "og:title", content: "Shop Office Stationery & Corporate Gifts | Officeneed" },
       {
         property: "og:description",
-        content: "Browse the full OfficeNeed catalogue with secure Shopify checkout.",
+        content: "Browse the full Officeneed catalogue with secure Shopify checkout.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -36,7 +36,7 @@ function ShopPage() {
     <><Navbar />
     <main className="mx-auto w-full max-w-[1600px] px-4 py-12 sm:px-6 lg:px-12">
       <p className="text-eyebrow text-muted-foreground">Shopify Store</p>
-      <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Shop OfficeNeed</h1>
+      <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Shop Officeneed</h1>
       <p className="mt-3 max-w-2xl text-muted-foreground">
         Live products from our store, with secure checkout.
       </p>
