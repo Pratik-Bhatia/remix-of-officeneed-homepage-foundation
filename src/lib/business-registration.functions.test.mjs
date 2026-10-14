@@ -12,7 +12,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-const { saveBusinessRegistrationRecord, buildB2BApplicationEmail } = await import("@/lib/business-registration.functions");
+const { saveBusinessRegistrationRecord } = await import("@/lib/business-registration.functions");
 
 function makeFakeClient({ existingCompanyIdForGst = null } = {}) {
   const upsertedRows = [];
@@ -54,7 +54,6 @@ test("a brand-new GST registration is saved as 'pending' with no b2b_company_id 
     { companyName: "Acme Pvt Ltd", gstNumber: "27AAAAA0000A1Z5", contactName: "Jane Doe", phone: "+919999999999" },
     "gid://shopify/Customer/1",
     client,
-    async () => {},
   );
   assert.equal(result.ok, true);
   assert.equal(result.status, "pending");
@@ -103,27 +102,8 @@ test("no address at all stores every address column as null, not undefined/omitt
   assert.equal(row.state, null);
 });
 
-test("a new application notifies the team once; a retry of a pending application does not", async () => {
-  const client = makeFakeClient();
-  const sent = [];
-  const notify = async (n) => { sent.push(n); };
-  await saveBusinessRegistrationRecord({ companyName: "Acme", gstNumber: "27AAAAA0000A1Z5" }, "gid://shopify/Customer/7", client, notify);
-  assert.equal(sent.length, 1);
-  client._state.previous = { status: "pending" };
-  await saveBusinessRegistrationRecord({ companyName: "Acme", gstNumber: "27AAAAA0000A1Z5" }, "gid://shopify/Customer/7", client, notify);
-  assert.equal(sent.length, 1);
-});
-
-test("a notification failure never fails the application", async () => {
-  const client = makeFakeClient();
-  const r = await saveBusinessRegistrationRecord({ companyName: "Acme", gstNumber: "27AAAAA0000A1Z5" }, "gid://shopify/Customer/8", client, async () => { throw new Error("down"); });
-  assert.equal(r.status, "pending");
-});
-
-test("team email goes to marketing@officeneed.in with a Shopify customer link and no secrets", () => {
-  const e = buildB2BApplicationEmail({ companyName: "Acme <b>", gstNumber: "27AAAAA0000A1Z5", customerId: "gid://shopify/Customer/42" });
-  assert.equal(e.to, "marketing@officeneed.in");
-  assert.ok(e.html.includes("customers/42"));
-  assert.ok(!e.html.includes("<b>Acme <b>"));
-  assert.ok(!/token|password/i.test(e.html));
+test("saving an application never sends any email (no notifier, no Resend)", async () => {
+  const { readFileSync } = await import("node:fs");
+  const src = readFileSync("src/lib/business-registration.functions.ts", "utf8");
+  assert.ok(!/resend|RESEND_API_KEY|emails\.send|marketing@officeneed\.in/i.test(src));
 });

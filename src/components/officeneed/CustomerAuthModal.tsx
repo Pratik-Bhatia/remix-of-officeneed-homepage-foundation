@@ -345,12 +345,17 @@ export function CustomerAuthModal({
             const customerId = useB2BStore.getState().customerId;
             if (outcome === "submitted") {
               clearApplicationDraft(customerId);
-              toast.success("Account created. Your business application is pending review. You'll see standard prices until it's approved.");
+              toast.success("Your request has been submitted. Please wait while OfficeNeed reviews and approves your application.", {
+                id: "b2b-application-submitted",
+                duration: 8000,
+                // Bottom placement keeps it clear of the navigation and hero heading.
+                position: "bottom-center",
+              });
             } else {
               // Keeps a "Finish your business application" banner on the
               // account page until it succeeds.
               if (customerId) saveApplicationDraft(customerId, draft);
-              toast.error("Your account is ready, but your business application didn't go through.", {
+              toast.error("Your account is ready, but your business application couldn't be submitted. Please try again.", {
                 duration: Infinity,
                 action: { label: "Retry", onClick: () => { void submitApplication(); } },
               });
