@@ -315,7 +315,7 @@ export function CustomerAuthModal({
         // point. Registering here NEVER grants B2B pricing by itself
         // anymore (manual approval restored -- see
         // src/lib/business-registration.functions.ts and
-        // src/routes/admin/b2b-companies.tsx): this intake write is the
+        // OfficeNeed approves in Shopify Admin): this intake write is the
         // ONLY thing that happens, creating a 'pending' application an
         // admin must explicitly approve before any real Shopify Company/
         // Contact/Role relationship -- and therefore any Corporate

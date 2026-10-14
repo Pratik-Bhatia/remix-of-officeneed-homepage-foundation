@@ -11,8 +11,8 @@
  * the real, sole entry point into the manual-approval queue. The row is
  * always written 'pending' (the table's own DB default); this function
  * never grants B2B pricing and never touches Shopify at all. An admin
- * must explicitly approve it (src/lib/admin-b2b.functions.ts's
- * approveB2BApplication) before the real Shopify Company/CompanyContact/
+ * approves it in Shopify Admin (the website dashboard was removed;
+* notification email below tells the team) before the real Shopify Company/CompanyContact/
  * Role relationship is created -- B2B eligibility still comes exclusively
  * from that real Shopify relationship (src/lib/b2b.functions.ts), never
  * from this table.
