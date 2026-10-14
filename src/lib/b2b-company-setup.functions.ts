@@ -1,7 +1,18 @@
 import { toIndiaZoneCode } from "./india-zones";
 /**
- * Automatic Shopify B2B company setup, run immediately after a Company-tab
- * self-registration (src/lib/customer.ts's registerCustomer, unchanged).
+ * Shopify B2B company provisioning -- the actual Company/Contact/Role
+ * mutation chain, extracted into provisionShopifyCompanyForApproval below.
+ *
+ * NOT run at registration time anymore. Registration only writes a
+ * pending row to business_account_requests (see
+ * src/lib/business-registration.functions.ts) -- no Shopify relationship
+ * exists, and no B2B pricing is granted, until an admin explicitly
+ * approves the application (src/lib/admin-b2b.functions.ts's
+ * approveB2BApplication), which is the only caller of this module's
+ * exported function. This restores manual review (removed for one day in
+ * this repo's history between automate-registration commits) while
+ * reusing the exact same, already-hardened mutation sequence that used to
+ * run automatically.
  *
  * Mutation sequence -- verified live against this store's Admin API
  * 2026-10 schema before implementing, not guessed:
@@ -58,22 +69,19 @@ import { toIndiaZoneCode } from "./india-zones";
  *      contact.
  *
  * FAILURE SAFETY: any step throws immediately, naming the exact stage --
- * the caller (CustomerAuthModal.tsx / account.tsx) must never report
- * "Business account created successfully" if this throws. No automatic
- * rollback of a freshly-created Company: if a later step fails after
- * step 3b created one, it's left in place (empty, no contact -- harmless)
- * rather than risking a destructive delete on an ambiguous partial
- * state. A retry for the same GST finds and reuses it via step 2 --
- * self-healing, not an ever-growing pile of duplicates. A Company that
- * already had OTHER real contacts (the reuse path) is never deleted,
- * ever.
+ * the caller (admin-b2b.functions.ts's approveB2BApplication) must never
+ * mark an application "approved" if this throws. No automatic rollback of
+ * a freshly-created Company: if a later step fails after step 3b created
+ * one, it's left in place (empty, no contact -- harmless) rather than
+ * risking a destructive delete on an ambiguous partial state. A retry for
+ * the same GST finds and reuses it via step 2 -- self-healing, not an
+ * ever-growing pile of duplicates. A Company that already had OTHER real
+ * contacts (the reuse path) is never deleted, ever.
  */
-import { createServerFn } from "@tanstack/react-start";
 import { adminGraphQLRequest } from "@/lib/shopify-admin.server";
-import { resolveCustomerIdFromToken } from "@/lib/b2b.functions";
 import { isValidGstin, normalizeGstin } from "@/lib/gst";
 
-export type B2BCompanySetupResult = { status: "created"; companyId: string; companyLocationId: string };
+export type B2BCompanyProvisionResult = { companyId: string; companyLocationId: string };
 
 // TEMPORARY DIAGNOSTIC: every throw point below is tagged with a safe,
 // stable stage identifier -- added to pin down exactly which step of the
@@ -389,77 +397,85 @@ async function ensureContactAndRole(
   }
 }
 
-export const setupB2BCompany = createServerFn({ method: "POST" })
-  .inputValidator((input: {
-    customerAccessToken: string;
-    companyName: string;
-    gstNumber: string;
-    contactName: string;
-    phone?: string;
-    // Optional: the registered business address is no longer collected on
-    // the registration form (it's added later from Account Settings ->
-    // Business Account -> Edit Details, src/lib/b2b-location.functions.ts's
-    // updateB2BLocationDetails). When omitted, the Company/Company Location
-    // are created without one -- never an invented, placeholder, or
-    // copied-from-elsewhere address. Still accepted here (not removed
-    // entirely) so that existing caller, b2b-location.functions.ts's own
-    // address-assignment path, and any future caller that DOES have a real
-    // address to set up front keep working unchanged.
-    address?: B2BAddressInput;
-  }) => {
-    if (!input?.customerAccessToken || typeof input.customerAccessToken !== "string") {
-      throw new Error("Missing session token.");
+/**
+ * Validates and normalizes the raw application data (company name, GST,
+ * contact, optional address) before provisioning -- same validation the
+ * old customer-facing createServerFn used to do inline, preserved exactly
+ * so an admin approving a stored application gets the same guarantees a
+ * customer submitting it live used to get.
+ */
+function validateProvisionInput(input: {
+  companyName: string;
+  gstNumber: string;
+  contactName: string;
+  phone?: string;
+  address?: B2BAddressInput;
+}) {
+  const companyName = input.companyName?.trim();
+  if (!companyName) throw new Error("Company name is required.");
+  const gstNumberRaw = input.gstNumber?.trim() ?? "";
+  if (!gstNumberRaw) throw new Error("GST number is required.");
+  if (!isValidGstin(gstNumberRaw)) throw new Error("GST number is not a valid GSTIN.");
+  const contactName = input.contactName?.trim() || companyName;
+  const phone = input.phone?.trim() || undefined;
+
+  let address: B2BAddressInput | undefined;
+  if (input.address) {
+    const addressLine1 = input.address.addressLine1?.trim() ?? "";
+    const addressLine2 = input.address.addressLine2?.trim() || undefined;
+    const city = input.address.city?.trim() ?? "";
+    const stateRaw = input.address.state?.trim() ?? "";
+    const state = stateRaw ? toIndiaZoneCode(stateRaw) : "";
+    if (state === null) throw new Error("Please enter a valid Indian state (e.g. Maharashtra).");
+    const pin = input.address.pin?.trim() ?? "";
+    const country = input.address.country?.trim() ?? "";
+    if (!addressLine1) throw new Error("Address Line 1 is required.");
+    if (!city) throw new Error("City is required.");
+    if (!state) throw new Error("State is required.");
+    if (!pin) throw new Error("PIN / Postal Code is required.");
+    if (!country) throw new Error("Country is required.");
+    // GST (the dedup key and the taxRegistrationId this address would be
+    // stored against) only applies to India -- see the B2BAddressInput
+    // comment for why this is a fixed check rather than a general
+    // country mapping.
+    if (country.trim().toLowerCase() !== "india") {
+      throw new Error("Only India is currently supported for Company registration addresses.");
     }
-    const companyName = input.companyName?.trim();
-    if (!companyName) throw new Error("Company name is required.");
-    const gstNumberRaw = input.gstNumber?.trim() ?? "";
-    if (!gstNumberRaw) throw new Error("GST number is required.");
-    if (!isValidGstin(gstNumberRaw)) throw new Error("GST number is not a valid GSTIN.");
-    const contactName = input.contactName?.trim() || companyName;
-    const phone = input.phone?.trim() || undefined;
+    address = { addressLine1, ...(addressLine2 ? { addressLine2 } : {}), city, state, pin, country };
+  }
 
-    let address: B2BAddressInput | undefined;
-    if (input.address) {
-      const addressLine1 = input.address.addressLine1?.trim() ?? "";
-      const addressLine2 = input.address.addressLine2?.trim() || undefined;
-      const city = input.address.city?.trim() ?? "";
-      const stateRaw = input.address.state?.trim() ?? "";
-      const state = stateRaw ? toIndiaZoneCode(stateRaw) : "";
-      if (state === null) throw new Error("Please enter a valid Indian state (e.g. Maharashtra).");
-      const pin = input.address.pin?.trim() ?? "";
-      const country = input.address.country?.trim() ?? "";
-      if (!addressLine1) throw new Error("Address Line 1 is required.");
-      if (!city) throw new Error("City is required.");
-      if (!state) throw new Error("State is required.");
-      if (!pin) throw new Error("PIN / Postal Code is required.");
-      if (!country) throw new Error("Country is required.");
-      // GST (the dedup key and the taxRegistrationId this address would be
-      // stored against) only applies to India -- see the B2BAddressInput
-      // comment for why this is a fixed check rather than a general
-      // country mapping.
-      if (country.trim().toLowerCase() !== "india") {
-        throw new Error("Only India is currently supported for Company registration addresses.");
-      }
-      address = { addressLine1, ...(addressLine2 ? { addressLine2 } : {}), city, state, pin, country };
-    }
+  return {
+    companyName,
+    gstNumber: normalizeGstin(gstNumberRaw),
+    contactName,
+    ...(phone ? { phone } : {}),
+    ...(address ? { address } : {}),
+  };
+}
 
-    return {
-      customerAccessToken: input.customerAccessToken,
-      companyName,
-      gstNumber: normalizeGstin(gstNumberRaw),
-      contactName,
-      ...(phone ? { phone } : {}),
-      ...(address ? { address } : {}),
-    };
-  })
-  .handler(async ({ data }): Promise<B2BCompanySetupResult> => {
-    let traceCustomerId: string | null = null;
-    try {
-    // 1. Trusted identity -- same rule as every other B2B server function.
-    const customerId = await resolveCustomerIdFromToken(data.customerAccessToken);
-    if (!customerId) throw stagePlainError("CUSTOMER_RESOLUTION_FAILED", "Could not verify the signed-in customer.");
-    traceCustomerId = customerId;
-
+/**
+ * Runs the actual Shopify Company/Contact/Role mutation chain for ONE
+ * approved application. Only ever called from
+ * src/lib/admin-b2b.functions.ts's approveB2BApplication, after admin
+ * auth has already been verified and the application's stored data
+ * (company name, GST, contact, shopify_customer_id) has already been
+ * loaded from business_account_requests -- customerId here is that
+ * stored, already-real Shopify customer id (itself originally captured
+ * via resolveCustomerIdFromToken at the customer's own registration
+ * time), never anything supplied fresh by a browser request.
+ */
+export async function provisionShopifyCompanyForApproval(input: {
+  customerId: string;
+  companyName: string;
+  gstNumber: string;
+  contactName: string;
+  phone?: string;
+  address?: B2BAddressInput;
+}): Promise<B2BCompanyProvisionResult> {
+  const data = validateProvisionInput(input);
+  const customerId = input.customerId;
+  let traceCustomerId: string | null = customerId;
+  try {
     // 2 / 3. Find-or-create the Company, keyed on GST.
     let companyId: string;
     let companyLocationId: string | null;
@@ -590,12 +606,12 @@ export const setupB2BCompany = createServerFn({ method: "POST" })
     await ensureContactAndRole(customerId, companyId, companyLocationId, orderingOnlyRoleId);
 
     console.log(`[B2B setup] SUCCESS customer=${customerId} gst=${data.gstNumber} company=${companyId}`);
-    return { status: "created", companyId, companyLocationId };
-    } catch (err) {
-      // Server-side trace of the exact failing stage. Never logs tokens.
-      const msg = err instanceof Error ? err.message : String(err);
-      const stage = /^\[([A-Z_:,]+)\]/.exec(msg)?.[1] ?? "UNTAGGED";
-      console.error(`[B2B setup] FAILED stage=${stage} customer=${traceCustomerId ?? "unresolved"} gst=${data.gstNumber} msg=${msg}`);
-      throw err;
-    }
-  });
+    return { companyId, companyLocationId };
+  } catch (err) {
+    // Server-side trace of the exact failing stage. Never logs tokens.
+    const msg = err instanceof Error ? err.message : String(err);
+    const stage = /^\[([A-Z_:,]+)\]/.exec(msg)?.[1] ?? "UNTAGGED";
+    console.error(`[B2B setup] FAILED stage=${stage} customer=${traceCustomerId ?? "unresolved"} gst=${data.gstNumber} msg=${msg}`);
+    throw err;
+  }
+}

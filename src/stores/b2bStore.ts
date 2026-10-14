@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { resolveB2BSession, type CompanyLocationOption } from "@/lib/b2b.functions";
 
-export type B2BStatus = "idle" | "resolving" | "b2c" | "needs-location" | "b2b";
+export type B2BStatus = "idle" | "resolving" | "b2c" | "pending" | "needs-location" | "b2b";
 
 interface B2BStore {
   status: B2BStatus;
@@ -62,6 +62,10 @@ export const useB2BStore = create<B2BStore>()((set, get) => ({
 
       if (result.status === "b2c") {
         set({ status: "b2c", locations: [], companyLocationId: null, customerId: result.customerId, resolvedForToken: token, resolved: true });
+        return;
+      }
+      if (result.status === "pending") {
+        set({ status: "pending", locations: [], companyLocationId: null, customerId: result.customerId, resolvedForToken: token, resolved: true });
         return;
       }
       const { locations, customerId } = result;

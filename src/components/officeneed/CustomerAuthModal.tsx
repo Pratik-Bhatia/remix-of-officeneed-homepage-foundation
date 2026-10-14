@@ -12,7 +12,6 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { signInCustomer, registerCustomer, requestPasswordRecovery, getCustomerToken, CustomerAuthError } from "@/lib/customer";
 import { saveBusinessRegistration } from "@/lib/business-registration.functions";
-import { setupB2BCompany } from "@/lib/b2b-company-setup.functions";
 import { refreshSaves, toggleSave, isHandleSaved } from "@/lib/saves";
 import { takePendingSave, clearPendingSave } from "@/lib/pending-save";
 import { useQueryClient } from "@tanstack/react-query";
@@ -308,61 +307,38 @@ export function CustomerAuthModal({
           });
         }
         // The Shopify customer is already created and signed in at this
-        // point -- a failure saving the company/GST intake record is
-        // secondary and must not look like the whole registration failed.
-        // (GST itself was already required + format-validated above, so
-        // this call failing now would be a transient/infra issue, not a
-        // bad value -- still surfaced, never silently dropped.)
+        // point. Registering here NEVER grants B2B pricing by itself
+        // anymore (manual approval restored -- see
+        // src/lib/business-registration.functions.ts and
+        // src/routes/admin/b2b-companies.tsx): this intake write is the
+        // ONLY thing that happens, creating a 'pending' application an
+        // admin must explicitly approve before any real Shopify Company/
+        // Contact/Role relationship -- and therefore any Corporate
+        // Pricing -- exists. A failure here must never claim the
+        // application was submitted when it wasn't.
         const token = getCustomerToken();
         if (token) {
           try {
-            await saveBusinessRegistration({ data: { token, companyName, gstNumber } });
-          } catch (saveErr) {
-            console.error("Failed to save business registration details:", saveErr);
-            toast.warning("Account created, but we couldn't save your company details. Please contact OfficeNeed.");
-          }
-        }
-
-        // Automatic Shopify B2B setup -- the actual thing that makes
-        // Corporate Pricing available, not just an intake record (see
-        // src/lib/b2b-company-setup.functions.ts for the full mutation
-        // chain). "Business account created" is only ever shown once this
-        // genuinely succeeds -- a failure here must never look like B2B
-        // is active when it isn't.
-        if (token) {
-          try {
-            await setupB2BCompany({
+            await saveBusinessRegistration({
               data: {
-                customerAccessToken: token,
+                token,
                 companyName,
                 gstNumber,
                 contactName: fullName,
                 ...(phone ? { phone } : {}),
-                // The compact Company registration form no longer collects
-                // a business address (added later via Account Settings ->
-                // Business Account -> Edit Details) -- only the `upgrade`
-                // flow's fuller form still has these fields. Omitted
-                // entirely (not sent as empty strings) when absent, since
-                // the server-side address validator now treats any address
-                // it receives as one that must be complete.
+                // Only the `upgrade` form's fuller fields are ever
+                // non-empty here -- the compact fresh-registration form
+                // doesn't render these inputs at all, so form.get(...)
+                // returns "" for all of them and this is correctly
+                // omitted. Stored as-is and applied to the real Shopify
+                // Company Location only once an admin approves.
                 ...(addressLine1 ? { address: { addressLine1, ...(addressLine2 ? { addressLine2 } : {}), city, state, pin, country } } : {}),
               },
             });
-            // The existing B2BSync-driven resolve() for this exact token
-            // already ran (and found no company) the moment signInCustomer
-            // fired officeneed-customer-token above -- resolve() no-ops on
-            // a repeat call for the same token (see b2bStore.ts), so this
-            // store must be reset first to force a genuinely fresh lookup
-            // against the relationship that was *just* created.
-            useB2BStore.getState().reset();
-            await useB2BStore.getState().resolve(token);
-            queryClient.invalidateQueries({ queryKey: ["shopify"] });
-            toast.success("Your business account has been created successfully.");
-          } catch (b2bErr) {
-            console.error("[B2B setup] Automatic company setup failed:", b2bErr);
-            toast.error(
-              "Your account was created, but we couldn't finish setting up your business pricing automatically. Please contact OfficeNeed so we can complete this for you.",
-            );
+            toast.success("Your business account application has been submitted. We'll notify you once it's approved.");
+          } catch (saveErr) {
+            console.error("Failed to save business registration details:", saveErr);
+            toast.error("Your account was created, but we couldn't submit your business application. Please contact OfficeNeed so we can complete this for you.");
           }
         } else {
           toast.success("Account created successfully");
@@ -788,8 +764,8 @@ export function CustomerAuthModal({
 
                     {/* Deliberately no Business Address section here --
                         registration no longer collects the registered
-                        business address (see setupB2BCompany's now-optional
-                        `address` input). It's added later from Account
+                        business address (see saveBusinessRegistration's
+                        optional `address` input). It's added later from Account
                         Settings -> Business Account -> Edit Details
                         (BusinessDetailsFormDialog in account.profile.tsx /
                         updateB2BLocationDetails), which is unrelated to and

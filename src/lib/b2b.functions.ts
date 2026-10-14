@@ -31,6 +31,7 @@ const SHOPIFY_STOREFRONT_URL = `https://${SHOPIFY_STORE_PERMANENT_DOMAIN}/api/${
 export type CompanyLocationOption = { id: string; name: string };
 export type B2BSessionResult =
   | { status: "b2c"; customerId: string | null }
+  | { status: "pending"; customerId: string }
   | { status: "b2b"; locations: CompanyLocationOption[]; customerId: string };
 
 const RESOLVE_CUSTOMER_ID_QUERY = `
@@ -168,8 +169,28 @@ export const resolveB2BSession = createServerFn({ method: "POST" })
 
     // 0 assigned locations covers BOTH "no company contact at all" and
     // "has a company contact but every role assignment was removed" --
-    // both are treated identically as plain B2C.
-    if (locations.length === 0) return { status: "b2c", customerId };
+    // ACCESS is identical either way (plain B2C), decided purely from
+    // this real Shopify lookup above, never from anything below. The
+    // only question left is which MESSAGE to show: a customer with a
+    // pending application (src/lib/business-registration.functions.ts)
+    // sees "under review" instead of the generic "register your
+    // business" CTA -- purely cosmetic, and fails safe to the plain b2c
+    // message on any error, same as this whole function already does.
+    if (locations.length === 0) {
+      try {
+        const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+        const { data: pendingRequest } = await (supabaseAdmin as any)
+          .from("business_account_requests")
+          .select("status")
+          .eq("shopify_customer_id", customerId)
+          .eq("status", "pending")
+          .maybeSingle();
+        if (pendingRequest) return { status: "pending", customerId };
+      } catch (err) {
+        console.error("[B2B] pending-application lookup failed (falling back to b2c):", err instanceof Error ? err.message : err);
+      }
+      return { status: "b2c", customerId };
+    }
 
     return { status: "b2b", locations, customerId };
   });

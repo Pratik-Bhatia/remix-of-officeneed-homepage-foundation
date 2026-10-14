@@ -68,6 +68,18 @@ function B2BAccountStatus() {
       </div>
     );
   }
+  // Purely informational -- this customer has no real B2B access yet
+  // (that's still decided exclusively by the live Shopify lookup above
+  // this branch in resolveB2BSession), just a pending application an
+  // admin hasn't reviewed yet. See src/routes/admin/b2b-companies.tsx.
+  if (b2bStatus === "pending") {
+    return (
+      <div className="mt-4 mb-6 flex flex-wrap items-center gap-3 rounded-xl border border-border bg-background px-4 py-3 text-sm">
+        <Building2 className="size-4 shrink-0 text-muted-foreground" />
+        <span className="text-muted-foreground">Your business account application is under review. We'll notify you once it's approved.</span>
+      </div>
+    );
+  }
   if (b2bStatus !== "b2b" && b2bStatus !== "needs-location") return null;
 
   return (

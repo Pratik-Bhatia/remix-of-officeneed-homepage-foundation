@@ -113,6 +113,20 @@ test("a real B2C customer signing in through the Individual tab still resolves t
   assert.equal(state.companyLocationId, null);
 });
 
+test("a customer with a pending B2B application resolves to 'pending', not 'b2c' or 'b2b' -- purely informational, no location/pricing access granted", async () => {
+  resetStore();
+  resolveDelayMs = {};
+  TOKEN_RESULT["token-pending-applicant"] = { status: "pending", customerId: "gid://shopify/Customer/333" };
+
+  await useB2BStore.getState().resolve("token-pending-applicant");
+
+  const state = useB2BStore.getState();
+  assert.equal(state.status, "pending");
+  assert.equal(state.resolved, true);
+  assert.equal(state.companyLocationId, null);
+  assert.equal(state.locations.length, 0);
+});
+
 test("a slower, now-stale resolve() for a previous token must not overwrite a newer token's result -- the modal awaiting resolve() per sign-in relies on this guard when a customer signs out and back in quickly", async () => {
   resetStore();
   resolveDelayMs = { "token-old": 50, "token-new": 0 };
