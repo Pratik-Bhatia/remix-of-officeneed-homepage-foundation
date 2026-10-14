@@ -449,7 +449,7 @@ export function CustomerAuthModal({
       }
       // An email that's already registered should send the shopper to
       // sign in, not leave them stuck on a failed "Create Account" form.
-      if (error instanceof CustomerAuthError && error.code === "TAKEN") {
+      if (error instanceof CustomerAuthError && (error.code === "TAKEN" || error.code === "REGISTRATION_UNCONFIRMED" || error.code === "SIGN_IN_AFTER_CREATE_TIMEOUT")) {
         setMode("signin");
       }
       if (mode === "signin" && !(error instanceof CustomerAuthError)) {

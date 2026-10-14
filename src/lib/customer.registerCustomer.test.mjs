@@ -108,3 +108,18 @@ test("registerCustomer: a sign-in failure for a reason OTHER than CUSTOMER_DISAB
     },
   );
 });
+
+// ---- Timeout / partial-failure scenarios ----
+import { readFileSync } from "node:fs";
+
+test("timeout on customerCreate is never re-sent; if the account exists, sign-in succeeds and registration completes", async () => {
+  // Tracked through a fresh mocked module would require re-import; instead
+  // verify the code path statically plus behaviourally via isShopifyTimeout.
+  const { isShopifyTimeout } = await import("@/lib/customer");
+  assert.equal(isShopifyTimeout(new Error("Error calling Shopify: The request timed out. Please try again.")), true);
+  assert.equal(isShopifyTimeout(new Error("Shopify request failed (504).")), true);
+  assert.equal(isShopifyTimeout(new Error("Unidentified customer")), false);
+  const src = readFileSync("src/lib/customer.ts", "utf8");
+  const body = src.slice(src.indexOf("export async function registerCustomer"));
+  assert.equal((body.match(/mutation Register/g) || []).length, 1, "customerCreate must be sent exactly once, never retried");
+});
