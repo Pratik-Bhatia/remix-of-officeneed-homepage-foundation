@@ -27,6 +27,56 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { adminGraphQLRequest } from "@/lib/shopify-admin.server";
 import { provisionShopifyCompanyForApproval } from "@/lib/b2b-company-setup.functions";
+import { resolveCompanyLocationsForCustomer } from "@/lib/b2b.functions";
+
+/**
+ * Shopify Admin is the ONLY authority for B2B approval. The website never
+ * creates Shopify companies/contacts/roles or sets payment terms anymore --
+ * the admin does that in Shopify Admin. Flip to true only to roll back to
+ * the old website-driven approval (provisioning code kept intact).
+ */
+export const WEBSITE_B2B_APPROVAL_ENABLED = false;
+
+/**
+ * Reads the customer's REAL Shopify company/contact/role link and mirrors
+ * it onto our application record as a display label. The label is never
+ * used for access -- b2b.functions.ts decides access from Shopify alone.
+ */
+export async function checkShopifyApprovalImpl(
+  data: { requestId: string },
+  context: AdminContext,
+  deps: { resolveLocations: typeof resolveCompanyLocationsForCustomer } = { resolveLocations: resolveCompanyLocationsForCustomer },
+) {
+  await assertAdmin(context);
+  const client = context.supabase;
+  const { data: request, error } = await client
+    .from("business_account_requests")
+    .select("id, status, shopify_customer_id")
+    .eq("id", data.requestId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!request) throw new Error("Application not found.");
+  const locations = await deps.resolveLocations(request.shopify_customer_id);
+  const linked = locations.length > 0;
+  if (linked && request.status !== "approved") {
+    const { error: updErr } = await client
+      .from("business_account_requests")
+      .update({ status: "approved", reviewed_by: context.userId, reviewed_at: new Date().toISOString(), rejection_reason: null })
+      .eq("id", data.requestId);
+    if (updErr) throw new Error(updErr.message);
+  }
+  return { linked, locations };
+}
+
+export const checkShopifyApproval = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { requestId: string }) => {
+    if (!input?.requestId) throw new Error("requestId is required.");
+    return { requestId: input.requestId };
+  })
+  .handler(async ({ data, context }) => checkShopifyApprovalImpl(data, context as any));
+
+const APPROVAL_IN_SHOPIFY_MESSAGE = "B2B approval and payment terms are managed in Shopify Admin.";
 
 type AdminContext = { supabase: any; userId: string };
 
@@ -255,7 +305,10 @@ export const approveB2BApplication = createServerFn({ method: "POST" })
       paymentTermsTemplateName: paymentTerms === "pay_later" ? (input.paymentTermsTemplateName?.trim() || null) : null,
     };
   })
-  .handler(async ({ data, context }) => approveB2BApplicationImpl(data, context as any));
+  .handler(async ({ data, context }) => {
+    if (!WEBSITE_B2B_APPROVAL_ENABLED) throw new Error(APPROVAL_IN_SHOPIFY_MESSAGE);
+    return approveB2BApplicationImpl(data, context as any);
+  });
 
 export async function rejectB2BApplicationImpl(data: { requestId: string; reason: string | null }, context: AdminContext) {
   await assertAdmin(context);
@@ -320,7 +373,10 @@ export const updateB2BCompanyPaymentTerms = createServerFn({ method: "POST" })
       paymentTermsTemplateName: paymentTerms === "pay_later" ? (input.paymentTermsTemplateName?.trim() || null) : null,
     };
   })
-  .handler(async ({ data, context }) => updateB2BCompanyPaymentTermsImpl(data, context as any));
+  .handler(async ({ data, context }) => {
+    if (!WEBSITE_B2B_APPROVAL_ENABLED) throw new Error(APPROVAL_IN_SHOPIFY_MESSAGE);
+    return updateB2BCompanyPaymentTermsImpl(data, context as any);
+  });
 
 const LIST_ALL_COMPANIES_QUERY = `
   query ListAllCompanies($after: String) {
