@@ -24,6 +24,7 @@ function upsertingClient({ failTimes = 0 } = {}) {
       }
       if (table === "business_account_requests") {
         return {
+          select: () => ({ eq: (_k, v) => ({ maybeSingle: async () => ({ data: rows.get(v) ?? null, error: null }) }) }),
           upsert: async (row, opts) => {
             if (failuresLeft > 0) { failuresLeft--; return { error: { message: "column \"status\" does not exist" } }; }
             rows.set(row[opts.onConflict], row);
