@@ -1,18 +1,26 @@
 import { toIndiaZoneCode } from "./india-zones";
 /**
- * Shopify B2B company provisioning -- the actual Company/Contact/Role
- * mutation chain, extracted into provisionShopifyCompanyForApproval below.
+ * Shopify B2B company provisioning -- the Company/Location creation and
+ * the separate Contact/Role assignment, split into two functions so each
+ * can be called independently:
  *
- * NOT run at registration time anymore. Registration only writes a
- * pending row to business_account_requests (see
- * src/lib/business-registration.functions.ts) -- no Shopify relationship
- * exists, and no B2B pricing is granted, until an admin explicitly
- * approves the application (src/lib/admin-b2b.functions.ts's
- * approveB2BApplication), which is the only caller of this module's
- * exported function. This restores manual review (removed for one day in
- * this repo's history between automate-registration commits) while
- * reusing the exact same, already-hardened mutation sequence that used to
- * run automatically.
+ *   - findOrCreateShopifyCompany: Company + Location only (name, GST,
+ *     optional address). Called from src/lib/business-registration.functions.ts
+ *     at REGISTRATION time, so the Company is visible in Shopify Admin ->
+ *     Customers -> Companies immediately. Creating a Company this way
+ *     grants NO B2B access by itself -- access is derived exclusively
+ *     from Customer -> CompanyContact -> RoleAssignment -> CompanyLocation
+ *     (b2b.functions.ts), never from a Company merely existing with no
+ *     contacts.
+ *   - provisionShopifyCompanyForApproval: calls the above, then ALSO
+ *     assigns the customer as a contact with the "Ordering only" role --
+ *     this is the step that actually grants B2B access, and stays
+ *     exclusively a manual Shopify Admin action (Customers -> Companies ->
+ *     Add customer as contact) per policy. Currently unused by any
+ *     caller in this codebase (the "make Shopify the only authority"
+ *     redesign removed its only caller, admin-b2b.functions.ts) -- kept
+ *     in place, unchanged, in case a future admin tool wants to automate
+ *     that manual step; nothing currently invokes it.
  *
  * Mutation sequence -- verified live against this store's Admin API
  * 2026-10 schema before implementing, not guessed:
@@ -453,28 +461,25 @@ function validateProvisionInput(input: {
   };
 }
 
+export type B2BCompanyLookupResult = B2BCompanyProvisionResult & { orderingOnlyRoleId: string };
+
 /**
- * Runs the actual Shopify Company/Contact/Role mutation chain for ONE
- * approved application. Only ever called from
- * src/lib/admin-b2b.functions.ts's approveB2BApplication, after admin
- * auth has already been verified and the application's stored data
- * (company name, GST, contact, shopify_customer_id) has already been
- * loaded from business_account_requests -- customerId here is that
- * stored, already-real Shopify customer id (itself originally captured
- * via resolveCustomerIdFromToken at the customer's own registration
- * time), never anything supplied fresh by a browser request.
+ * Finds (by GST) or creates the Shopify Company + Company Location for an
+ * application -- Company/Location only, NEVER a contact or role
+ * assignment. Safe to call at registration time, before any approval:
+ * a Company with zero contacts grants no one any B2B access (see this
+ * file's header comment). Idempotent and retry-safe via the GST-keyed
+ * lookup-before-create below -- a retried registration after a timeout
+ * finds and reuses the same Company instead of creating a duplicate.
  */
-export async function provisionShopifyCompanyForApproval(input: {
-  customerId: string;
+export async function findOrCreateShopifyCompany(input: {
   companyName: string;
   gstNumber: string;
   contactName: string;
   phone?: string;
   address?: B2BAddressInput;
-}): Promise<B2BCompanyProvisionResult> {
+}): Promise<B2BCompanyLookupResult> {
   const data = validateProvisionInput(input);
-  const customerId = input.customerId;
-  let traceCustomerId: string | null = customerId;
   try {
     // 2 / 3. Find-or-create the Company, keyed on GST.
     let companyId: string;
@@ -492,7 +497,7 @@ export async function provisionShopifyCompanyForApproval(input: {
       // customer as a contact with the Ordering only role, and is
       // idempotent whether this customer is brand new to the company or
       // retrying their own prior setup.
-      console.log(`[B2B setup] branch=existing customer=${customerId} gst=${data.gstNumber} company=${existing.id}`);
+      console.log(`[B2B setup] branch=existing gst=${data.gstNumber} company=${existing.id}`);
       companyId = existing.id;
       orderingOnlyRoleId = resolveOrderingOnlyRoleId(existing.contactRoles);
       const existingLocation = existing.locations.edges[0]?.node ?? null;
@@ -564,7 +569,7 @@ export async function provisionShopifyCompanyForApproval(input: {
         await assignCompanyLocationAddress(companyLocationId, data.address, data.contactName, data.phone, "COMPANY_LOCATION_CREATE_FAILED");
       }
     } else {
-      console.log(`[B2B setup] branch=create customer=${customerId} gst=${data.gstNumber}`);
+      console.log(`[B2B setup] branch=create gst=${data.gstNumber}`);
       const createResult = await adminGraphQLRequest<{
         companyCreate: { company: CompanyRef | null; userErrors: Array<{ message: string; field: string[] | null }> };
       }>(COMPANY_CREATE_MUTATION, {
@@ -602,16 +607,44 @@ export async function provisionShopifyCompanyForApproval(input: {
       }
     }
 
-    // 4/5/6, fully idempotent -- see ensureContactAndRole's doc comment.
-    await ensureContactAndRole(customerId, companyId, companyLocationId, orderingOnlyRoleId);
-
-    console.log(`[B2B setup] SUCCESS customer=${customerId} gst=${data.gstNumber} company=${companyId}`);
-    return { companyId, companyLocationId };
+    console.log(`[B2B setup] company ready gst=${data.gstNumber} company=${companyId}`);
+    return { companyId, companyLocationId, orderingOnlyRoleId };
   } catch (err) {
     // Server-side trace of the exact failing stage. Never logs tokens.
     const msg = err instanceof Error ? err.message : String(err);
     const stage = /^\[([A-Z_:,]+)\]/.exec(msg)?.[1] ?? "UNTAGGED";
-    console.error(`[B2B setup] FAILED stage=${stage} customer=${traceCustomerId ?? "unresolved"} gst=${data.gstNumber} msg=${msg}`);
+    console.error(`[B2B setup] company creation FAILED stage=${stage} gst=${data.gstNumber} msg=${msg}`);
     throw err;
   }
+}
+
+/**
+ * Runs findOrCreateShopifyCompany above, then ALSO assigns the customer
+ * as a contact with the "Ordering only" role -- the step that actually
+ * grants B2B access. Currently unused (see this file's header comment);
+ * kept for a possible future admin tool. customerId here must already be
+ * a real, trusted Shopify customer id (e.g. resolveCustomerIdFromToken's
+ * result, or one already stored from a customer's own prior
+ * registration), never anything supplied fresh by an unverified request.
+ */
+export async function provisionShopifyCompanyForApproval(input: {
+  customerId: string;
+  companyName: string;
+  gstNumber: string;
+  contactName: string;
+  phone?: string;
+  address?: B2BAddressInput;
+}): Promise<B2BCompanyProvisionResult> {
+  const { companyId, companyLocationId, orderingOnlyRoleId } = await findOrCreateShopifyCompany(input);
+  try {
+    // 4/5/6, fully idempotent -- see ensureContactAndRole's doc comment.
+    await ensureContactAndRole(input.customerId, companyId, companyLocationId, orderingOnlyRoleId);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    const stage = /^\[([A-Z_:,]+)\]/.exec(msg)?.[1] ?? "UNTAGGED";
+    console.error(`[B2B setup] contact/role assignment FAILED stage=${stage} customer=${input.customerId} gst=${input.gstNumber} company=${companyId} msg=${msg}`);
+    throw err;
+  }
+  console.log(`[B2B setup] SUCCESS customer=${input.customerId} gst=${input.gstNumber} company=${companyId}`);
+  return { companyId, companyLocationId };
 }

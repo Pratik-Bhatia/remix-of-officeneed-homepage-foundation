@@ -303,13 +303,44 @@ export function CustomerAuthModal({
         const country = String(form.get("country") ?? "").trim();
         const { firstName, lastName } = splitFullName(fullName);
         if (!upgrade) {
-          await registerCustomer({
-            email,
-            password,
-            ...(firstName ? { firstName } : {}),
-            ...(lastName ? { lastName } : {}),
-            ...(phone ? { phone } : {}),
-          });
+          try {
+            await registerCustomer({
+              email,
+              password,
+              ...(firstName ? { firstName } : {}),
+              ...(lastName ? { lastName } : {}),
+              ...(phone ? { phone } : {}),
+            });
+          } catch (registerErr) {
+            // registerCustomer() itself already anticipates that Shopify
+            // can commit customerCreate (and fire its own welcome email)
+            // even though the response -- or its own internal sign-in
+            // probe -- never confirmed that back to us in time (see that
+            // function's own comment on REGISTRATION_UNCONFIRMED /
+            // SIGN_IN_AFTER_CREATE_TIMEOUT). Losing the business details
+            // the shopper already typed behind a real, already-created
+            // Shopify customer would be exactly the "customer gets the
+            // welcome email but the application vanishes" failure mode --
+            // one more sign-in attempt, now that a little more time has
+            // passed, recovers the common case. On success this falls
+            // through to the EXACT same application-submit code below as
+            // a normal registration; on failure it re-throws the
+            // ORIGINAL error unchanged, preserving today's existing
+            // fallback messaging for the rarer double-failure case.
+            if (
+              entryType === "company" &&
+              registerErr instanceof CustomerAuthError &&
+              (registerErr.code === "REGISTRATION_UNCONFIRMED" || registerErr.code === "SIGN_IN_AFTER_CREATE_TIMEOUT")
+            ) {
+              try {
+                await signInCustomer(email, password);
+              } catch {
+                throw registerErr;
+              }
+            } else {
+              throw registerErr;
+            }
+          }
         }
         // The Shopify customer is already created and signed in at this
         // point. Registering here NEVER grants B2B pricing by itself

@@ -12,15 +12,34 @@ function memoryStorage() {
   return { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), removeItem: (k) => m.delete(k), _m: m };
 }
 
+// Fake findOrCreateShopifyCompany -- these tests are about the Supabase
+// retry/draft mechanics specifically, not Shopify company creation (see
+// b2b-company-setup.functions.test.mjs for that), so this always
+// succeeds deterministically with no real Admin API call.
+const fakeShopify = async (input) => ({
+  companyId: `gid://shopify/Company/${input.gstNumber}`,
+  companyLocationId: `gid://shopify/CompanyLocation/${input.gstNumber}`,
+  orderingOnlyRoleId: "gid://shopify/CompanyContactRole/1",
+});
+
 // Fake DB that honours upsert onConflict like Postgres does.
 function upsertingClient({ failTimes = 0 } = {}) {
   const rows = new Map();
+  const companyRows = new Map(); // gst_number -> row
   let failuresLeft = failTimes;
+  let nextCompanyRowId = 1;
   return {
     rows,
     from(table) {
       if (table === "b2b_companies") {
-        return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }) };
+        return {
+          select: () => ({ eq: (_k, gst) => ({ maybeSingle: async () => ({ data: companyRows.has(gst) ? { id: companyRows.get(gst).id } : null, error: null }) }) }),
+          insert: (row) => {
+            const id = `company-row-${nextCompanyRowId++}`;
+            companyRows.set(row.gst_number, { id, ...row });
+            return { select: () => ({ single: async () => ({ data: { id }, error: null }) }) };
+          },
+        };
       }
       if (table === "business_account_requests") {
         return {
@@ -44,7 +63,7 @@ test("application submission failure after customer creation reports 'failed', k
   const client = upsertingClient({ failTimes: 1 });
   let registerCalls = 0;
   const storage = memoryStorage();
-  const outcome = await submitBusinessApplication((d) => saveBusinessRegistrationRecord(d, CUSTOMER, client), draft);
+  const outcome = await submitBusinessApplication((d) => saveBusinessRegistrationRecord(d, CUSTOMER, client, fakeShopify), draft);
   assert.equal(outcome, "failed");
   saveApplicationDraft(CUSTOMER, draft, storage);
   assert.deepEqual(getApplicationDraft(CUSTOMER, storage), draft);
@@ -55,7 +74,7 @@ test("application submission failure after customer creation reports 'failed', k
 test("a retry after failure succeeds, stores one pending application, and clears the draft", async () => {
   const client = upsertingClient({ failTimes: 1 });
   const storage = memoryStorage();
-  const save = (d) => saveBusinessRegistrationRecord(d, CUSTOMER, client);
+  const save = (d) => saveBusinessRegistrationRecord(d, CUSTOMER, client, fakeShopify);
   assert.equal(await submitBusinessApplication(save, draft), "failed");
   saveApplicationDraft(CUSTOMER, draft, storage);
   assert.equal(await submitBusinessApplication(save, getApplicationDraft(CUSTOMER, storage)), "submitted");
@@ -67,7 +86,7 @@ test("a retry after failure succeeds, stores one pending application, and clears
 
 test("repeated retries never create duplicate applications for the same customer", async () => {
   const client = upsertingClient();
-  const save = (d) => saveBusinessRegistrationRecord(d, CUSTOMER, client);
+  const save = (d) => saveBusinessRegistrationRecord(d, CUSTOMER, client, fakeShopify);
   for (let i = 0; i < 5; i++) assert.equal(await submitBusinessApplication(save, draft), "submitted");
   assert.equal(client.rows.size, 1);
 });
