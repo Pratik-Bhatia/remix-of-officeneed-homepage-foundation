@@ -11,8 +11,8 @@
  * the real, sole entry point into the manual-approval queue. The row is
  * always written 'pending' (the table's own DB default); this function
  * never grants B2B pricing and never touches Shopify at all. An admin
- * must explicitly approve it (src/lib/admin-b2b.functions.ts's
- * approveB2BApplication) before the real Shopify Company/CompanyContact/
+ * approves it in Shopify Admin (the website dashboard was removed;
+* notification email below tells the team) before the real Shopify Company/CompanyContact/
  * Role relationship is created -- B2B eligibility still comes exclusively
  * from that real Shopify relationship (src/lib/b2b.functions.ts), never
  * from this table.
@@ -116,21 +116,34 @@ export const saveBusinessRegistration = createServerFn({ method: "POST" })
  * (createServerFn's own handler can't be invoked outside the real server
  * runtime in node:test).
  */
+export type B2BApplicationNotice = {
+  companyName: string;
+  gstNumber: string;
+  contactName?: string;
+  phone?: string;
+  address?: BusinessAddressInput;
+  customerId: string;
+};
+
 export async function saveBusinessRegistrationRecord(
   data: { companyName: string; gstNumber: string; contactName?: string; phone?: string; address?: BusinessAddressInput },
   customerId: string,
-  // Cast to `any` by callers: b2b_companies and business_account_requests'
-  // new columns (status/b2b_company_id/contact_name/phone/address.../...)
-  // were added in 20261014140000_restore_b2b_manual_approval.sql, not yet
-  // reflected in the generated Database type -- same convention
-  // admin-quotes.functions.ts already uses for a table it queries ahead
-  // of a type regen.
+  // Cast to `any` by callers (columns ahead of the generated types).
   client: any,
+  // Injected so tests can observe it; defaults to the real team email.
+  notify: (notice: B2BApplicationNotice) => Promise<unknown> = notifyTeamOfB2BApplication,
 ): Promise<{ ok: true; status: "pending" }> {
   const { data: existingCompany } = await client
     .from("b2b_companies")
     .select("id")
     .eq("gst_number", data.gstNumber)
+    .maybeSingle();
+  // Read before writing so a retry/resubmit of an already-saved pending
+  // application does not email the team a second time.
+  const { data: previous } = await client
+    .from("business_account_requests")
+    .select("status")
+    .eq("shopify_customer_id", customerId)
     .maybeSingle();
   const { error } = await client.from("business_account_requests").upsert(
     {
@@ -154,5 +167,58 @@ export async function saveBusinessRegistrationRecord(
     { onConflict: "shopify_customer_id" },
   );
   if (error) throw new Error(error.message);
+  if (previous?.status !== "pending") {
+    // Never let an email problem fail the shopper's application.
+    try {
+      await notify({ ...data, customerId });
+    } catch (err) {
+      console.error("[B2B intake] team notification failed", err instanceof Error ? err.message : String(err));
+    }
+  }
   return { ok: true, status: "pending" };
+}
+
+const B2B_APPLICATION_RECIPIENT = "marketing@officeneed.in";
+
+function escapeHtml(value: unknown): string {
+  if (value === null || value === undefined || value === "") return "—";
+  return String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
+/** Builds the team email. Contains only application details -- no tokens or passwords. */
+export function buildB2BApplicationEmail(n: B2BApplicationNotice) {
+  const numericId = n.customerId.startsWith("gid://shopify/Customer/") ? n.customerId.split("/").pop() : null;
+  const link = numericId ? `https://admin.shopify.com/store/har1k4-di/customers/${numericId}` : null;
+  const address = n.address
+    ? [n.address.addressLine1, n.address.addressLine2, n.address.city, n.address.state, n.address.pin, n.address.country].filter(Boolean).join(", ")
+    : "";
+  const subject = `New B2B application: ${n.companyName} (${n.gstNumber})`;
+  const html = `<h2>New business account application</h2>
+<p>Approve it in Shopify Admin → Customers → Companies by adding this customer as a contact with a role at a location.</p>
+<table cellpadding="6">
+<tr><td><b>Company</b></td><td>${escapeHtml(n.companyName)}</td></tr>
+<tr><td><b>GSTIN</b></td><td>${escapeHtml(n.gstNumber)}</td></tr>
+<tr><td><b>Contact</b></td><td>${escapeHtml(n.contactName)}</td></tr>
+<tr><td><b>Phone</b></td><td>${escapeHtml(n.phone)}</td></tr>
+<tr><td><b>Address</b></td><td>${escapeHtml(address)}</td></tr>
+<tr><td><b>Shopify customer</b></td><td>${link ? `<a href="${escapeHtml(link)}">Open in Shopify (ID ${escapeHtml(numericId)})</a>` : escapeHtml(n.customerId)}</td></tr>
+</table>`;
+  return { to: B2B_APPLICATION_RECIPIENT, subject, html };
+}
+
+async function notifyTeamOfB2BApplication(n: B2BApplicationNotice) {
+  const apiKey = process.env["RESEND_API_KEY"];
+  if (!apiKey) {
+    console.warn("[B2B intake] RESEND_API_KEY not set; application email skipped.");
+    return;
+  }
+  const { Resend } = await import("resend");
+  const email = buildB2BApplicationEmail(n);
+  const { error } = await new Resend(apiKey).emails.send({
+    from: process.env["EMAIL_FROM"] || "OfficeNeed Assistant <contact@officeneed.in>",
+    to: email.to,
+    subject: email.subject,
+    html: email.html,
+  });
+  if (error) throw new Error(error.message);
 }
