@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import {
   listB2BApplications,
-  approveB2BApplication,
+  checkShopifyApproval,
   rejectB2BApplication,
   listPaymentTermsTemplates,
   syncExistingShopifyCompanies,
@@ -44,7 +44,8 @@ function AdminB2BCompaniesPage() {
   const [syncResult, setSyncResult] = useState<string | null>(null);
 
   const listFn = useServerFn(listB2BApplications);
-  const approveFn = useServerFn(approveB2BApplication);
+  const checkFn = useServerFn(checkShopifyApproval);
+  const [checkResult, setCheckResult] = useState<string | null>(null);
   const rejectFn = useServerFn(rejectB2BApplication);
   const templatesFn = useServerFn(listPaymentTermsTemplates);
   const syncFn = useServerFn(syncExistingShopifyCompanies);
@@ -87,22 +88,18 @@ function AdminB2BCompaniesPage() {
     setRejectReason("");
   };
 
-  const approve = async () => {
+  const checkStatus = async () => {
     if (!selected) return;
     setSubmitting(true);
+    setCheckResult(null);
     try {
-      const template = templates.find((t) => t.id === templateId);
-      await approveFn({
-        data: {
-          requestId: selected.id,
-          paymentTerms: paymentChoice,
-          ...(paymentChoice === "pay_later" ? { paymentTermsTemplateId: templateId, ...(template?.translatedName ? { paymentTermsTemplateName: template.translatedName } : {}) } : {}),
-        },
-      });
-      setSelected(null);
+      const r = await checkFn({ data: { requestId: selected.id } });
+      setCheckResult(r.linked
+        ? `Approved in Shopify: ${r.locations.map((l: any) => l.name).join(", ")}`
+        : "Not linked to a company in Shopify yet. This customer still sees normal prices.");
       await load();
     } catch (e: any) {
-      setError(e?.message ?? "Failed to approve application.");
+      setCheckResult(e?.message ?? "Unable to check Shopify.");
     } finally {
       setSubmitting(false);
     }
@@ -222,7 +219,7 @@ function AdminB2BCompaniesPage() {
                   {selected.b2b_companies && (
                     <>
                       <span className="text-muted-foreground">Existing company:</span>
-                      <span className="font-medium">This GST already has an approved company -- approving adds this customer as an additional contact.</span>
+                      <span className="font-medium">This GST already has an approved company -- add this customer as another contact in Shopify.</span>
                     </>
                   )}
                   {selected.status === "rejected" && selected.rejection_reason && (
@@ -235,36 +232,26 @@ function AdminB2BCompaniesPage() {
 
               {selected.status === "pending" && (
                 <>
-                  <div>
-                    <h3 className="font-semibold text-base border-b pb-2 mb-3">Payment terms</h3>
-                    <RadioGroup value={paymentChoice} onValueChange={(v) => setPaymentChoice(v as "pay_now" | "pay_later")}>
-                      <div className="flex items-center gap-2">
-                        <RadioGroupItem value="pay_now" id="pay_now" />
-                        <Label htmlFor="pay_now">Pay Now -- customer pays online at checkout</Label>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <RadioGroupItem value="pay_later" id="pay_later" />
-                        <Label htmlFor="pay_later">Pay Later -- admin-approved credit terms</Label>
-                      </div>
-                    </RadioGroup>
-                    {paymentChoice === "pay_later" && (
-                      <Select value={templateId} onValueChange={setTemplateId}>
-                        <SelectTrigger className="mt-3">
-                          <SelectValue placeholder="Choose a payment terms template" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {templates.map((t) => (
-                            <SelectItem key={t.id} value={t.id}>{t.translatedName}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    <Button onClick={approve} disabled={submitting || (paymentChoice === "pay_later" && !templateId)}>
-                      Approve
-                    </Button>
+                  <div className="space-y-3">
+                    <h3 className="font-semibold text-base border-b pb-2 mb-3">Approve in Shopify</h3>
+                    <ol className="list-decimal pl-5 text-sm text-muted-foreground space-y-1">
+                      <li>In Shopify Admin, open Customers → Companies and add or open the company (GSTIN {selected.gst_number}).</li>
+                      <li>Add this customer as a contact and give them a role at a location.</li>
+                      <li>Set the catalog and payment terms on that location.</li>
+                      <li>Come back and press Check Shopify status.</li>
+                    </ol>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <Button variant="outline" onClick={() => navigator.clipboard?.writeText(`${selected.company_name}\nGSTIN: ${selected.gst_number}\n${selected.contact_name ?? ""} ${selected.phone ?? ""}\n${[selected.address_line1, selected.address_line2, selected.city, selected.state, selected.pin, selected.country].filter(Boolean).join(", ")}`)}>
+                        Copy details
+                      </Button>
+                      {String(selected.shopify_customer_id ?? "").startsWith("gid://shopify/Customer/") && (
+                        <Button variant="outline" asChild>
+                          <a href={`https://admin.shopify.com/store/har1k4-di/customers/${String(selected.shopify_customer_id).split("/").pop()}`} target="_blank" rel="noreferrer">Open customer in Shopify</a>
+                        </Button>
+                      )}
+                      <Button onClick={checkStatus} disabled={submitting}>Check Shopify status</Button>
+                    </div>
+                    {checkResult && <p className="text-sm">{checkResult}</p>}
                   </div>
 
                   <div>
