@@ -7,8 +7,8 @@ export const Route = createFileRoute('/blog/$slug')({
   component: BlogPost,
   head: () => ({
     meta: [
-      { title: 'Article — OfficeNeed' },
-      { name: 'description', content: 'Read full article on OfficeNeed.' },
+      { title: 'Article — Officeneed' },
+      { name: 'description', content: 'Read full article on Officeneed.' },
     ],
   }),
 })

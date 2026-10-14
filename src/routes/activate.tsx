@@ -97,7 +97,7 @@ function ActivatePage() {
           {!activationUrl ? (
             <p className="mt-6 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
               This activation link is invalid or incomplete. Please use the link from your activation email, or
-              contact OfficeNeed for a new one.
+              contact Officeneed for a new one.
             </p>
           ) : (
             <form onSubmit={handleSubmit} className="mt-6 space-y-4">

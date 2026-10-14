@@ -30,7 +30,7 @@ function ReturnsRefundsPage() {
             <section>
               <h2 className="text-2xl font-medium mb-4">No Returns or Exchanges</h2>
               <p className="text-muted-foreground leading-relaxed">
-                All products sold by OfficeNeed are strictly non-returnable and non-exchangeable under any circumstances. We do not accept returns or offer exchanges on any product.
+                All products sold by Officeneed are strictly non-returnable and non-exchangeable under any circumstances. We do not accept returns or offer exchanges on any product.
               </p>
             </section>
 

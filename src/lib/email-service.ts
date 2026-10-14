@@ -22,7 +22,7 @@ function getResendClient() {
 }
 
 function getEmailFrom() {
-  return process.env["EMAIL_FROM"] || "OfficeNeed Assistant <contact@officeneed.in>";
+  return process.env["EMAIL_FROM"] || "Officeneed Assistant <contact@officeneed.in>";
 }
 
 function getInternalEmail() {
@@ -131,12 +131,12 @@ export async function sendCustomerConfirmationEmail(params: {
     const { error } = await resend.emails.send({
       from: getEmailFrom(),
       to: params.email,
-      subject: `Your OfficeNeed enquiry has been received — #${params.enquiryId}`,
+      subject: `Your Officeneed enquiry has been received — #${params.enquiryId}`,
       html: `
         <div style="font-family: sans-serif; max-w-2xl; margin: 0 auto; color: #333;">
-          <h2 style="color: #000;">OfficeNeed</h2>
+          <h2 style="color: #000;">OFFICENEED</h2>
           <p>Hi ${esc(params.name)},</p>
-          <p>Thank you for sharing your requirements with OfficeNeed.</p>
+          <p>Thank you for sharing your requirements with Officeneed.</p>
           <p>We've received your enquiry and our team will review the products and requirements you've shared.</p>
           <hr style="border: none; border-top: 1px solid #eaeaea; margin: 20px 0;" />
           <p><strong>Enquiry ID:</strong> ${esc(params.enquiryId)}</p>
@@ -146,12 +146,12 @@ export async function sendCustomerConfirmationEmail(params: {
           <hr style="border: none; border-top: 1px solid #eaeaea; margin: 20px 0;" />
           <p>We've included your enquiry summary for reference as a PDF attachment.</p>
           <p>Our team will get back to you shortly.</p>
-          <p>Regards,<br/>Team OfficeNeed</p>
+          <p>Regards,<br/>Team Officeneed</p>
         </div>
       `,
       attachments: [
         {
-          filename: `OfficeNeed-Enquiry-${params.enquiryId}.pdf`,
+          filename: `Officeneed-Enquiry-${params.enquiryId}.pdf`,
           content: params.pdfBuffer,
         },
       ],
@@ -230,7 +230,7 @@ export async function sendInternalNotificationEmail(params: {
       `,
       attachments: [
         {
-          filename: `OfficeNeed-Enquiry-${params.enquiryId}.pdf`,
+          filename: `Officeneed-Enquiry-${params.enquiryId}.pdf`,
           content: params.pdfBuffer,
         },
         ...(params.attachments ?? []).map((a) => ({ filename: a.filename, content: a.content })),

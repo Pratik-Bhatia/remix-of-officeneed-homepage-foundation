@@ -21,7 +21,7 @@ function Logo({ className }: { className?: string }) {
   return (
     <Link
       to="/"
-      aria-label="OfficeNeed — home"
+      aria-label="Officeneed — home"
       className="inline-flex shrink-0 items-center rounded-sm"
     >
       <img

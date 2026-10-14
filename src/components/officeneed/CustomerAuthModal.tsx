@@ -258,7 +258,7 @@ export function CustomerAuthModal({
           if (signedInToken) await useB2BStore.getState().resolve(signedInToken);
           if (useB2BStore.getState().status === "b2c") {
             toast.warning(
-              "Your account is not currently linked to a business account. Please contact OfficeNeed to complete your business setup.",
+              "Your account is not currently linked to a business account. Please contact Officeneed to complete your business setup.",
             );
           } else {
             toast.success("Successfully logged in");
@@ -376,7 +376,7 @@ export function CustomerAuthModal({
             const customerId = useB2BStore.getState().customerId;
             if (outcome === "submitted") {
               clearApplicationDraft(customerId);
-              toast.success("Your request has been submitted. Please wait while OfficeNeed reviews and approves your application.", {
+              toast.success("Your request has been submitted. Please wait while Officeneed reviews and approves your application.", {
                 id: "b2b-application-submitted",
                 duration: 8000,
                 // Bottom placement keeps it clear of the navigation and hero heading.
@@ -881,7 +881,7 @@ export function CustomerAuthModal({
                 : entryType === "company"
                   ? mode === "signin"
                     ? "Sign in with your business email to see your orders and saved products."
-                    : "Register your business. B2B pricing is enabled separately once OfficeNeed sets up your company account in Shopify."
+                    : "Register your business. B2B pricing is enabled separately once Officeneed sets up your company account in Shopify."
                   : mode === "signin"
                     ? "Sign in to see your orders and saved products."
                     : "Create an account to track your orders and keep a list of saved products."}

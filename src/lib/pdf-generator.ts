@@ -459,8 +459,8 @@ export async function generateCorporateQuotePDF(data: CorporateQuotePDFData): Pr
     doc.setFontSize(8);
     doc.setTextColor(150, 150, 150);
     const footerText = data.payment
-      ? `Internal OfficeNeed team record only -- not the customer's invoice or receipt. | Page ${i} of ${pageCount}`
-      : `Thank you for choosing OfficeNeed. This document is a quote request summary, not a final tax invoice. | Page ${i} of ${pageCount}`;
+      ? `Internal Officeneed team record only -- not the customer's invoice or receipt. | Page ${i} of ${pageCount}`
+      : `Thank you for choosing Officeneed. This document is a quote request summary, not a final tax invoice. | Page ${i} of ${pageCount}`;
     doc.text(footerText, marginX, 285);
   }
 
@@ -763,7 +763,7 @@ export async function generateEnquiryPDF(data: EnquiryPDFData): Promise<Buffer> 
     doc.setFont("Roboto", "normal");
     doc.setFontSize(8);
     doc.setTextColor(150, 150, 150);
-    const footerText = `Thank you for choosing OfficeNeed. This document is an enquiry summary and not a final tax invoice. | Page ${i} of ${pageCount}`;
+    const footerText = `Thank you for choosing Officeneed. This document is an enquiry summary and not a final tax invoice. | Page ${i} of ${pageCount}`;
     doc.text(footerText, marginX, 285);
   }
 

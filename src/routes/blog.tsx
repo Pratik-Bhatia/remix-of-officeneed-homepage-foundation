@@ -6,7 +6,7 @@ export const Route = createFileRoute('/blog')({
   component: BlogPage,
   head: () => ({
     meta: [
-      { title: 'Blog — OfficeNeed' },
+      { title: 'Blog — Officeneed' },
       { name: 'description', content: 'Read our latest articles, insights, and news.' },
     ],
   }),
@@ -59,7 +59,7 @@ function BlogPage() {
       <main className="flex-1 w-full max-w-7xl mx-auto px-4 py-16 sm:px-6 lg:px-8">
         <header className="mb-12">
           <h1 className="text-4xl font-light tracking-tight text-foreground mb-4">Editorial & Insights</h1>
-          <p className="text-lg text-muted-foreground">Discover the latest trends, guides, and stories from OfficeNeed.</p>
+          <p className="text-lg text-muted-foreground">Discover the latest trends, guides, and stories from Officeneed.</p>
         </header>
 
         {/* Featured Article */}

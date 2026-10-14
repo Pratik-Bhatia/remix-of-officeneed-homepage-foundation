@@ -9,13 +9,13 @@ import { Footer } from "@/components/officeneed/Footer";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "OfficeNeed — One Vendor. Multiple Solutions." },
+      { title: "Officeneed — One Vendor. Multiple Solutions." },
       {
         name: "description",
         content:
           "Corporate procurement made simpler: gifting, office stationery, IT infrastructure, printing & branding and luxury gifting from one accountable partner.",
       },
-      { property: "og:title", content: "OfficeNeed — One Vendor. Multiple Solutions." },
+      { property: "og:title", content: "Officeneed — One Vendor. Multiple Solutions." },
       {
         property: "og:description",
         content:
