@@ -18,6 +18,7 @@ import { useCustomer, signOutCustomer } from "@/lib/customer";
 import { CustomerContext } from "@/lib/customer-context";
 import { clearSaves, refreshSaves } from "@/lib/saves";
 import { cn } from "@/lib/utils";
+import { getApplicationDraft } from "@/lib/business-application-draft";
 import { useB2BStore } from "@/stores/b2bStore";
 
 export const Route = createFileRoute("/account")({
