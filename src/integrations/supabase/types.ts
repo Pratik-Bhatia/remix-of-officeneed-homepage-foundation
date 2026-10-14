@@ -14,32 +14,124 @@ export type Database = {
   }
   public: {
     Tables: {
-      business_account_requests: {
+      b2b_companies: {
         Row: {
+          approved_at: string | null
+          approved_by: string | null
           company_name: string
           created_at: string
           gst_number: string
           id: string
-          shopify_customer_id: string
+          payment_terms: string
+          payment_terms_template_id: string | null
+          payment_terms_template_name: string | null
+          shopify_company_id: string
+          shopify_company_location_id: string
           updated_at: string
         }
         Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
           company_name: string
           created_at?: string
           gst_number: string
           id?: string
-          shopify_customer_id: string
+          payment_terms?: string
+          payment_terms_template_id?: string | null
+          payment_terms_template_name?: string | null
+          shopify_company_id: string
+          shopify_company_location_id: string
           updated_at?: string
         }
         Update: {
+          approved_at?: string | null
+          approved_by?: string | null
           company_name?: string
           created_at?: string
           gst_number?: string
           id?: string
-          shopify_customer_id?: string
+          payment_terms?: string
+          payment_terms_template_id?: string | null
+          payment_terms_template_name?: string | null
+          shopify_company_id?: string
+          shopify_company_location_id?: string
           updated_at?: string
         }
         Relationships: []
+      }
+      business_account_requests: {
+        Row: {
+          address_line1: string | null
+          address_line2: string | null
+          b2b_company_id: string | null
+          city: string | null
+          company_name: string
+          contact_name: string | null
+          country: string | null
+          created_at: string
+          gst_number: string
+          id: string
+          phone: string | null
+          pin: string | null
+          rejection_reason: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          shopify_customer_id: string
+          state: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          address_line1?: string | null
+          address_line2?: string | null
+          b2b_company_id?: string | null
+          city?: string | null
+          company_name: string
+          contact_name?: string | null
+          country?: string | null
+          created_at?: string
+          gst_number: string
+          id?: string
+          phone?: string | null
+          pin?: string | null
+          rejection_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          shopify_customer_id: string
+          state?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          address_line1?: string | null
+          address_line2?: string | null
+          b2b_company_id?: string | null
+          city?: string | null
+          company_name?: string
+          contact_name?: string | null
+          country?: string | null
+          created_at?: string
+          gst_number?: string
+          id?: string
+          phone?: string | null
+          pin?: string | null
+          rejection_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          shopify_customer_id?: string
+          state?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "business_account_requests_b2b_company_id_fkey"
+            columns: ["b2b_company_id"]
+            isOneToOne: false
+            referencedRelation: "b2b_companies"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       buy_now_customization_records: {
         Row: {
