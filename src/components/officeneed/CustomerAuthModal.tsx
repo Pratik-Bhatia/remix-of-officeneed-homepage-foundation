@@ -19,6 +19,7 @@ import { splitFullName } from "@/lib/name-utils";
 import { isValidGstin } from "@/lib/gst";
 import { normalizeIndianPhone } from "@/lib/contact-phone";
 import { useB2BStore } from "@/stores/b2bStore";
+import { submitBusinessApplication, saveApplicationDraft, clearApplicationDraft, getApplicationDraft, type BusinessApplicationDraft } from "@/lib/business-application-draft";
 
 /**
  * The ONLY thing that differs between the global modal and the embedded
@@ -318,8 +319,7 @@ export function CustomerAuthModal({
         // application was submitted when it wasn't.
         const token = getCustomerToken();
         if (token) {
-          const payload = {
-            token,
+          const draft: BusinessApplicationDraft = {
             companyName,
             gstNumber,
             contactName: fullName,
@@ -330,13 +330,22 @@ export function CustomerAuthModal({
             ...(addressLine1 ? { address: { addressLine1, ...(addressLine2 ? { addressLine2 } : {}), city, state, pin, country } } : {}),
           };
           // One application per customer (upsert on customer id), so a
-          // retry updates the same row and never creates a duplicate.
+          // retry updates the same row and never creates a duplicate. A
+          // retry never calls registerCustomer again.
           const submitApplication = async (): Promise<void> => {
-            try {
-              await saveBusinessRegistration({ data: payload });
+            const outcome = await submitBusinessApplication(
+              (d) => saveBusinessRegistration({ data: { token, ...d } }),
+              draft,
+            );
+            await useB2BStore.getState().resolve(token).catch(() => {});
+            const customerId = useB2BStore.getState().customerId;
+            if (outcome === "submitted") {
+              clearApplicationDraft(customerId);
               toast.success("Account created. Your business application is pending review. You'll see standard prices until it's approved.");
-            } catch (saveErr) {
-              console.error("Failed to save business registration details:", saveErr);
+            } else {
+              // Keeps a "Finish your business application" banner on the
+              // account page until it succeeds.
+              if (customerId) saveApplicationDraft(customerId, draft);
               toast.error("Your account is ready, but your business application didn't go through.", {
                 duration: Infinity,
                 action: { label: "Retry", onClick: () => { void submitApplication(); } },
