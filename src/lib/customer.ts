@@ -315,6 +315,12 @@ export async function signInCustomer(email: string, password: string): Promise<v
   setCustomerToken(result.customerAccessToken);
 }
 
+/** Shopify's own GraphQL timeout ("The request timed out") or a network/HTTP gateway timeout. */
+export function isShopifyTimeout(err: unknown): boolean {
+  const m = err instanceof Error ? err.message : String(err);
+  return /timed out|timeout|\(50[34]\)/i.test(m);
+}
+
 export async function registerCustomer(input: {
   email: string;
   password: string;
@@ -327,12 +333,35 @@ export async function registerCustomer(input: {
   phone?: string;
 }): Promise<void> {
   try {
-    const resp = await storefrontApiRequest(
-      `mutation Register($input: CustomerCreateInput!) {
-         customerCreate(input: $input) { customerUserErrors { code field message } }
-       }`,
-      { input },
-    );
+    let resp;
+    try {
+      resp = await storefrontApiRequest(
+        `mutation Register($input: CustomerCreateInput!) {
+           customerCreate(input: $input) { customerUserErrors { code field message } }
+         }`,
+        { input },
+      );
+    } catch (createErr) {
+      if (!isShopifyTimeout(createErr)) throw createErr;
+      // customerCreate is NOT idempotent and Shopify may have committed it
+      // before timing out, so never re-send it. Instead check once with a
+      // sign-in (safe to repeat): success means the account exists.
+      try {
+        await signInCustomer(input.email, input.password);
+        return;
+      } catch (probeErr) {
+        if (probeErr instanceof CustomerAuthError && probeErr.code === "CUSTOMER_DISABLED") {
+          throw new CustomerAuthError(
+            "Your account has been created. Please check your email to activate it before signing in.",
+            "PENDING_ACTIVATION",
+          );
+        }
+        throw new CustomerAuthError(
+          "Shopify took too long to respond, so we couldn't confirm your account. Please wait a minute, then try signing in with the same email before registering again.",
+          "REGISTRATION_UNCONFIRMED",
+        );
+      }
+    }
     const errors = (resp?.data as { customerCreate: { customerUserErrors: Array<{ code: string | null; field?: string[] | null; message: string }> } })
       .customerCreate.customerUserErrors;
     const err = errors[0];
@@ -372,6 +401,13 @@ export async function registerCustomer(input: {
         throw new CustomerAuthError(
           "Your account has been created. Please check your email to activate it before signing in.",
           "PENDING_ACTIVATION",
+        );
+      }
+      if (isShopifyTimeout(signInErr)) {
+        // The account definitely exists now; only the sign-in timed out.
+        throw new CustomerAuthError(
+          "Your account was created, but signing in took too long. Please sign in to continue.",
+          "SIGN_IN_AFTER_CREATE_TIMEOUT",
         );
       }
       throw signInErr;
