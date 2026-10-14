@@ -32,6 +32,9 @@ function makeFakeClient({ existingCompanyIdForGst = null } = {}) {
       }
       if (table === "business_account_requests") {
         return {
+          select() {
+            return { eq() { return { async maybeSingle() { return { data: client._previous ?? null, error: null }; } }; } };
+          },
           upsert(row, _opts) {
             upsertedRows.push(row);
             return Promise.resolve({ error: null });

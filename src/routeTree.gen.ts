@@ -30,7 +30,6 @@ import { Route as AccountIndexRouteImport } from './routes/account.index'
 import { Route as AccountOrdersRouteImport } from './routes/account.orders'
 import { Route as AccountProfileRouteImport } from './routes/account.profile'
 import { Route as AccountSavesRouteImport } from './routes/account.saves'
-import { Route as AdminB2bCompaniesRouteImport } from './routes/admin/b2b-companies'
 import { Route as AdminQuotesRouteImport } from './routes/admin/quotes'
 import { Route as AdminReviewsRouteImport } from './routes/admin/reviews'
 import { Route as BlogSlugRouteImport } from './routes/blog.$slug'
@@ -144,11 +143,6 @@ const AccountSavesRoute = AccountSavesRouteImport.update({
   path: '/saves',
   getParentRoute: () => AccountRoute,
 } as any)
-const AdminB2bCompaniesRoute = AdminB2bCompaniesRouteImport.update({
-  id: '/admin/b2b-companies',
-  path: '/admin/b2b-companies',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const AdminQuotesRoute = AdminQuotesRouteImport.update({
   id: '/admin/quotes',
   path: '/admin/quotes',
@@ -206,7 +200,6 @@ export interface FileRoutesByFullPath {
   '/account/orders': typeof AccountOrdersRoute
   '/account/profile': typeof AccountProfileRoute
   '/account/saves': typeof AccountSavesRoute
-  '/admin/b2b-companies': typeof AdminB2bCompaniesRoute
   '/admin/quotes': typeof AdminQuotesRoute
   '/admin/reviews': typeof AdminReviewsRoute
   '/blog/$slug': typeof BlogSlugRoute
@@ -236,7 +229,6 @@ export interface FileRoutesByTo {
   '/account/orders': typeof AccountOrdersRoute
   '/account/profile': typeof AccountProfileRoute
   '/account/saves': typeof AccountSavesRoute
-  '/admin/b2b-companies': typeof AdminB2bCompaniesRoute
   '/admin/quotes': typeof AdminQuotesRoute
   '/admin/reviews': typeof AdminReviewsRoute
   '/blog/$slug': typeof BlogSlugRoute
@@ -268,7 +260,6 @@ export interface FileRoutesById {
   '/account/orders': typeof AccountOrdersRoute
   '/account/profile': typeof AccountProfileRoute
   '/account/saves': typeof AccountSavesRoute
-  '/admin/b2b-companies': typeof AdminB2bCompaniesRoute
   '/admin/quotes': typeof AdminQuotesRoute
   '/admin/reviews': typeof AdminReviewsRoute
   '/blog/$slug': typeof BlogSlugRoute
@@ -301,7 +292,6 @@ export interface FileRouteTypes {
     | '/account/orders'
     | '/account/profile'
     | '/account/saves'
-    | '/admin/b2b-companies'
     | '/admin/quotes'
     | '/admin/reviews'
     | '/blog/$slug'
@@ -331,7 +321,6 @@ export interface FileRouteTypes {
     | '/account/orders'
     | '/account/profile'
     | '/account/saves'
-    | '/admin/b2b-companies'
     | '/admin/quotes'
     | '/admin/reviews'
     | '/blog/$slug'
@@ -362,7 +351,6 @@ export interface FileRouteTypes {
     | '/account/orders'
     | '/account/profile'
     | '/account/saves'
-    | '/admin/b2b-companies'
     | '/admin/quotes'
     | '/admin/reviews'
     | '/blog/$slug'
@@ -391,7 +379,6 @@ export interface RootRouteChildren {
   ReturnsRefundsRoute: typeof ReturnsRefundsRoute
   ShippingDeliveryRoute: typeof ShippingDeliveryRoute
   TermsAndConditionsRoute: typeof TermsAndConditionsRoute
-  AdminB2bCompaniesRoute: typeof AdminB2bCompaniesRoute
   AdminQuotesRoute: typeof AdminQuotesRoute
   AdminReviewsRoute: typeof AdminReviewsRoute
   ProductsSlugRoute: typeof ProductsSlugRoute
@@ -549,13 +536,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AccountSavesRouteImport
       parentRoute: typeof AccountRoute
     }
-    '/admin/b2b-companies': {
-      id: '/admin/b2b-companies'
-      path: '/admin/b2b-companies'
-      fullPath: '/admin/b2b-companies'
-      preLoaderRoute: typeof AdminB2bCompaniesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/admin/quotes': {
       id: '/admin/quotes'
       path: '/admin/quotes'
@@ -653,7 +633,6 @@ const rootRouteChildren: RootRouteChildren = {
   ReturnsRefundsRoute: ReturnsRefundsRoute,
   ShippingDeliveryRoute: ShippingDeliveryRoute,
   TermsAndConditionsRoute: TermsAndConditionsRoute,
-  AdminB2bCompaniesRoute: AdminB2bCompaniesRoute,
   AdminQuotesRoute: AdminQuotesRoute,
   AdminReviewsRoute: AdminReviewsRoute,
   ProductsSlugRoute: ProductsSlugRoute,
