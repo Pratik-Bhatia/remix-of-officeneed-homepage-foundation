@@ -95,9 +95,17 @@ export const saveBusinessRegistration = createServerFn({ method: "POST" })
   .handler(async ({ data }): Promise<{ ok: true; status: "pending" }> => {
     // The token is the only proof of identity we trust -- never accept a
     // client-supplied customer id (same rule b2b.functions.ts follows).
-    const customerId = await resolveCustomerId(data.token);
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    return saveBusinessRegistrationRecord(data, customerId, supabaseAdmin as any);
+    let customerId = "unresolved";
+    try {
+      customerId = await resolveCustomerId(data.token);
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      return await saveBusinessRegistrationRecord(data, customerId, supabaseAdmin as any);
+    } catch (err) {
+      // Log the real cause server-side only (no token / password). The
+      // shopper only ever sees a generic message.
+      console.error("[B2B intake] FAILED", { customerId, error: err instanceof Error ? err.message : String(err) });
+      throw new Error("BUSINESS_APPLICATION_FAILED");
+    }
   });
 
 /**
