@@ -318,28 +318,32 @@ export function CustomerAuthModal({
         // application was submitted when it wasn't.
         const token = getCustomerToken();
         if (token) {
-          try {
-            await saveBusinessRegistration({
-              data: {
-                token,
-                companyName,
-                gstNumber,
-                contactName: fullName,
-                ...(phone ? { phone } : {}),
-                // Only the `upgrade` form's fuller fields are ever
-                // non-empty here -- the compact fresh-registration form
-                // doesn't render these inputs at all, so form.get(...)
-                // returns "" for all of them and this is correctly
-                // omitted. Stored as-is and applied to the real Shopify
-                // Company Location only once an admin approves.
-                ...(addressLine1 ? { address: { addressLine1, ...(addressLine2 ? { addressLine2 } : {}), city, state, pin, country } } : {}),
-              },
-            });
-            toast.success("Your business account application has been submitted. We'll notify you once it's approved.");
-          } catch (saveErr) {
-            console.error("Failed to save business registration details:", saveErr);
-            toast.error("Your account was created, but we couldn't submit your business application. Please contact OfficeNeed so we can complete this for you.");
-          }
+          const payload = {
+            token,
+            companyName,
+            gstNumber,
+            contactName: fullName,
+            ...(phone ? { phone } : {}),
+            // Only the `upgrade` form renders address inputs; the compact
+            // form leaves them "" so this is omitted. Applied to Shopify
+            // only once an admin approves.
+            ...(addressLine1 ? { address: { addressLine1, ...(addressLine2 ? { addressLine2 } : {}), city, state, pin, country } } : {}),
+          };
+          // One application per customer (upsert on customer id), so a
+          // retry updates the same row and never creates a duplicate.
+          const submitApplication = async (): Promise<void> => {
+            try {
+              await saveBusinessRegistration({ data: payload });
+              toast.success("Account created. Your business application is pending review. You'll see standard prices until it's approved.");
+            } catch (saveErr) {
+              console.error("Failed to save business registration details:", saveErr);
+              toast.error("Your account is ready, but your business application didn't go through.", {
+                duration: Infinity,
+                action: { label: "Retry", onClick: () => { void submitApplication(); } },
+              });
+            }
+          };
+          await submitApplication();
         } else {
           toast.success("Account created successfully");
         }

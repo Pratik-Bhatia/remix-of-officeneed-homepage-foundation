@@ -29,6 +29,20 @@
       "when": 1791904704994,
       "tag": "0003_add_buy_now_customization_records",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1791970471249,
+      "tag": "0004_restore_b2b_manual_approval",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1791970490522,
+      "tag": "0005_fix_b2b_admin_rls",
+      "breakpoints": true
     }
   ]
 }
