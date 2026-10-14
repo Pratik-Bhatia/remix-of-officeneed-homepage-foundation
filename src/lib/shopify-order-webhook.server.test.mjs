@@ -122,14 +122,16 @@ let emailShouldSucceed = true;
 let pdfCallCount = 0;
 let emailCallCount = 0;
 let lastPdfData = null;
+let lastEmailHtml = null;
 
 mock.module("@/lib/attachments.server", {
   namedExports: { getUploadClient: () => fakeClient },
 });
 mock.module("@/lib/email-service", {
   namedExports: {
-    sendInternalHtmlEmail: async () => {
+    sendInternalHtmlEmail: async (_subject, html) => {
       emailCallCount++;
+      lastEmailHtml = html;
       return emailShouldSucceed;
     },
     sendCustomerHtmlEmail: async () => true,
@@ -322,6 +324,41 @@ test("a Buy Now order referencing a real saved customization record produces a P
   assert.equal(customizationRecords.get(recordId).shopify_order_id, String(orderId));
 });
 
+// ---- Original uploaded logo file link (PDF + internal email) ----
+// Regression: a fix that stopped (correctly) using the raw logo as a
+// stand-in for the "Customization Preview" accidentally left the saved
+// logo_url completely unused -- no link in the PDF, no link in the email.
+// These tests prove the original file's own URL now reaches both outputs,
+// distinct from (and alongside) the rendered product preview.
+
+test("the PDF's logo.fileUrl is the record's actual logo_url -- the ORIGINAL file link, never the composited product preview", async () => {
+  lastPdfData = null;
+  const recordId = seedCustomizationRecord({ logo_url: "https://assets.example.com/buy-now/original-acme-logo.png", preview_image_url: "https://assets.example.com/buy-now/product-mockup.png" });
+  await postWebhook(baseOrderPayload({ id: 999030, line_items: [lineItemWithRecord(recordId)] }));
+  assert.equal(lastPdfData.logo.fileUrl, "https://assets.example.com/buy-now/original-acme-logo.png");
+  assert.notEqual(lastPdfData.logo.fileUrl, lastPdfData.previewImageDataUrl, "the original logo link and the product mockup preview must be two distinct things, never substituted for each other");
+});
+
+test("the internal email includes a working 'Download Original Logo' link to the record's logo_url, mirroring the Request a Quote email format", async () => {
+  lastEmailHtml = null;
+  const recordId = seedCustomizationRecord({ logo_url: "https://assets.example.com/buy-now/original-acme-logo.png" });
+  await postWebhook(baseOrderPayload({ id: 999031, line_items: [lineItemWithRecord(recordId)] }));
+  assert.ok(lastEmailHtml.includes('href="https://assets.example.com/buy-now/original-acme-logo.png"'), "email must contain a real href to the original logo file");
+  assert.ok(lastEmailHtml.includes("Download Original Logo"), "email must use the same 'Download Original Logo' label the quote flow's email uses");
+  assert.ok(lastEmailHtml.includes('src="https://assets.example.com/buy-now/original-acme-logo.png"'), "email must also show the logo thumbnail, same as the quote flow's email");
+});
+
+test("a record with a logo filename but no saved logo_url degrades gracefully -- plain text, no broken link, no crash", async () => {
+  lastPdfData = null;
+  lastEmailHtml = null;
+  const recordId = seedCustomizationRecord({ logo_filename: "acme-logo.png", logo_url: null });
+  const res = await postWebhook(baseOrderPayload({ id: 999032, line_items: [lineItemWithRecord(recordId)] }));
+  assert.equal(res.status, 200);
+  assert.equal(lastPdfData.logo.fileUrl, undefined);
+  assert.ok(!lastEmailHtml.includes("Download Original Logo"), "must not show a download link when there is no URL to link to");
+  assert.ok(lastEmailHtml.includes("acme-logo.png"), "the filename itself must still be shown as plain text");
+});
+
 test("a Buy Now order for a gift set whose record has a customization_data breakdown produces a PDF listing those components", async () => {
   lastPdfData = null;
   const orderId = 999011;
@@ -331,6 +368,7 @@ test("a Buy Now order for a gift set whose record has a customization_data break
     printing_method: "UV Printing",
     logo_filename: null,
     logo_url: null,
+    preview_image_url: null, // gift sets only ever save per-component previews, never a single top-level one
     customization_data: [
       { component: "A5 Notebook Diary", customized: true, widthMm: 30, heightMm: 15, previewUrl: "https://assets.example.com/buy-now/diary.png" },
       { component: "Ball Pen", customized: true, widthMm: 20, heightMm: 5, previewUrl: "https://assets.example.com/buy-now/pen.png" },

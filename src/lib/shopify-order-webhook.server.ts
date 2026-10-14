@@ -292,8 +292,11 @@ async function processOrderPaid(payload: ShopifyOrderWebhookPayload): Promise<vo
     // all that actually landed on the real, paid Shopify order.
     const record = await lookUpCustomizationRecord(client, payload);
     const customizedComponents = (record?.customization_data ?? []).filter((c) => c.customized);
-    const [logoImageDataUrl, mainPreviewDataUrl, ...componentPreviewDataUrls] = await Promise.all([
-      fetchAsDataUrl(record?.logo_url ?? undefined),
+    // record.logo_url is linked to directly (both in the PDF and the
+    // email below), never fetched/re-embedded as a data URL -- it's the
+    // ORIGINAL source file, meant to be opened/downloaded as-is by the
+    // production team, not composited into anything.
+    const [mainPreviewDataUrl, ...componentPreviewDataUrls] = await Promise.all([
       fetchAsDataUrl(record?.preview_image_url ?? undefined),
       ...customizedComponents.map((c) => fetchAsDataUrl(c.previewUrl ?? undefined)),
     ]);
@@ -325,7 +328,9 @@ async function processOrderPaid(payload: ShopifyOrderWebhookPayload): Promise<vo
     if (record && !previewImageDataUrl) {
       console.error(`[shopify-order-webhook] order ${orderNumber}: no customization preview available (record ${record.id}, preview_image_url=${record.preview_image_url ? "set but unfetchable" : "not saved"}).`);
     }
-    void logoImageDataUrl;
+    if (record?.logo_filename && !record.logo_url) {
+      console.error(`[shopify-order-webhook] order ${orderNumber}: logo filename saved but no logo_url -- original file link will be missing from the PDF/email.`);
+    }
 
     const pdfBuffer = await generateCorporateQuotePDF({
       refNumber: orderNumber,
@@ -342,6 +347,11 @@ async function processOrderPaid(payload: ShopifyOrderWebhookPayload): Promise<vo
         ? {
             logo: {
               fileName: record.logo_filename,
+              // The ORIGINAL uploaded file's own storage URL -- linked to
+              // directly in the PDF (see pdf-generator.ts's "Original
+              // Uploaded Logo" section), never the composited product
+              // preview above.
+              fileUrl: record.logo_url ?? undefined,
               positionX: record.logo_position_x ?? undefined,
               positionY: record.logo_position_y ?? undefined,
               widthMm: record.logo_width_mm ?? undefined,
@@ -370,7 +380,12 @@ async function processOrderPaid(payload: ShopifyOrderWebhookPayload): Promise<vo
       <p><strong>Product:</strong> ${record?.product_name ?? productName}${(record?.product_variant ?? variant) ? ` — ${record?.product_variant ?? variant}` : ""}</p>
       <p><strong>Quantity:</strong> ${record?.quantity ?? quantity}</p>
       <p><strong>Amount Paid:</strong> ${formatAmount(payload.total_price, payload.currency)}</p>
-      ${record?.logo_filename ? `<p><strong>Logo:</strong> ${record.logo_filename}${record.logo_width_mm && record.logo_height_mm ? ` (${record.logo_width_mm.toFixed(1)} x ${record.logo_height_mm.toFixed(1)} mm)` : ""}</p>` : ""}
+      ${record?.logo_filename
+        ? `<p><strong>Logo:</strong> ${record.logo_filename}${record.logo_width_mm && record.logo_height_mm ? ` (${record.logo_width_mm.toFixed(1)} x ${record.logo_height_mm.toFixed(1)} mm)` : ""}</p>
+           ${record.logo_url
+             ? `<h3>Attached Logo</h3><p><img src="${record.logo_url}" alt="Logo" style="max-width: 300px; max-height: 300px; border: 1px solid #ccc; background-color: #f9f9f9; padding: 10px;" /></p><p><a href="${record.logo_url}" target="_blank">Download Original Logo</a></p>`
+             : ""}`
+        : ""}
       ${record?.printing_method ? `<p><strong>Printing Method:</strong> ${record.printing_method}</p>` : ""}
       <p><em>Internal order record attached as a PDF. This is not the customer's invoice -- it is sent to the OfficeNeed team only.</em></p>
     `;

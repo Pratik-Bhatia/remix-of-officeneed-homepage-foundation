@@ -91,6 +91,16 @@ export interface CorporateQuotePDFData {
   requirements?: string | undefined;
   logo?: {
     fileName: string;
+    /** The ORIGINAL uploaded logo file's own storage URL (e.g. the
+     * Supabase public URL Buy Now/the quote flow uploaded it to) --
+     * distinct from previewImageDataUrl below, which is the rendered
+     * product MOCKUP, not the source file. When present, rendered as a
+     * clickable "Original Uploaded Logo" link so the production team can
+     * open/download the exact file the customer uploaded, not just see
+     * it composited onto the product. Omitted on an older record saved
+     * before this field existed -- the PDF falls back gracefully, same
+     * as every other optional field here. */
+    fileUrl?: string | undefined;
     positionX?: number | undefined;
     positionY?: number | undefined;
     /** The exact Width/Height (mm) shown in the customizer's Logo Size
@@ -290,6 +300,28 @@ export async function generateCorporateQuotePDF(data: CorporateQuotePDFData): Pr
     ];
     for (const row of logoRows) {
       doc.text(row, marginX, currentY);
+      currentY += 6;
+    }
+
+    // Original Uploaded Logo -- a clickable link to the exact source file
+    // the customer uploaded (its own storage URL), distinct from the
+    // rendered product mockup below. Same visual pattern (blue text +
+    // manual underline) as the Reference Files section further down this
+    // file uses for its own file links, via textWithLink.
+    if (data.logo.fileUrl) {
+      currentY += 2;
+      doc.setFont("Roboto", "bold");
+      doc.setTextColor(0, 0, 0);
+      doc.text("Original Uploaded Logo:", marginX, currentY);
+      currentY += 6;
+      doc.setFont("Roboto", "normal");
+      doc.setTextColor(20, 80, 200);
+      const linkLabel = sanitizeText(data.logo.fileName) || "Download original file";
+      doc.textWithLink(linkLabel, marginX + 4, currentY, { url: data.logo.fileUrl });
+      const linkWidth = doc.getTextWidth(linkLabel);
+      doc.setDrawColor(20, 80, 200);
+      doc.line(marginX + 4, currentY + 1, marginX + 4 + linkWidth, currentY + 1);
+      doc.setTextColor(0, 0, 0);
       currentY += 6;
     }
   }
