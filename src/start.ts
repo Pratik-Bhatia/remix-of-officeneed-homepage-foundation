@@ -47,6 +47,8 @@ const csrfMiddleware = createCsrfMiddleware({
 });
 
 export const startInstance = createStart(() => ({
-  requestMiddleware: [errorMiddleware, shopifyOrderWebhookMiddleware, accessGateMiddleware, csrfMiddleware],
+  // accessGateMiddleware removed at the owner's request (site is public).
+  // Re-add it here to restore the password cover page.
+  requestMiddleware: [errorMiddleware, shopifyOrderWebhookMiddleware, csrfMiddleware],
   functionMiddleware: [attachSupabaseAuth],
 }));
