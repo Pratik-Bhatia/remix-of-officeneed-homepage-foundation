@@ -26,7 +26,6 @@ import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as ReturnsRefundsRouteImport } from './routes/returns-refunds'
 import { Route as ShippingDeliveryRouteImport } from './routes/shipping-delivery'
 import { Route as TermsAndConditionsRouteImport } from './routes/terms-and-conditions'
-import { Route as TrackOrderRouteImport } from './routes/track-order'
 import { Route as AccountIndexRouteImport } from './routes/account.index'
 import { Route as AccountOrdersRouteImport } from './routes/account.orders'
 import { Route as AccountProfileRouteImport } from './routes/account.profile'
@@ -124,11 +123,6 @@ const TermsAndConditionsRoute = TermsAndConditionsRouteImport.update({
   path: '/terms-and-conditions',
   getParentRoute: () => rootRouteImport,
 } as any)
-const TrackOrderRoute = TrackOrderRouteImport.update({
-  id: '/track-order',
-  path: '/track-order',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const AccountIndexRoute = AccountIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -203,7 +197,6 @@ export interface FileRoutesByFullPath {
   '/returns-refunds': typeof ReturnsRefundsRoute
   '/shipping-delivery': typeof ShippingDeliveryRoute
   '/terms-and-conditions': typeof TermsAndConditionsRoute
-  '/track-order': typeof TrackOrderRoute
   '/account/orders': typeof AccountOrdersRoute
   '/account/profile': typeof AccountProfileRoute
   '/account/saves': typeof AccountSavesRoute
@@ -233,7 +226,6 @@ export interface FileRoutesByTo {
   '/returns-refunds': typeof ReturnsRefundsRoute
   '/shipping-delivery': typeof ShippingDeliveryRoute
   '/terms-and-conditions': typeof TermsAndConditionsRoute
-  '/track-order': typeof TrackOrderRoute
   '/account/orders': typeof AccountOrdersRoute
   '/account/profile': typeof AccountProfileRoute
   '/account/saves': typeof AccountSavesRoute
@@ -265,7 +257,6 @@ export interface FileRoutesById {
   '/returns-refunds': typeof ReturnsRefundsRoute
   '/shipping-delivery': typeof ShippingDeliveryRoute
   '/terms-and-conditions': typeof TermsAndConditionsRoute
-  '/track-order': typeof TrackOrderRoute
   '/account/orders': typeof AccountOrdersRoute
   '/account/profile': typeof AccountProfileRoute
   '/account/saves': typeof AccountSavesRoute
@@ -298,7 +289,6 @@ export interface FileRouteTypes {
     | '/returns-refunds'
     | '/shipping-delivery'
     | '/terms-and-conditions'
-    | '/track-order'
     | '/account/orders'
     | '/account/profile'
     | '/account/saves'
@@ -328,7 +318,6 @@ export interface FileRouteTypes {
     | '/returns-refunds'
     | '/shipping-delivery'
     | '/terms-and-conditions'
-    | '/track-order'
     | '/account/orders'
     | '/account/profile'
     | '/account/saves'
@@ -359,7 +348,6 @@ export interface FileRouteTypes {
     | '/returns-refunds'
     | '/shipping-delivery'
     | '/terms-and-conditions'
-    | '/track-order'
     | '/account/orders'
     | '/account/profile'
     | '/account/saves'
@@ -391,7 +379,6 @@ export interface RootRouteChildren {
   ReturnsRefundsRoute: typeof ReturnsRefundsRoute
   ShippingDeliveryRoute: typeof ShippingDeliveryRoute
   TermsAndConditionsRoute: typeof TermsAndConditionsRoute
-  TrackOrderRoute: typeof TrackOrderRoute
   AdminQuotesRoute: typeof AdminQuotesRoute
   AdminReviewsRoute: typeof AdminReviewsRoute
   ProductsSlugRoute: typeof ProductsSlugRoute
@@ -521,13 +508,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TermsAndConditionsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/track-order': {
-      id: '/track-order'
-      path: '/track-order'
-      fullPath: '/track-order'
-      preLoaderRoute: typeof TrackOrderRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/account/': {
       id: '/account/'
       path: '/'
@@ -653,7 +633,6 @@ const rootRouteChildren: RootRouteChildren = {
   ReturnsRefundsRoute: ReturnsRefundsRoute,
   ShippingDeliveryRoute: ShippingDeliveryRoute,
   TermsAndConditionsRoute: TermsAndConditionsRoute,
-  TrackOrderRoute: TrackOrderRoute,
   AdminQuotesRoute: AdminQuotesRoute,
   AdminReviewsRoute: AdminReviewsRoute,
   ProductsSlugRoute: ProductsSlugRoute,

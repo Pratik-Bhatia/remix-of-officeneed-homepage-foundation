@@ -17,6 +17,11 @@ import { useCustomer } from "@/lib/customer";
 // preference system covers this, so this is its own narrowly-scoped key.
 const AUTH_POPUP_SHOWN_KEY = "officeneed_auth_popup_shown";
 
+// Shiplystic's own branded tracking portal -- replaces the earlier
+// custom /track-order page. Navigates in the SAME tab (window.location.href,
+// not window.open) so this is a normal top-level redirect, not a popup.
+const SHIPLYSTIC_TRACKING_URL = "https://app.shiplystic.com/track/SLY26091";
+
 function Logo({ className }: { className?: string }) {
   return (
     <Link
@@ -236,7 +241,7 @@ export function Navbar() {
           <IconButton label="Search store" className="size-[26px] md:size-10 xl:size-11" onClick={() => setSearchOpen(true)}>
             <Search className="size-5 md:size-[22px] xl:size-5" strokeWidth={1.6} />
           </IconButton>
-          <IconButton label="Track order" className="size-[26px] md:size-10 xl:size-11" onClick={() => navigate({ to: "/track-order" })}>
+          <IconButton label="Track order" className="size-[26px] md:size-10 xl:size-11" onClick={() => { window.location.href = SHIPLYSTIC_TRACKING_URL; }}>
             <PackageSearch className="size-5 md:size-[22px] xl:size-5" strokeWidth={1.6} />
           </IconButton>
           <span className="hidden xl:inline-flex">
@@ -406,7 +411,7 @@ export function Navbar() {
             aria-label="Track order — check the status of a shipment"
             onClick={() => {
               setMobileOpen(false);
-              navigate({ to: "/track-order" });
+              window.location.href = SHIPLYSTIC_TRACKING_URL;
             }}
             className={cn(
               "mt-2 flex w-full items-center gap-3 rounded-xl border border-border bg-muted px-4 py-3.5 text-left transition-[opacity,transform] duration-[420ms] ease-[cubic-bezier(0.22,1,0.36,1)] active:bg-secondary",
