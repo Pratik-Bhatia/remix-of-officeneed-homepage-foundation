@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "@tanstack/react-router";
 import { Loader2, ShoppingBag, X } from "lucide-react";
-import { useCartStore } from "@/stores/cartStore";
+import { toast } from "sonner";
+import { useCartStore, checkoutFailureMessage } from "@/stores/cartStore";
 import { trackInitiateCheckout } from "@/lib/meta-pixel";
 import { cn } from "@/lib/utils";
 import { formatMoney } from "@/lib/shopify";
@@ -49,17 +50,23 @@ export function CartDrawer({ triggerClassName }: { triggerClassName?: string }) 
     // valid checkout URL, since that only needs cartId + buyerIdentity
     // (customerAccessToken + companyLocationId, resolved from the
     // customer's own Company Contact relationship, not from this address).
+    if (preparing) return;
     const win = window.open("", "_blank");
     setPreparing(true);
     try {
-      const checkoutUrl = await prepareCheckout();
-      if (!checkoutUrl) {
+      const result = await prepareCheckout();
+      if (result.url === null) {
         win?.close();
+        toast.error(checkoutFailureMessage(result.reason));
         return;
       }
       trackInitiateCheckout(useCartStore.getState().items, discountedSubtotal);
-      if (win) win.location.href = checkoutUrl;
-      else window.open(checkoutUrl, "_blank");
+      if (win) win.location.href = result.url;
+      else window.open(result.url, "_blank");
+    } catch (error) {
+      console.error("Checkout preparation failed:", error);
+      win?.close();
+      toast.error("Couldn't start checkout. Please try again.");
     } finally {
       setPreparing(false);
     }

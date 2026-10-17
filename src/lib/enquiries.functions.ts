@@ -43,7 +43,46 @@ const enquirySchema = z.object({
     .max(5)
     .optional(),
   enquiryId: z.string().optional(),
+  // Separate from enquiryId (the truncated "ON-AI-XXXXXXXX" display
+  // reference, which is NOT a reliable database key -- its first-8-hex-char
+  // prefix is only 32 bits of entropy and isn't guaranteed unique at scale).
+  // Optional and additive: no existing caller supplies it, so this changes
+  // nothing for them. A future retry caller that wants an exact, safe
+  // lookup should pass back the enquiryRowId this function now returns on
+  // every successful submission (see the return shape below).
+  enquiryRowId: z.string().uuid().optional(),
 });
+
+/** "accepted" means Resend's API accepted the send request, NOT that it
+ * was confirmed delivered to an inbox (this repo has no Resend
+ * delivery/bounce webhook) -- never overclaim "sent"/"delivered" here. */
+export function computeEnquiryEmailStatus(
+  customerEmailSent: boolean,
+  internalEmailSent: boolean,
+  pdfAttempted: boolean,
+): "accepted" | "partial" | "provider_error" | "not_attempted" {
+  if (!pdfAttempted) return "not_attempted";
+  if (customerEmailSent && internalEmailSent) return "accepted";
+  if (customerEmailSent || internalEmailSent) return "partial";
+  return "provider_error";
+}
+
+/** Decides, per email, whether a retry should skip re-sending because the
+ * provider already accepted it on a prior attempt -- never all-or-nothing:
+ * a "partial" prior result (one email accepted, the other not) must only
+ * resend the one that still needs it. `existing` is whatever the retry
+ * lookup found for the row (or null/undefined if no row was found, the
+ * lookup failed, or no exact row id was available at all) -- any of those
+ * "unknown" cases safely default to "don't skip", i.e. resend, which is
+ * exactly today's original (pre-skip-logic) behavior. */
+export function resolveEmailResendPlan(
+  existing: { customer_email_sent?: boolean | null; internal_email_sent?: boolean | null } | null | undefined,
+): { skipCustomerEmail: boolean; skipInternalEmail: boolean } {
+  return {
+    skipCustomerEmail: existing?.customer_email_sent === true,
+    skipInternalEmail: existing?.internal_email_sent === true,
+  };
+}
 
 /**
  * Public B2B product enquiry submission.
@@ -88,10 +127,40 @@ export const submitEnquiry = createServerFn({ method: "POST" })
 
     let dbEnquiryId = "";
     let enquiryRowId = "";
-    
+    // On a retry, skip re-sending only the specific email(s) the provider
+    // already accepted -- per-email, never all-or-nothing, so a prior
+    // "partial" result (one sent, one not) only resends the one that
+    // still needs it. No current caller actually exercises the retry path
+    // yet (confirmed: ChatWidget/EnquiryDialog/Footer never pass enquiryId
+    // back in) -- this is forward-looking, not a live behavior change.
+    let skipCustomerEmail = false;
+    let skipInternalEmail = false;
+
     if (data.enquiryId) {
       // It's a retry of a partial failure, we skip inserting to avoid duplicates.
       dbEnquiryId = data.enquiryId.replace("ON-AI-", "");
+      if (data.enquiryRowId) {
+        // Exact lookup by the real row id -- never a prefix/guess. Also
+        // lets the status-persisting update below (keyed on enquiryRowId)
+        // work correctly on a retry too, not just on a fresh insert.
+        enquiryRowId = data.enquiryRowId;
+        try {
+          const { data: existing } = await supabase
+            .from("product_enquiries")
+            .select("customer_email_sent, internal_email_sent")
+            .eq("id", data.enquiryRowId)
+            .maybeSingle();
+          ({ skipCustomerEmail, skipInternalEmail } = resolveEmailResendPlan(existing));
+        } catch (lookupErr) {
+          console.error("[OfficeNeed] retry email-sent lookup failed, proceeding to resend both", lookupErr);
+        }
+      }
+      // If enquiryRowId wasn't supplied (an older/legacy retry call that
+      // only has the truncated display id), there is no reliable way to
+      // look up the exact row -- both skip flags stay false, i.e. resend
+      // both, exactly today's original behavior for that case. Not a
+      // regression: this is what every retry did before email-sent
+      // tracking existed at all.
     } else {
       // 1. Insert into Supabase
       // Generate ID locally so we don't have to use .select() which fails RLS for anon role
@@ -197,11 +266,13 @@ export const submitEnquiry = createServerFn({ method: "POST" })
       }
     }
 
-    // 3 & 4. Send Emails
-    let customerEmailSent = false;
-    let internalEmailSent = false;
+    // 3 & 4. Send Emails -- each one independently: a retry must only
+    // resend the specific email that wasn't already accepted, never both
+    // just because one of them still needs it.
+    let customerEmailSent = skipCustomerEmail;
+    let internalEmailSent = skipInternalEmail;
 
-    if (pdfBuffer) {
+    if (pdfBuffer && !skipCustomerEmail) {
       customerEmailSent = await sendCustomerConfirmationEmail({
         email: data.email,
         name: data.name,
@@ -211,9 +282,11 @@ export const submitEnquiry = createServerFn({ method: "POST" })
         ...(data.timeline ? { timeline: data.timeline } : {}),
         pdfBuffer,
       });
+    }
 
+    if (pdfBuffer && !skipInternalEmail) {
       const subtotal = (data.selectedProducts || []).reduce((acc, p) => acc + (p.priceNum * p.quantity), 0);
-      
+
       internalEmailSent = await sendInternalNotificationEmail({
         enquiryId: fullEnquiryId,
         customerName: data.name,
@@ -233,12 +306,43 @@ export const submitEnquiry = createServerFn({ method: "POST" })
       });
     }
 
-    return { 
+    // Record what actually happened with email delivery -- "accepted" means
+    // Resend's API accepted the send request, NOT that it was confirmed
+    // delivered to an inbox (this repo has no Resend delivery/bounce
+    // webhook). Never blocks the response already decided above: any
+    // failure here is logged only. "Attempted" counts a prior accepted
+    // send (via skip) as having been attempted too, so a retry whose PDF
+    // generation fails this time doesn't wrongly report "not_attempted"
+    // when one of the two emails was already genuinely sent earlier.
+    const pdfAttempted = pdfBuffer !== null || skipCustomerEmail || skipInternalEmail;
+    const emailStatus = computeEnquiryEmailStatus(customerEmailSent, internalEmailSent, pdfAttempted);
+    if (enquiryRowId) {
+      try {
+        await supabase
+          .from("product_enquiries")
+          .update({
+            email_status: emailStatus,
+            customer_email_sent: customerEmailSent,
+            internal_email_sent: internalEmailSent,
+          })
+          .eq("id", enquiryRowId);
+      } catch (statusErr) {
+        console.error("[OfficeNeed] failed to record email_status (non-fatal)", statusErr);
+      }
+    }
+
+    return {
       ok: true as const,
       enquiryId: fullEnquiryId,
+      // Additive: lets a future retry caller pass this back for an exact,
+      // safe lookup instead of the truncated enquiryId above. Empty string
+      // on a retry that itself didn't supply enquiryRowId (nothing exact
+      // to report back in that case).
+      enquiryRowId,
       pdfGenerated: !pdfError && pdfBuffer !== null,
       customerEmailSent,
       internalEmailSent,
+      emailStatus,
       attachmentsStored: stored.filter((a) => a.status === "stored").length,
       attachmentsFailed: stored.filter((a) => a.status === "failed").length
     };

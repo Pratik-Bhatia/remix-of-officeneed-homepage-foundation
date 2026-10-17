@@ -6,6 +6,18 @@ import { generateCorporateQuotePDF } from "./pdf-generator";
 
 const MAX_BYTES = 10 * 1024 * 1024; // 10MB
 
+/** Same "accepted = provider accepted the request, not confirmed
+ * delivered" meaning as enquiries.functions.ts's computeEnquiryEmailStatus
+ * -- no delivery/bounce webhook exists for either pipeline. */
+export function computeQuoteEmailStatus(
+  internalEmailSent: boolean,
+  customerEmailSent: boolean,
+): "accepted" | "partial" | "provider_error" {
+  if (internalEmailSent && customerEmailSent) return "accepted";
+  if (internalEmailSent || customerEmailSent) return "partial";
+  return "provider_error";
+}
+
 function base64ToUint8Array(base64: string) {
   const binary = atob(base64);
   const bytes = new Uint8Array(binary.length);
@@ -359,6 +371,8 @@ export const submitCorporateQuote = createServerFn({ method: "POST" })
         : "";
 
       // 6. Send Emails
+      let internalEmailSent = false;
+      let customerEmailSent = false;
       try {
         // Internal Notification
         const internalHtml = `
@@ -385,7 +399,7 @@ export const submitCorporateQuote = createServerFn({ method: "POST" })
           ${pdfAttachments ? '<p><em>The complete quote request, including the customization preview, is attached as a PDF.</em></p>' : ''}
         `;
 
-        await sendInternalHtmlEmail(
+        internalEmailSent = await sendInternalHtmlEmail(
           `New Corporate Quote Request - ${data.company} - ${data.product.name}`,
           internalHtml,
           pdfAttachments
@@ -410,7 +424,7 @@ export const submitCorporateQuote = createServerFn({ method: "POST" })
           ${pdfAttachments ? '<p style="margin-top: 16px;"><em>We\'ve attached a PDF summary of your request, including your customization preview, for your records.</em></p>' : ''}
         `;
 
-        await sendCustomerHtmlEmail(
+        customerEmailSent = await sendCustomerHtmlEmail(
           data.email,
           `Quote Request Received: ${data.product.name}`,
           customerHtml,
@@ -418,10 +432,22 @@ export const submitCorporateQuote = createServerFn({ method: "POST" })
         );
       } catch (emailError) {
         console.error("Failed to send emails:", emailError);
-        // We still return success since the quote is saved, but we might want to log this.
+        // We still return success since the quote is saved -- a failed
+        // send is recorded in email_status below, not surfaced as a quote
+        // failure, since the quote record itself is already safely saved.
       }
 
-      return { ok: true as const, refNumber };
+      // "accepted" means Resend's API accepted the send request, not that
+      // it was confirmed delivered (no Resend delivery/bounce webhook
+      // exists in this repo). Never blocks the response: logged only.
+      const emailStatus = computeQuoteEmailStatus(internalEmailSent, customerEmailSent);
+      try {
+        await client.from("corporate_quote_requests").update({ email_status: emailStatus }).eq("id", quoteId);
+      } catch (statusErr) {
+        console.error("Failed to record email_status (non-fatal):", statusErr);
+      }
+
+      return { ok: true as const, refNumber, emailStatus };
     } catch (e: any) {
       console.error("Unhandled error in quote submission:", e);
       return { ok: false as const, error: e.message || "An unexpected error occurred." };

@@ -17,7 +17,7 @@ import { getProductBySlug, getRelatedProducts } from "@/lib/products";
 import { fetchProductByHandle, fetchRelatedProducts, formatMoney, type ShopifyProductNode, type ShopifyVariantNode, type BuyerContext } from "@/lib/shopify";
 import { mergeProduct, shopifyNodeToProduct, useShopifyCollections, useB2BPriceOverlayMap } from "@/lib/shopify-overlay";
 import { TAXONOMY, resolveLiveTitle } from "@/lib/taxonomy";
-import { useCartStore } from "@/stores/cartStore";
+import { useCartStore, checkoutFailureMessage } from "@/stores/cartStore";
 import { useB2BStore } from "@/stores/b2bStore";
 import { getCustomerToken } from "@/lib/customer";
 import { useSaves } from "@/lib/saves";
@@ -617,15 +617,15 @@ function ProductDetail() {
     }
     const win = window.open("", "_blank");
     try {
-      const checkoutUrl = await prepareCheckout();
-      if (!checkoutUrl) {
+      const result = await prepareCheckout();
+      if (result.url === null) {
         win?.close();
-        toast.error("Couldn't start checkout. Please try again.");
+        toast.error(checkoutFailureMessage(result.reason));
         return;
       }
       trackInitiateCheckout(useCartStore.getState().items);
-      if (win) win.location.href = checkoutUrl;
-      else window.open(checkoutUrl, "_blank");
+      if (win) win.location.href = result.url;
+      else window.open(result.url, "_blank");
     } catch {
       win?.close();
       toast.error("Couldn't start checkout. Please try again.");

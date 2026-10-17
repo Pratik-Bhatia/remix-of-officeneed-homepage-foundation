@@ -2,6 +2,7 @@ import { FieldError } from "@/components/ui/field-error";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import { Navbar } from "@/components/officeneed/Navbar";
 import { Footer } from "@/components/officeneed/Footer";
 import { Button } from "@/components/ui/button";
@@ -79,6 +80,7 @@ function PasswordResetPage() {
       // resetUrl and password are never logged anywhere in this flow.
       await resetPasswordByUrl(resetUrl, password);
       await refreshSaves(true);
+      toast.success("Your password has been changed.");
       navigate({ to: "/account" });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");

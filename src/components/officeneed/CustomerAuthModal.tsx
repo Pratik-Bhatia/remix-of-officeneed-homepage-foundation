@@ -376,7 +376,7 @@ export function CustomerAuthModal({
             const customerId = useB2BStore.getState().customerId;
             if (outcome === "submitted") {
               clearApplicationDraft(customerId);
-              toast.success("Your request has been submitted. Please wait while Officeneed reviews and approves your application.", {
+              toast.success("Your request has been submitted. Officeneed will review your application and set up your business pricing once approved.", {
                 id: "b2b-application-submitted",
                 duration: 8000,
                 // Bottom placement keeps it clear of the navigation and hero heading.

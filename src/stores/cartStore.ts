@@ -446,8 +446,14 @@ interface CartStore {
   getCheckoutUrl: () => string | null;
   applyDiscountCode: (code: string) => Promise<{ ok: boolean; message: string }>;
   removeDiscountCode: (code: string) => Promise<void>;
-  /** Attach the signed-in customer to the cart, then return a fresh checkout URL. */
-  prepareCheckout: () => Promise<string | null>;
+  /** Attach the signed-in customer to the cart, then return a fresh checkout
+   * URL -- or, on failure, WHY, so callers can show an honest message
+   * instead of failing silently. `reason` is never shown to the shopper
+   * verbatim; callers map it to their own wording. */
+  prepareCheckout: () => Promise<
+    | { url: string }
+    | { url: null; reason: "no-cart" | "no-checkout-url" | "cart-not-found" | "user-error" | "exception" }
+  >;
   /**
    * Buy Now: creates a brand-new, standalone Shopify cart for exactly this
    * one line and returns its checkout URL -- WITHOUT ever touching this
@@ -476,6 +482,25 @@ interface CartStore {
    * retyping the address inline, which is Shopify's documented way to
    * reference (not copy-and-detach) a saved address on the cart. */
   setDeliveryAddressFromSaved: (customerAddressId: string) => Promise<boolean>;
+}
+
+/** Maps prepareCheckout()'s failure `reason` to one honest, shopper-facing
+ * message -- shared by every call site (cart.tsx, CartDrawer.tsx,
+ * products.$slug.tsx) so the wording stays consistent in one place. */
+export function checkoutFailureMessage(
+  reason: "no-cart" | "no-checkout-url" | "cart-not-found" | "user-error" | "exception",
+): string {
+  switch (reason) {
+    case "no-cart":
+    case "no-checkout-url":
+      return "Your bag is empty. Please add an item before checking out.";
+    case "cart-not-found":
+      return "Your bag expired. Please add your items again.";
+    case "user-error":
+    case "exception":
+    default:
+      return "Couldn't start checkout. Please try again.";
+  }
 }
 
 export const useCartStore = create<CartStore>()(
@@ -767,28 +792,37 @@ export const useCartStore = create<CartStore>()(
 
         prepareCheckout: async () => {
           const { cartId, checkoutUrl, clearCart } = get();
-          if (!cartId) return checkoutUrl;
+          if (!cartId) return checkoutUrl ? { url: checkoutUrl } : { url: null, reason: "no-cart" as const };
           // Record attribution on the cart so it shows on the Shopify order.
           const attributes = attributionAttributes();
           if (attributes.length) {
             storefrontApiRequest(CART_ATTRIBUTES_UPDATE_MUTATION, { cartId, attributes }).catch(() => {});
           }
           const buyerIdentity = currentBuyerIdentity();
-          if (!buyerIdentity) return checkoutUrl ? formatCheckoutUrl(checkoutUrl) : null;
+          if (!buyerIdentity) {
+            // Guest checkout is a normal, supported path (buyerIdentity is
+            // only non-null for a signed-in customer/company) -- a missing
+            // checkoutUrl here means there's no cart to check out, not that
+            // sign-in is required.
+            return checkoutUrl ? { url: formatCheckoutUrl(checkoutUrl) } : { url: null, reason: "no-checkout-url" as const };
+          }
           try {
             const data = await storefrontApiRequest(CART_BUYER_IDENTITY_UPDATE_MUTATION, {
               cartId,
               buyerIdentity,
             });
             const errors: UserError[] = data?.data?.cartBuyerIdentityUpdate?.userErrors ?? [];
-            if (isCartNotFoundError(errors)) { clearCart(); return null; }
+            if (isCartNotFoundError(errors)) {
+              clearCart();
+              return { url: null, reason: "cart-not-found" as const };
+            }
             if (errors.length > 0) {
               console.error("Buyer identity update failed:", errors);
-              return checkoutUrl;
+              return checkoutUrl ? { url: checkoutUrl } : { url: null, reason: "user-error" as const };
             }
             const updatedCart = data?.data?.cartBuyerIdentityUpdate?.cart;
             const url = updatedCart?.checkoutUrl;
-            if (!url) return checkoutUrl;
+            if (!url) return checkoutUrl ? { url: checkoutUrl } : { url: null, reason: "no-checkout-url" as const };
             // Refresh cost/items now, not just checkoutUrl: attaching a
             // companyLocationId can change Shopify's computed price for
             // this cart, and the old behavior (only storing checkoutUrl)
@@ -797,10 +831,10 @@ export const useCartStore = create<CartStore>()(
             // that staleness mattered most.
             applyCart(updatedCart);
             const formatted = formatCheckoutUrl(url);
-            return formatted;
+            return { url: formatted };
           } catch (error) {
             console.error("Failed to attach customer to cart:", error);
-            return checkoutUrl;
+            return checkoutUrl ? { url: checkoutUrl } : { url: null, reason: "exception" as const };
           }
         },
 
@@ -823,7 +857,13 @@ export const useCartStore = create<CartStore>()(
             const createPayload = createData?.data?.cartCreate;
             if (reportProblems(createPayload?.userErrors ?? [], createPayload?.warnings ?? [])) return null;
             let cart = createPayload?.cart;
-            if (!cart) return null;
+            if (!cart) {
+              // No userErrors, but also no cart -- an otherwise-silent gap;
+              // give the same feedback as every other failure path below.
+              toast.error("Couldn't start checkout. Please try again.");
+              haptic("error");
+              return null;
+            }
             const { valid } = extractLines(cart);
             if (!valid.some((l) => l.merchandise.id === item.variantId)) {
               toast.error("Sorry, this item is out of stock.");

@@ -21,6 +21,21 @@ if (typeof globalThis.window === "undefined") {
 
 mock.module("@/lib/customer", { namedExports: { getCustomerToken: () => null } });
 
+// Captures toast.error calls so the new "!cart with no userErrors" fix
+// (createStandaloneCheckout used to return null here with ZERO feedback)
+// can be asserted on directly, not just "it didn't throw".
+let toastErrorCalls = [];
+mock.module("sonner", {
+  namedExports: {
+    toast: {
+      error: (message) => { toastErrorCalls.push(message); },
+      success: () => {},
+      warning: () => {},
+      info: () => {},
+    },
+  },
+});
+
 let saveCustomerCartCallCount = 0;
 mock.module("@/lib/customer-cart.functions", {
   namedExports: {
@@ -35,6 +50,7 @@ mock.module("@/lib/customer-cart.functions", {
 let cartCreateCallCount = 0;
 let nextCreatedCartId = "gid://shopify/Cart/standalone-1";
 let simulateOutOfStock = false;
+let simulateNullCart = false;
 let lastCartCreateLines = null;
 
 mock.module("@/lib/shopify", {
@@ -44,6 +60,11 @@ mock.module("@/lib/shopify", {
         cartCreateCallCount++;
         lastCartCreateLines = variables.input.lines;
         const line = variables.input.lines[0];
+        if (simulateNullCart) {
+          // Models a cartCreate response with no userErrors AND no cart --
+          // the one silent gap createStandaloneCheckout used to have.
+          return { data: { cartCreate: { cart: null, userErrors: [], warnings: [] } } };
+        }
         return {
           data: {
             cartCreate: {
@@ -167,6 +188,20 @@ test("an out-of-stock variant returns null and still leaves the persistent cart 
     assert.equal(state.checkoutUrl, "https://example.com/checkout/persistent-2");
   } finally {
     simulateOutOfStock = false;
+  }
+});
+
+test("a cartCreate response with no userErrors and no cart now shows a toast instead of failing silently", async () => {
+  useCartStore.setState({ cartId: null, items: [], checkoutUrl: null, discountCodes: [], cost: { subtotal: null, total: null } });
+  toastErrorCalls = [];
+  simulateNullCart = true;
+  try {
+    nextCreatedCartId = "gid://shopify/Cart/standalone-6";
+    const url = await useCartStore.getState().createStandaloneCheckout(buyNowItem());
+    assert.equal(url, null);
+    assert.deepEqual(toastErrorCalls, ["Couldn't start checkout. Please try again."]);
+  } finally {
+    simulateNullCart = false;
   }
 });
 

@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ShoppingBag, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import { Navbar } from "@/components/officeneed/Navbar";
 import { Footer } from "@/components/officeneed/Footer";
-import { useCartStore } from "@/stores/cartStore";
+import { useCartStore, checkoutFailureMessage } from "@/stores/cartStore";
 import { trackInitiateCheckout } from "@/lib/meta-pixel";
 import { formatMoney } from "@/lib/shopify";
 import { CartLineItem } from "@/components/officeneed/CartLineItem";
@@ -58,14 +59,23 @@ function CartPage() {
     // below, still optional) was never one of its requirements.
     // Open the tab synchronously so popup blockers allow it, then point it
     // at the checkout URL once the signed-in customer is attached.
+    if (preparing) return;
     const win = window.open("", "_blank");
     setPreparing(true);
     try {
-      const checkoutUrl = await prepareCheckout();
-      if (!checkoutUrl) { win?.close(); return; }
+      const result = await prepareCheckout();
+      if (result.url === null) {
+        win?.close();
+        toast.error(checkoutFailureMessage(result.reason));
+        return;
+      }
       trackInitiateCheckout(useCartStore.getState().items, subtotal);
-      if (win) win.location.href = checkoutUrl;
-      else window.open(checkoutUrl, "_blank");
+      if (win) win.location.href = result.url;
+      else window.open(result.url, "_blank");
+    } catch (error) {
+      console.error("Checkout preparation failed:", error);
+      win?.close();
+      toast.error("Couldn't start checkout. Please try again.");
     } finally {
       setPreparing(false);
     }

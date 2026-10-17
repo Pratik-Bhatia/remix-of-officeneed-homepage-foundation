@@ -83,7 +83,7 @@ function B2BAccountStatus() {
     return (
       <div className="mt-4 mb-6 flex flex-wrap items-center gap-3 rounded-xl border border-border bg-background px-4 py-3 text-sm">
         <Building2 className="size-4 shrink-0 text-muted-foreground" />
-        <span className="text-muted-foreground">Your business account application is under review. We'll notify you once it's approved.</span>
+        <span className="text-muted-foreground">Your business account application is under review. Officeneed will set up your business pricing — no action needed from you.</span>
       </div>
     );
   }

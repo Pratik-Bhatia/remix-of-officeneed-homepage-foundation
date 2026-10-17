@@ -312,22 +312,19 @@ export function Footer() {
                   btn.innerHTML = `<svg class="animate-spin h-5 w-5 text-foreground" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>`;
 
                   try {
-                    const { submitEnquiry } = await import("@/lib/enquiries.functions");
-                    const result = await submitEnquiry({
-                      data: {
-                        name: "Newsletter Subscriber",
-                        email: email,
-                        message: "User subscribed to newsletter",
-                        category: "Newsletter Subscription"
-                      }
-                    });
-                    
+                    const { subscribeToNewsletter } = await import("@/lib/newsletter.functions");
+                    const result = await subscribeToNewsletter({ data: { email } });
+
                     if (!result.ok) {
                       toast.error(result.error || "Failed to subscribe.");
                     } else {
                       const { trackLead } = await import("@/lib/meta-pixel");
                       trackLead("Newsletter", { email });
-                      toast.success("Successfully subscribed to our newsletter!");
+                      toast.success(
+                        result.alreadySubscribed
+                          ? "You're already subscribed!"
+                          : "Successfully subscribed to our newsletter!",
+                      );
                       form.reset();
                     }
                   } catch (err) {

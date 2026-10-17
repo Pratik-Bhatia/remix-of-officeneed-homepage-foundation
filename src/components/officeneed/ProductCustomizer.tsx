@@ -1568,7 +1568,9 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
       if (!result.ok) throw new Error(result.error);
         trackLead("Corporate Quote", { email: formData.email, phone: formData.phone }, { content_name: product.name });
         setRefNumber(result.refNumber);
-        toast.success("Quote request submitted successfully! We will contact you shortly.");
+        toast.success("Quote request submitted successfully! We will contact you shortly.", {
+          description: `Reference number: ${result.refNumber}`,
+        });
         haptic("success");
         onOpenChange(false);
         setTimeout(() => setStep("customize"), 300);
@@ -1733,6 +1735,9 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
         ...(lineAttributes.length ? { lineAttributes } : {}),
       });
       if (!checkoutUrl) {
+        // createStandaloneCheckout() already shows its own toast on every
+        // failure path before returning null -- do not add a second one
+        // here, or the shopper would see two error toasts for one failure.
         win?.close();
         return;
       }
