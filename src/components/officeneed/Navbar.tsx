@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { lockScroll, unlockScroll } from "@/lib/scroll-lock";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Menu, MessageSquare, Search, User, X, ChevronDown, ChevronRight } from "lucide-react";
+import { Menu, MessageSquare, Search, User, X, ChevronDown, ChevronRight, PackageSearch } from "lucide-react";
 import logoUrl from "@/assets/officeneed-logo.svg";
 import { primaryNavCategories as navCategories, navItemTarget, navCategoryTarget, getLiveNavLabel } from "@/lib/navigation";
 import { useShopifyCollections } from "@/lib/shopify-overlay";
@@ -236,6 +236,9 @@ export function Navbar() {
           <IconButton label="Search store" className="size-[26px] md:size-10 xl:size-11" onClick={() => setSearchOpen(true)}>
             <Search className="size-5 md:size-[22px] xl:size-5" strokeWidth={1.6} />
           </IconButton>
+          <IconButton label="Track order" className="size-[26px] md:size-10 xl:size-11" onClick={() => navigate({ to: "/track-order" })}>
+            <PackageSearch className="size-5 md:size-[22px] xl:size-5" strokeWidth={1.6} />
+          </IconButton>
           <span className="hidden xl:inline-flex">
             <IconButton label="Account" className="size-[26px] md:size-10 xl:size-11" onClick={() => status === "in" ? navigate({ to: "/account" }) : setAuthOpen(true)}>
               <User className="size-5 md:size-[22px] xl:size-5" strokeWidth={1.6} />
@@ -395,6 +398,26 @@ export function Navbar() {
             <span className="min-w-0 flex-1">
               <span className="block text-sm font-semibold text-foreground">Account</span>
               <span className="block text-xs text-muted-foreground">Access your orders and saved products.</span>
+            </span>
+            <ChevronRight className="size-4 shrink-0 text-muted-foreground" strokeWidth={1.8} />
+          </button>
+          <button
+            type="button"
+            aria-label="Track order — check the status of a shipment"
+            onClick={() => {
+              setMobileOpen(false);
+              navigate({ to: "/track-order" });
+            }}
+            className={cn(
+              "mt-2 flex w-full items-center gap-3 rounded-xl border border-border bg-muted px-4 py-3.5 text-left transition-[opacity,transform] duration-[420ms] ease-[cubic-bezier(0.22,1,0.36,1)] active:bg-secondary",
+              mobileOpen ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0",
+            )}
+            style={{ transitionDelay: mobileOpen ? `${120 + (navCategories.length + 1) * 60}ms` : "0ms" }}
+          >
+            <PackageSearch className="size-5 shrink-0 text-foreground" strokeWidth={1.8} />
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-semibold text-foreground">Track order</span>
+              <span className="block text-xs text-muted-foreground">Check the status of a shipment.</span>
             </span>
             <ChevronRight className="size-4 shrink-0 text-muted-foreground" strokeWidth={1.8} />
           </button>
