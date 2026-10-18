@@ -25,6 +25,9 @@ import { useCustomerContext } from "@/lib/customer-context";
 import { useB2BStore } from "@/stores/b2bStore";
 import { getB2BLocationDetails, updateB2BLocationDetails, type B2BLocationDetails } from "@/lib/b2b-location.functions";
 import { normalizeIndianPhone } from "@/lib/contact-phone";
+import { toIndiaZoneCode } from "@/lib/india-zones";
+
+const PIN_CODE_PATTERN = /^\d{6}$/;
 
 /** Phone is optional on every form on this page -- empty input returns
  * null (unchanged, matches each form's prior "omit if empty" behavior).
@@ -115,16 +118,41 @@ function AddressFormDialog({
       toast.error(error instanceof Error ? error.message : "Enter a valid phone number.");
       return;
     }
+    const firstName = String(form.get("firstName") ?? "").trim();
+    const lastName = String(form.get("lastName") ?? "").trim();
+    const address1 = String(form.get("address1") ?? "").trim();
+    const city = String(form.get("city") ?? "").trim();
+    const province = String(form.get("province") ?? "").trim();
+    const zip = String(form.get("zip") ?? "").trim();
+    const country = String(form.get("country") ?? "").trim();
+    if (!firstName) { toast.error("First name is required."); return; }
+    if (!lastName) { toast.error("Last name is required."); return; }
+    if (!address1) { toast.error("Address is required."); return; }
+    if (!city) { toast.error("City is required."); return; }
+    if (!country) { toast.error("Country is required."); return; }
+    // toIndiaZoneCode is only used to validate the state name here -- unlike
+    // the B2B company-address forms, Shopify's MailingAddressInput.province
+    // field (customerAddressCreate/Update) wants the plain state NAME, not
+    // the 2-letter zone code those forms send to CompanyAddressInput, so the
+    // raw trimmed text is still what gets stored once it's confirmed valid.
+    if (!toIndiaZoneCode(province)) {
+      toast.error("Please enter a valid Indian state (e.g. Maharashtra).");
+      return;
+    }
+    if (!PIN_CODE_PATTERN.test(zip)) {
+      toast.error("Enter a valid 6-digit PIN code.");
+      return;
+    }
     const input: CustomerAddressInput = {
-      firstName: String(form.get("firstName") ?? "").trim() || null,
-      lastName: String(form.get("lastName") ?? "").trim() || null,
+      firstName,
+      lastName,
       company: String(form.get("company") ?? "").trim() || null,
-      address1: String(form.get("address1") ?? "").trim() || null,
+      address1,
       address2: String(form.get("address2") ?? "").trim() || null,
-      city: String(form.get("city") ?? "").trim() || null,
-      province: String(form.get("province") ?? "").trim() || null,
-      zip: String(form.get("zip") ?? "").trim() || null,
-      country: String(form.get("country") ?? "").trim() || null,
+      city,
+      province,
+      zip,
+      country,
       phone,
     };
     setBusy(true);

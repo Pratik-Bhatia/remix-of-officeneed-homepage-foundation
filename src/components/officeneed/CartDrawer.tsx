@@ -11,6 +11,7 @@ import { lockScroll, unlockScroll } from "@/lib/scroll-lock";
 import { CartLineItem } from "@/components/officeneed/CartLineItem";
 import { CartProfileLinks } from "@/components/officeneed/CartProfileLinks";
 import { DiscountCodeInput } from "@/components/officeneed/DiscountCodeInput";
+import { DeliveryAddressSelector } from "@/components/officeneed/DeliveryAddressSelector";
 
 export function CartDrawer({ triggerClassName }: { triggerClassName?: string }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -43,13 +44,14 @@ export function CartDrawer({ triggerClassName }: { triggerClassName?: string }) 
   const handleCheckout = async () => {
     // No delivery-address requirement here, for B2B or B2C: Shopify's own
     // hosted checkout collects shipping/billing exactly as it always has.
-    // A buyer's optional delivery address (set via the full cart page's
-    // DeliveryAddressSelector, if they choose to) is picked up
-    // automatically through prepareCheckout()/applyCart() below when
-    // present -- it was never required for prepareCheckout() to return a
-    // valid checkout URL, since that only needs cartId + buyerIdentity
-    // (customerAccessToken + companyLocationId, resolved from the
-    // customer's own Company Contact relationship, not from this address).
+    // A buyer's optional delivery address (set via DeliveryAddressSelector
+    // above -- rendered here in the drawer and on the full /cart page --
+    // if they choose to) is picked up automatically through
+    // prepareCheckout()/applyCart() below when present -- it was never
+    // required for prepareCheckout() to return a valid checkout URL, since
+    // that only needs cartId + buyerIdentity (customerAccessToken +
+    // companyLocationId, resolved from the customer's own Company Contact
+    // relationship, not from this address).
     if (preparing) return;
     const win = window.open("", "_blank");
     setPreparing(true);
@@ -209,6 +211,10 @@ export function CartDrawer({ triggerClassName }: { triggerClassName?: string }) 
                         onRemove={() => removeItem(item.variantId)}
                       />
                     ))}
+                  </div>
+
+                  <div className="mt-6">
+                    <DeliveryAddressSelector />
                   </div>
 
                   <div className="mt-6">
