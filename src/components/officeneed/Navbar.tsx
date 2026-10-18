@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { lockScroll, unlockScroll } from "@/lib/scroll-lock";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { Menu, MessageSquare, Search, User, X, ChevronDown, ChevronRight, PackageSearch } from "lucide-react";
 import logoUrl from "@/assets/officeneed-logo.svg";
 import { primaryNavCategories as navCategories, navItemTarget, navCategoryTarget, getLiveNavLabel } from "@/lib/navigation";
@@ -21,6 +21,16 @@ const AUTH_POPUP_SHOWN_KEY = "officeneed_auth_popup_shown";
 // custom /track-order page. Navigates in the SAME tab (window.location.href,
 // not window.open) so this is a normal top-level redirect, not a popup.
 const SHIPLYSTIC_TRACKING_URL = "https://app.shiplystic.com/track/SLY26091";
+
+// Routes where an auth popup -- automatic (first-visit) or programmatic
+// (the shared open-auth-modal event, e.g. a session-expiry re-prompt)
+// -- must never cover the page: Shopify's password-reset email link
+// lands here with a one-time reset token in the URL, and a popup
+// appearing over it blocks completing the reset. No explicit,
+// user-clicked auth entry point (account icon, cart/wishlist "sign in",
+// the B2B upgrade prompt) is reachable from this page in the first
+// place, so suppressing both triggers here doesn't affect any of them.
+const AUTH_POPUP_SUPPRESSED_ROUTES = ["/password-reset"];
 
 function Logo({ className }: { className?: string }) {
   return (
@@ -84,19 +94,23 @@ export function Navbar() {
   
   const { status } = useCustomer();
   const navigate = useNavigate();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
   // Live Shopify collection titles for nav labels -- same cached query
   // every other page that needs collection data already uses (React
   // Query dedupes by queryKey, so this doesn't add a network request).
   const { collections } = useShopifyCollections();
 
   useEffect(() => {
-    const handleOpenAuth = () => setAuthOpen(true);
+    const handleOpenAuth = () => {
+      if (AUTH_POPUP_SUPPRESSED_ROUTES.includes(pathname)) return;
+      setAuthOpen(true);
+    };
     window.addEventListener("open-auth-modal", handleOpenAuth);
 
     return () => {
       window.removeEventListener("open-auth-modal", handleOpenAuth);
     };
-  }, []);
+  }, [pathname]);
 
   // Automatic first-visit auth popup. Reuses the exact same modal/state as
   // every other entry point above (setAuthOpen) -- no second modal, no
@@ -111,7 +125,15 @@ export function Navbar() {
   // through this very popup).
   const autoPopupChecked = useRef(false);
   useEffect(() => {
-    if (status === "checking" || autoPopupChecked.current) return;
+    if (status === "checking") return;
+    // Never consume the one-shot while on a suppressed route -- if the
+    // visitor navigates elsewhere in the same session (e.g. abandons the
+    // password-reset page without completing it), the popup should still
+    // get its normal first-visit chance there, not be silently skipped
+    // for the rest of the session just because the reset link happened
+    // to be the first page they landed on.
+    if (AUTH_POPUP_SUPPRESSED_ROUTES.includes(pathname)) return;
+    if (autoPopupChecked.current) return;
     autoPopupChecked.current = true;
     if (status !== "out") return; // signed in (Individual or Corporate) -- never auto-open
     try {
@@ -123,7 +145,7 @@ export function Navbar() {
       return;
     }
     setAuthOpen(true);
-  }, [status]);
+  }, [status, pathname]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

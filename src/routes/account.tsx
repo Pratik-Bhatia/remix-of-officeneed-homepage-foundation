@@ -181,22 +181,30 @@ function AccountLayout() {
             status === "out" ? "max-w-4xl" : "max-w-6xl",
           )}
         >
-          <header className="mb-8 flex flex-wrap items-end justify-between gap-4">
-            <div>
-              <h1 className="text-3xl sm:text-4xl font-light tracking-tight text-foreground">
-                {customer?.firstName ? `Hello, ${customer.firstName}` : "Your Account"}
-              </h1>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Track orders, revisit saved products and keep your details up to date.
-              </p>
-            </div>
-            {status === "in" ? (
-              <Button variant="outline" className="rounded-full px-5" onClick={handleSignOut}>
-                <LogOut className="size-4" />
-                Sign out
-              </Button>
-            ) : null}
-          </header>
+          {status !== "out" ? (
+            // Suppressed when signed out: the embedded CustomerAuthModal
+            // below already has its own heading ("Welcome back"/"Create
+            // your account") and subheading -- this page-level header
+            // would otherwise duplicate that messaging, which modal mode
+            // never has to contend with (it's an overlay with no
+            // surrounding page chrome of its own).
+            <header className="mb-8 flex flex-wrap items-end justify-between gap-4">
+              <div>
+                <h1 className="text-3xl sm:text-4xl font-light tracking-tight text-foreground">
+                  {customer?.firstName ? `Hello, ${customer.firstName}` : "Your Account"}
+                </h1>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Track orders, revisit saved products and keep your details up to date.
+                </p>
+              </div>
+              {status === "in" ? (
+                <Button variant="outline" className="rounded-full px-5" onClick={handleSignOut}>
+                  <LogOut className="size-4" />
+                  Sign out
+                </Button>
+              ) : null}
+            </header>
+          ) : null}
 
           {status === "in" ? <B2BAccountStatus /> : null}
 

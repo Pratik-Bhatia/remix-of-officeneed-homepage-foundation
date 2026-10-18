@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { cn } from "@/lib/utils";
 import { FieldError, focusField } from "@/components/ui/field-error";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
@@ -35,15 +36,27 @@ import { submitBusinessApplication, saveApplicationDraft, clearApplicationDraft,
 function AuthSurface({
   embedded,
   className,
+  embeddedClassName,
   children,
 }: {
   embedded: boolean;
   className: string;
+  /** Overrides the embedded wrapper's default split-layout sizing
+   * (`lg:max-w-4xl lg:flex-row`) for a call site that intentionally
+   * stays single-column even in modal mode (forgot-password, the B2B
+   * upgrade form) -- without this, embedded mode previously ignored
+   * `className` entirely and forced the split layout on every branch. */
+  embeddedClassName?: string;
   children: React.ReactNode;
 }) {
   if (embedded) {
     return (
-      <div className="mx-auto flex w-full flex-col gap-0 overflow-hidden rounded-2xl border border-border bg-background lg:max-w-4xl lg:flex-row">
+      <div
+        className={cn(
+          "mx-auto flex w-full flex-col gap-0 overflow-hidden rounded-2xl border border-border bg-background",
+          embeddedClassName ?? "lg:max-w-4xl lg:flex-row",
+        )}
+      >
         {children}
       </div>
     );
@@ -96,8 +109,11 @@ export function CustomerAuthModal({
   // Company tab's "Create Business Account" form creates an ordinary
   // Shopify customer through the SAME registerCustomer() every B2C signup
   // uses, plus a company name/GST intake record (see
-  // src/lib/business-registration.functions.ts) for the merchant to review
-  // -- it does NOT itself grant B2B pricing or create a Shopify Company.
+  // src/lib/business-registration.functions.ts) for the merchant to
+  // review -- it DOES create/reuse a Shopify Company+Location there (so
+  // it's visible in Shopify Admin immediately), but it does NOT itself
+  // grant B2B pricing: no contact or role is assigned until an admin
+  // manually approves in Shopify Admin.
   const [entryType, setEntryType] = useState<"customer" | "company">("customer");
   const [busy, setBusy] = useState(false);
   // Opened while already signed in = a B2C customer upgrading their OWN
@@ -863,6 +879,7 @@ export function CustomerAuthModal({
           "flex max-h-[calc(100dvh-1.5rem)] w-[calc(100vw-1.5rem)] flex-col gap-0 overflow-hidden p-0 " +
           (isCompanyRegister ? "sm:max-w-[580px]" : "sm:max-w-md")
         }
+        embeddedClassName="max-w-xl"
       >
         <div className="shrink-0 space-y-4 px-5 pb-4 pt-6 sm:px-6">
           <div className="flex flex-col space-y-1.5 text-center sm:text-left">
@@ -881,7 +898,7 @@ export function CustomerAuthModal({
                 : entryType === "company"
                   ? mode === "signin"
                     ? "Sign in with your business email to see your orders and saved products."
-                    : "Register your business. B2B pricing is enabled separately once Officeneed sets up your company account in Shopify."
+                    : "Register your business for corporate access and pricing."
                   : mode === "signin"
                     ? "Sign in to see your orders and saved products."
                     : "Create an account to track your orders and keep a list of saved products."}
