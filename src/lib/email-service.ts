@@ -42,7 +42,7 @@ export type EmailAttachment = { filename: string; content: Buffer };
  * straight through silently produces a malformed/unusable attachment. Every
  * attachment is converted here so no caller has to remember this.
  */
-function toResendAttachments(attachments?: EmailAttachment[]) {
+export function toResendAttachments(attachments?: EmailAttachment[]) {
   if (!attachments?.length) return undefined;
   return attachments.map((a) => ({ filename: a.filename, content: a.content.toString("base64") }));
 }
@@ -119,7 +119,7 @@ export async function sendCustomerConfirmationEmail(params: {
   purpose?: string;
   quantity?: number;
   timeline?: string;
-  pdfBuffer: Buffer;
+  pdfBuffer: Buffer | null;
 }): Promise<boolean> {
   const resend = getResendClient();
   if (!resend) {
@@ -128,7 +128,7 @@ export async function sendCustomerConfirmationEmail(params: {
   }
 
   try {
-    const { error } = await resend.emails.send({
+    const { data, error } = await resend.emails.send({
       from: getEmailFrom(),
       to: params.email,
       subject: `Your Officeneed enquiry has been received — #${params.enquiryId}`,
@@ -144,22 +144,20 @@ export async function sendCustomerConfirmationEmail(params: {
           <p><strong>Quantity:</strong> ${esc(params.quantity)}</p>
           <p><strong>Timeline:</strong> ${esc(params.timeline)}</p>
           <hr style="border: none; border-top: 1px solid #eaeaea; margin: 20px 0;" />
-          <p>We've included your enquiry summary for reference as a PDF attachment.</p>
+          ${params.pdfBuffer ? "<p>We've included your enquiry summary for reference as a PDF attachment.</p>" : ""}
           <p>Our team will get back to you shortly.</p>
           <p>Regards,<br/>Team Officeneed</p>
         </div>
       `,
-      attachments: [
-        {
-          filename: `Officeneed-Enquiry-${params.enquiryId}.pdf`,
-          content: params.pdfBuffer,
-        },
-      ],
-    });
+      ...(params.pdfBuffer
+        ? { attachments: [{ filename: `Officeneed-Enquiry-${params.enquiryId}.pdf`, content: params.pdfBuffer.toString("base64") }] }
+        : {}),
+    }, { idempotencyKey: `enquiry-customer-${params.enquiryId}` });
     if (error) {
-      console.error("[EmailService] Customer email error:", error);
+      console.error(`[EmailService] customer confirmation rejected enquiry=${params.enquiryId}:`, error.name, error.message);
       return false;
     }
+    console.log(`[EmailService] customer confirmation accepted enquiry=${params.enquiryId} id=${data?.id}`);
     return true;
   } catch (err) {
     console.error("[EmailService] Customer email exception:", err);
@@ -179,7 +177,7 @@ export async function sendInternalNotificationEmail(params: {
   timeline?: string;
   notes?: string;
   subtotal: number;
-  pdfBuffer: Buffer;
+  pdfBuffer: Buffer | null;
   attachments?: Array<{ filename: string; content: Buffer }>;
 }): Promise<boolean> {
   const resend = getResendClient();
@@ -191,7 +189,7 @@ export async function sendInternalNotificationEmail(params: {
   const companyDisplay = params.companyName ? params.companyName : params.customerName;
 
   try {
-    const { error } = await resend.emails.send({
+    const { data, error } = await resend.emails.send({
       from: getEmailFrom(),
       to: getInternalEmail(),
       subject: `New AI Enquiry — ${String(companyDisplay).replace(/[\r\n]+/g, " ").slice(0, 120)} — #${params.enquiryId}`,
@@ -225,21 +223,22 @@ export async function sendInternalNotificationEmail(params: {
               : "No files uploaded."
           }</p>
 
-          <p><em>The complete enquiry PDF (including product breakdown) is attached to this email.</em></p>
+          <p><em>${params.pdfBuffer ? "The complete enquiry PDF (including product breakdown) is attached to this email." : "The enquiry PDF could not be generated; details are listed above."}</em></p>
         </div>
       `,
-      attachments: [
-        {
-          filename: `Officeneed-Enquiry-${params.enquiryId}.pdf`,
-          content: params.pdfBuffer,
-        },
-        ...(params.attachments ?? []).map((a) => ({ filename: a.filename, content: a.content })),
-      ],
-    });
+      ...(() => {
+        const atts = toResendAttachments([
+          ...(params.pdfBuffer ? [{ filename: `Officeneed-Enquiry-${params.enquiryId}.pdf`, content: params.pdfBuffer }] : []),
+          ...(params.attachments ?? []),
+        ]);
+        return atts ? { attachments: atts } : {};
+      })(),
+    }, { idempotencyKey: `enquiry-internal-${params.enquiryId}` });
     if (error) {
-      console.error("[EmailService] Internal email error:", error);
+      console.error(`[EmailService] internal notification rejected enquiry=${params.enquiryId}:`, error.name, error.message);
       return false;
     }
+    console.log(`[EmailService] internal notification accepted enquiry=${params.enquiryId} id=${data?.id}`);
     return true;
   } catch (err) {
     console.error("[EmailService] Internal email exception:", err);

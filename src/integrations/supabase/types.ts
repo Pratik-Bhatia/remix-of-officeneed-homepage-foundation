@@ -450,8 +450,11 @@ export type Database = {
           category: string
           company: string | null
           created_at: string
+          customer_email_sent: boolean
           email: string
+          email_status: string | null
           id: string
+          internal_email_sent: boolean
           message: string
           name: string
           product_name: string
@@ -463,8 +466,11 @@ export type Database = {
           category: string
           company?: string | null
           created_at?: string
+          customer_email_sent?: boolean
           email: string
+          email_status?: string | null
           id?: string
+          internal_email_sent?: boolean
           message: string
           name: string
           product_name: string
@@ -476,8 +482,11 @@ export type Database = {
           category?: string
           company?: string | null
           created_at?: string
+          customer_email_sent?: boolean
           email?: string
+          email_status?: string | null
           id?: string
+          internal_email_sent?: boolean
           message?: string
           name?: string
           product_name?: string
