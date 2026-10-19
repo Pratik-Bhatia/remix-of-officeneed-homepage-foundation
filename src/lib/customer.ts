@@ -131,7 +131,7 @@ const CUSTOMER_QUERY = `
       lastName
       phone
       defaultAddress { id firstName lastName company address1 address2 city province provinceCode zip country phone }
-      addresses(first: 5) { edges { node { id firstName lastName company address1 address2 city province provinceCode zip country phone } } }
+      addresses(first: 50) { edges { node { id firstName lastName company address1 address2 city province provinceCode zip country phone } } }
       orders(first: 25, sortKey: PROCESSED_AT, reverse: true) {
         edges {
           node {
