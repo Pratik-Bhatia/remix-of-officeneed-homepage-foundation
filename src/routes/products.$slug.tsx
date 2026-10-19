@@ -27,7 +27,7 @@ import { shopifyImageUrl } from "@/lib/shopify-image";
 import { fetchProductByHandle, fetchRelatedProducts, formatMoney, type ShopifyProductNode, type ShopifyVariantNode, type BuyerContext } from "@/lib/shopify";
 import { mergeProduct, shopifyNodeToProduct, useShopifyCollections, useB2BPriceOverlayMap } from "@/lib/shopify-overlay";
 import { TAXONOMY, resolveLiveTitle } from "@/lib/taxonomy";
-import { useCartStore, checkoutFailureMessage } from "@/stores/cartStore";
+import { useCartStore } from "@/stores/cartStore";
 import { useB2BStore } from "@/stores/b2bStore";
 import { getCustomerToken } from "@/lib/customer";
 import { useSaves } from "@/lib/saves";
@@ -426,7 +426,7 @@ function ProductDetail() {
 
   const addItem = useCartStore((s) => s.addItem);
   const items = useCartStore((s) => s.items);
-  const prepareCheckout = useCartStore((s) => s.prepareCheckout);
+  const createStandaloneCheckout = useCartStore((s) => s.createStandaloneCheckout);
 
   const min = product.minimumOrderQuantity || 1;
   const step = 1;
@@ -617,31 +617,43 @@ function ProductDetail() {
     }
   };
 
-  // Buy Now: ensures the selected variant is in the cart (adding it only
-  // if it isn't there yet, so a repeat click doesn't silently bump the
-  // quantity right before checkout), then hands off to the exact same
-  // checkout mechanism CartDrawer's own Checkout button uses. No
-  // delivery-address requirement, for B2B or B2C: Shopify's own hosted
-  // checkout collects shipping/billing exactly as it always has --
-  // prepareCheckout() below only ever needed cartId + buyerIdentity to
-  // return a valid checkout URL, never a cart-level delivery address.
+  // Buy Now: a standalone Shopify cart, created fresh for exactly this
+  // purchase -- NEVER the customer's persistent cart/items state. This
+  // used to add the selected variant to the regular cart and then check
+  // out that cart (prepareCheckout(), the same mechanism CartDrawer's own
+  // Checkout button uses) -- confirmed live this was the actual bug
+  // behind "Buy Now checks out my whole cart, not just this product":
+  // whatever was already in the shopper's cart got included, and the
+  // item was permanently added to their cart even if they abandoned
+  // checkout. Mirrors ProductCustomizer.tsx's own handleBuyNow, which
+  // already used createStandaloneCheckout correctly -- this brings the
+  // plain (non-customized) PDP Buy Now button in line with it, so both
+  // entry points now behave identically. No delivery-address requirement,
+  // for B2B or B2C: Shopify's own hosted checkout collects shipping/
+  // billing exactly as it always has.
   const handleBuyNowCheckout = async () => {
     if (!validatePurchasable()) return;
-    if (!isItemInCart) {
-      const ok = await addCurrentVariantToCart();
-      if (!ok) return;
-    }
+    if (!node || !selectedVariant) return;
     const win = window.open("", "_blank");
     try {
-      const result = await prepareCheckout();
-      if (result.url === null) {
+      const checkoutUrl = await createStandaloneCheckout({
+        product: { node },
+        variantId: selectedVariant.id,
+        variantTitle: selectedVariant.title,
+        price: selectedVariant.price ?? node.priceRange?.minVariantPrice,
+        quantity,
+        selectedOptions: selectedVariant.selectedOptions ?? [],
+      });
+      if (!checkoutUrl) {
+        // createStandaloneCheckout() already shows its own toast on every
+        // failure path before returning null -- do not add a second one
+        // here, or the shopper would see two error toasts for one failure.
         win?.close();
-        toast.error(checkoutFailureMessage(result.reason));
         return;
       }
-      trackInitiateCheckout(useCartStore.getState().items);
-      if (win) win.location.href = result.url;
-      else window.open(result.url, "_blank");
+      trackInitiateCheckout([{ variantId: selectedVariant.id, quantity, price: selectedVariant.price ?? node.priceRange?.minVariantPrice }]);
+      if (win) win.location.href = checkoutUrl;
+      else window.open(checkoutUrl, "_blank");
     } catch {
       win?.close();
       toast.error("Couldn't start checkout. Please try again.");

@@ -37,6 +37,13 @@ const submitQuoteSchema = z.object({
   location: z.string().min(1, "Delivery location is required"),
   requirements: z.string().optional(),
   printingMethod: z.string().optional(),
+  // Pre-formatted (client-side, via the existing formatMoney utility and
+  // the existing selectedVariant price -- see ProductCustomizer.tsx's
+  // submitQuote) unit-price-times-quantity total, passed through to the
+  // quote PDF only -- never stored (no corporate_quote_requests column for
+  // it) and never used for anything else. Optional so an older client
+  // build can't fail validation.
+  totalBilling: z.string().optional(),
   
   product: z.object({
     id: z.string(),
@@ -285,6 +292,7 @@ export const submitCorporateQuote = createServerFn({ method: "POST" })
             printingMethod: data.printingMethod,
             deliveryDate: data.deliveryDate,
             location: data.location,
+            totalBilling: data.totalBilling,
           },
           requirements: data.requirements,
           ...(data.logo

@@ -21,6 +21,7 @@ import { submitCorporateQuote } from "@/lib/corporate-quotes.functions";
 import { saveBuyNowCustomization } from "@/lib/buy-now-customization.functions";
 import { getBrandingLimits, computeEffectiveMaxScale, computeGeometricMaxScale, computeMinEffectiveScale, scaleToPhysicalMm, widthMmToScale, heightMmToScale, MIN_LOGO_SIZE_MM, GIFT_SET_REFERENCE_WIDTH_MM, CORPORATE_GIFTING_DEFAULT_REFERENCE_WIDTH_MM, type PrintingMethod, type BrandingLimits } from "@/lib/branding-limits";
 import { getPrintableArea } from "@/lib/printable-area";
+import { formatMoney } from "@/lib/shopify";
 
 interface ProductCustomizerProps {
   product: any;
@@ -1517,6 +1518,20 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
       // guaranteed to be the exact same image.
       const previewBase64 = summaryPreviewSrc;
 
+      // Total Billing for the quote PDF -- same unit price + fallback
+      // handleBuyNow above already uses (selectedVariant.price, falling
+      // back to the product's own min variant price), times the quantity
+      // just entered on this form, formatted with the same formatMoney
+      // utility every other displayed price in this app uses. Not a new
+      // calculation: unit price × quantity is the same line-total formula
+      // CartLineItem.tsx already applies elsewhere. Omitted (undefined)
+      // if no price is available for any reason, rather than showing a
+      // blank/zero total.
+      const quotePrice = selectedVariant?.price ?? rawProductNode?.priceRange?.minVariantPrice;
+      const totalBilling = quotePrice
+        ? formatMoney(parseFloat(quotePrice.amount) * parseInt(formData.quantity, 10), quotePrice.currencyCode)
+        : undefined;
+
       const result = await submitCorporateQuote({
         data: {
           fullName: formData.fullName,
@@ -1528,6 +1543,7 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
           location: formData.location,
           requirements: formData.requirements,
           printingMethod: printingMethod,
+          totalBilling,
           product: {
             id: product.id || product.slug,
             name: product.name,

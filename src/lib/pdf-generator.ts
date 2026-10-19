@@ -87,6 +87,12 @@ export interface CorporateQuotePDFData {
     printingMethod?: string | undefined;
     deliveryDate?: string | undefined;
     location: string;
+    /** Pre-formatted (via the existing formatMoney utility, same as every
+     * other displayed price in this app) unit-price-times-quantity total --
+     * never recalculated here, just rendered as given. Optional so an
+     * older client build, or a quote submitted before this field existed,
+     * simply omits the line rather than showing a blank/zero value. */
+    totalBilling?: string | undefined;
   };
   requirements?: string | undefined;
   logo?: {
@@ -256,6 +262,7 @@ export async function generateCorporateQuotePDF(data: CorporateQuotePDFData): Pr
     `Printing Method: ${sanitizeText(data.order.printingMethod)}`,
     `Delivery Date: ${sanitizeText(data.order.deliveryDate)}`,
     `Delivery Location: ${sanitizeText(data.order.location)}`,
+    ...(data.order.totalBilling ? [`Total Billing: ${sanitizeText(data.order.totalBilling)}`] : []),
   ];
 
   for (let i = 0; i < Math.max(leftCol.length, rightCol.length); i++) {

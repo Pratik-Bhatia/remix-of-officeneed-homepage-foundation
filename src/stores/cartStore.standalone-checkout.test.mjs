@@ -169,6 +169,52 @@ test("an existing persistent cart with real items is completely unchanged after 
   assert.equal(state.checkoutUrl, "https://example.com/checkout/persistent-1");
 });
 
+test("Buy Now with 8 unrelated products already in the cart: checkout line is only the selected product, and the existing 8 are completely untouched", async () => {
+  // Literal acceptance scenario from "Fix Buy Now Checkout Including
+  // Previous Cart Items" -- products.$slug.tsx's own Buy Now button used
+  // to add the clicked variant to THIS SAME persistent cart and check out
+  // the whole thing (prepareCheckout()), so every one of these 8 other
+  // items would have ended up on the checkout too. Fixed by switching
+  // that button to call this same createStandaloneCheckout the
+  // ProductCustomizer's Buy Now already used correctly.
+  const existingItems = Array.from({ length: 8 }, (_, i) => ({
+    lineId: `gid://shopify/CartLine/existing-${i}`,
+    product: { node: PRODUCT_NODE },
+    variantId: `gid://shopify/ProductVariant/existing-${i}`,
+    variantTitle: `Existing ${i}`,
+    price: { amount: "100", currencyCode: "INR" },
+    quantity: 1,
+    selectedOptions: [],
+  }));
+  useCartStore.setState({
+    cartId: "gid://shopify/Cart/persistent-many",
+    items: existingItems,
+    checkoutUrl: "https://example.com/checkout/persistent-many",
+    discountCodes: [],
+    cost: { subtotal: { amount: "800", currencyCode: "INR" }, total: { amount: "800", currencyCode: "INR" } },
+  });
+
+  nextCreatedCartId = "gid://shopify/Cart/standalone-buynow";
+  lastCartCreateLines = null;
+  const url = await useCartStore.getState().createStandaloneCheckout(
+    buyNowItem({ variantId: "gid://shopify/ProductVariant/just-this-one", quantity: 3 }),
+  );
+
+  assert.ok(url);
+  // Exactly one line was sent to Shopify, for exactly the clicked variant
+  // and quantity -- never the 8 other products.
+  assert.equal(lastCartCreateLines.length, 1);
+  assert.equal(lastCartCreateLines[0].merchandiseId, "gid://shopify/ProductVariant/just-this-one");
+  assert.equal(lastCartCreateLines[0].quantity, 3);
+  // The regular cart -- all 8 existing items, cartId, checkoutUrl -- is
+  // byte-identical to before Buy Now was clicked.
+  const state = useCartStore.getState();
+  assert.equal(state.cartId, "gid://shopify/Cart/persistent-many");
+  assert.deepEqual(state.items, existingItems);
+  assert.equal(state.items.length, 8);
+  assert.equal(state.checkoutUrl, "https://example.com/checkout/persistent-many");
+});
+
 test("createStandaloneCheckout never saves to the customer's persisted saved-cart record", async () => {
   saveCustomerCartCallCount = 0;
   nextCreatedCartId = "gid://shopify/Cart/standalone-3";
