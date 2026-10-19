@@ -569,6 +569,45 @@ function ProductDetail() {
     return i >= 0 ? i : 0;
   });
 
+  /* ------------- Mobile swipeable gallery <-> activeImage sync ------------ */
+  // activeImage stays the single shared source of truth for both the
+  // desktop single-image view and this mobile scroll-snap strip -- arrows,
+  // thumbnails (desktop) and variant selection all already just call
+  // setActiveImage, so they drive the mobile strip for free via the effect
+  // below, with no separate reset/sync logic needed for any of them.
+  const mobileGalleryRef = useRef<HTMLDivElement>(null);
+  // True for the duration of a programmatic (non-swipe) scroll, so the
+  // scroll handler below doesn't read its own in-flight animation as a
+  // user swipe and fight it / bounce activeImage around mid-scroll.
+  const isProgrammaticScroll = useRef(false);
+
+  useEffect(() => {
+    const el = mobileGalleryRef.current;
+    if (!el) return;
+    const targetLeft = activeImage * el.clientWidth;
+    if (Math.abs(el.scrollLeft - targetLeft) < 2) return;
+    isProgrammaticScroll.current = true;
+    el.scrollTo({ left: targetLeft, behavior: "smooth" });
+    const clear = () => { isProgrammaticScroll.current = false; };
+    el.addEventListener("scrollend", clear, { once: true });
+    // Fallback for browsers without `scrollend` support -- a smooth scroll
+    // across one slide's width never takes anywhere near this long.
+    const fallback = window.setTimeout(clear, 600);
+    return () => {
+      el.removeEventListener("scrollend", clear);
+      window.clearTimeout(fallback);
+    };
+  }, [activeImage]);
+
+  const handleGalleryScroll = () => {
+    const el = mobileGalleryRef.current;
+    if (!el || isProgrammaticScroll.current || el.clientWidth === 0) return;
+    const index = Math.round(el.scrollLeft / el.clientWidth);
+    if (index !== activeImage && index >= 0 && index < gallery.length) {
+      setActiveImage(index);
+    }
+  };
+
   // Follow back/forward or a shared link changing ?variant= on the same page.
   useEffect(() => {
     if (linkedVariant && linkedVariant.id !== selectedVariantId) {
@@ -895,7 +934,7 @@ function ProductDetail() {
                   <div
                     role="group"
                     aria-label="Product thumbnails"
-                    className="product-thumbnails order-2 lg:order-1 flex lg:flex-col gap-3 w-full lg:w-[80px] overflow-x-auto lg:overflow-y-auto pb-2 lg:pb-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                    className="product-thumbnails order-2 lg:order-1 hidden lg:flex lg:flex-col gap-3 w-full lg:w-[80px] overflow-x-auto lg:overflow-y-auto pb-2 lg:pb-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                   >
                     {gallery.map((media, i) => (
                       <button
@@ -927,29 +966,88 @@ function ProductDetail() {
 
                 {/* Main Image */}
                 <div className="product-main-image order-1 lg:order-2 w-full max-w-[1080px] aspect-square lg:aspect-auto lg:h-[calc(100vh-200px)] lg:max-h-[1080px] relative overflow-hidden rounded-2xl bg-secondary/30 border border-border/50 group flex items-center justify-center p-4 sm:p-8">
+                  {/* Desktop: single fixed image, swapped via thumbnails/
+                      arrows updating activeImage -- unchanged behavior. */}
                   <img
                     src={shopifyImageUrl(activeMedia?.url ?? product.images[0], 1200)}
                     alt={activeMedia?.alt || `${product.name} - image ${activeImage + 1}`}
                     width={1080}
                     height={1080}
                     fetchPriority="high"
-                    className="w-full h-full object-contain mix-blend-multiply block" style={{ maxHeight: "1080px" }}
+                    className="hidden lg:block w-full h-full object-contain mix-blend-multiply" style={{ maxHeight: "1080px" }}
                   />
-                  
+
+                  {/* Mobile: native horizontally-scrollable, scroll-snap
+                      strip of every gallery image -- swiping is handled
+                      entirely by the browser's own scroll physics (same
+                      proven pattern as the subcategory icon row on
+                      products.index.tsx), not custom pointer math, so it
+                      never fights vertical page scroll or pinch-zoom.
+                      activeImage stays the single shared source of truth:
+                      scrolling here updates it (handleGalleryScroll), and
+                      it changing from anywhere else (arrows, variant
+                      selection) scrolls this strip to match (the
+                      useEffect below). */}
+                  <div
+                    ref={mobileGalleryRef}
+                    onScroll={handleGalleryScroll}
+                    className="flex lg:hidden w-full h-full overflow-x-auto snap-x snap-mandatory [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                  >
+                    {gallery.map((media, i) => (
+                      <div key={media.url} className="w-full h-full shrink-0 snap-center flex items-center justify-center">
+                        <img
+                          src={shopifyImageUrl(media.url, 1200)}
+                          alt={media.alt || `${product.name} - image ${i + 1}`}
+                          width={1080}
+                          height={1080}
+                          loading={i === 0 ? undefined : "lazy"}
+                          fetchPriority={i === 0 ? "high" : undefined}
+                          className="w-full h-full object-contain mix-blend-multiply"
+                          style={{ maxHeight: "1080px" }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Pagination dots -- mobile only, hidden for a single
+                      image (same gating as the arrows below). */}
+                  {gallery.length > 1 && (
+                    <div
+                      role="tablist"
+                      aria-label="Product images"
+                      className="absolute bottom-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-background/90 px-2.5 py-1.5 shadow-sm backdrop-blur lg:hidden"
+                    >
+                      {gallery.map((media, i) => (
+                        <button
+                          key={media.url + "-dot"}
+                          type="button"
+                          role="tab"
+                          aria-label={`Show image ${i + 1} of ${gallery.length}`}
+                          aria-selected={activeImage === i}
+                          onClick={() => setActiveImage(i)}
+                          className={cn(
+                            "h-1.5 rounded-full transition-all",
+                            activeImage === i ? "w-4 bg-foreground" : "w-1.5 bg-foreground/30",
+                          )}
+                        />
+                      ))}
+                    </div>
+                  )}
+
                   {/* Arrows */}
                   {gallery.length > 1 && (
                     <>
                       <button
                         onClick={prevImage}
                         aria-label="Previous product image"
-                        className="absolute left-3 lg:left-4 top-1/2 -translate-y-1/2 flex items-center justify-center size-10 lg:size-11 rounded-full bg-background/90 backdrop-blur border border-border text-foreground opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity hover:bg-background focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground shadow-sm"
+                        className="absolute left-3 lg:left-4 top-1/2 -translate-y-1/2 hidden lg:flex items-center justify-center size-10 lg:size-11 rounded-full bg-background/90 backdrop-blur border border-border text-foreground lg:opacity-0 lg:group-hover:opacity-100 transition-opacity hover:bg-background focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground shadow-sm"
                       >
                         <ChevronLeft className="size-5 lg:size-6" />
                       </button>
                       <button
                         onClick={nextImage}
                         aria-label="Next product image"
-                        className="absolute right-3 lg:right-4 top-1/2 -translate-y-1/2 flex items-center justify-center size-10 lg:size-11 rounded-full bg-background/90 backdrop-blur border border-border text-foreground opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity hover:bg-background focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground shadow-sm"
+                        className="absolute right-3 lg:right-4 top-1/2 -translate-y-1/2 hidden lg:flex items-center justify-center size-10 lg:size-11 rounded-full bg-background/90 backdrop-blur border border-border text-foreground lg:opacity-0 lg:group-hover:opacity-100 transition-opacity hover:bg-background focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground shadow-sm"
                       >
                         <ChevronRight className="size-5 lg:size-6" />
                       </button>

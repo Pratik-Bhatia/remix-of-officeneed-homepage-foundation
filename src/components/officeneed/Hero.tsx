@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { TAXONOMY } from "@/lib/taxonomy";
 
 const heroPerfumes = { url: "/hero/hero-perfumes.webp" };
 const heroExclusive = { url: "/hero/officeneed-exclusive-set-v2.webp" };
@@ -6,13 +7,20 @@ const heroGifting = { url: "/hero/corporate-gifting.webp" };
 const heroAI = { url: "/hero/ai-assistant.webp" };
 
 
-const slides = [
+// Collection hrefs below are derived from TAXONOMY (the same single source
+// of truth src/lib/navigation.ts's footerShopTargets/navCategoryTarget
+// already use) instead of hardcoded handle strings -- two of those strings
+// ("fragrance-gifting", "exclusive-products") had drifted out of sync with
+// the real Shopify collection handles ("perfumes", "officeneed-exclusive"),
+// which made products.index.tsx correctly-but-misleadingly treat those
+// pages as genuinely empty categories and show the Coming Soon banner.
+export const slides = [
   {
     id: "scents",
     heading: "Signature Scents",
     text: "Elevate your professional presence with our premium fragrance collection.",
-    primary: { label: "Discover Collection", href: "/products/?collection=fragrance-gifting" },
-    secondary: { label: "Shop Perfumes", href: "/products/?collection=european-perfume" },
+    primary: { label: "Discover Collection", href: `/products/?collection=${TAXONOMY["Fragrance Gifting"].handle}` },
+    secondary: { label: "Shop Perfumes", href: `/products/?collection=${TAXONOMY["Fragrance Gifting"].subcategories["European Perfume"]!.handle}` },
     image: heroPerfumes.url,
     alt: "Luxury designer perfume bottles and gift boxes arranged with flowers and botanicals.",
   },
@@ -20,7 +28,7 @@ const slides = [
     id: "exclusive",
     heading: "Officeneed Exclusive",
     text: "Precision-crafted essentials designed for the modern workspace.",
-    primary: { label: "Explore Exclusives", href: "/products/?collection=exclusive-products" },
+    primary: { label: "Explore Exclusives", href: `/products/?collection=${TAXONOMY["Officeneed Exclusive"].handle}` },
     secondary: { label: "Shop Now", href: "/products/" },
     image: heroExclusive.url,
     alt: "Officeneed exclusive desk essentials, gift boxes and premium stationery set.",
@@ -29,8 +37,8 @@ const slides = [
     id: "gifting",
     heading: "Corporate Gifting",
     text: "Build lasting business relationships with curated, premium gift sets.",
-    primary: { label: "View Gift Catalogue", href: "/products/?collection=corporate-gifting" },
-    secondary: { label: "Shop Gift Sets", href: "/products/?collection=gift-sets" },
+    primary: { label: "View Gift Catalogue", href: `/products/?collection=${TAXONOMY["Corporate Gifting"].handle}` },
+    secondary: { label: "Shop Gift Sets", href: `/products/?collection=${TAXONOMY["Corporate Gifting"].subcategories["Gift Sets"]!.handle}` },
     image: heroGifting.url,
     alt: "Curated Officeneed corporate gift hamper with laptop bag, notebook, flask, mug, pen, candle, plant and thank you card.",
   },
