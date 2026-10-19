@@ -1,8 +1,10 @@
 import { Link } from "@tanstack/react-router";
 import { ShoppingBag, Minus, Plus } from "lucide-react";
-import type { CartItem } from "@/stores/cartStore";
+import { useCartStore, quantityRuleScopeKey, type CartItem } from "@/stores/cartStore";
+import { useB2BStore } from "@/stores/b2bStore";
 import { formatMoney } from "@/lib/shopify";
 import { shopifyImageUrl } from "@/lib/shopify-image";
+import { useB2BQuantityRuleOverlayMap } from "@/lib/shopify-overlay";
 
 /**
  * A single cart line's presentation -- shared by CartDrawer and the full
@@ -55,13 +57,26 @@ export function CartLineItem({
     (o) => o.value.trim().toLowerCase() !== "default title",
   );
 
-  // Shopify's own configured minimum for this exact variant, read from the
-  // product node snapshot this cart line already carries (see shopify.ts's
-  // ShopifyVariantNode.quantityRule) -- never a hardcoded per-product
-  // number. The decrement button below never lets this line drop below it;
+  // Shopify's own configured minimum for this exact variant, highest
+  // priority first -- never a hardcoded per-product number:
+  //  1. b2bOverlay -- a signed-in B2B buyer's own real catalog rule,
+  //     fetched for exactly this line's variant (see
+  //     useB2BQuantityRuleOverlayMap) -- covers a cart line for a product
+  //     the shopper isn't currently viewing on its own PDP, where that
+  //     page's own overlay fetch would never have run.
+  //  2. quantityRuleOverrides -- what an actual cart mutation has revealed
+  //     (see cartStore.ts), a reactive safety net for whatever (1) misses.
+  //  3. The product node snapshot this cart line already carries (see
+  //     shopify.ts's ShopifyVariantNode.quantityRule) -- correct for a
+  //     B2C/anonymous shopper, confirmed live; only a resolved B2B rule
+  //     ever overrides it.
+  // The decrement button below never lets this line drop below it;
   // removing the line entirely (the Remove button) is always allowed.
+  const { overlay: b2bOverlay } = useB2BQuantityRuleOverlayMap([item.variantId]);
+  const companyLocationId = useB2BStore((s) => s.companyLocationId);
+  const override = useCartStore((s) => s.quantityRuleOverrides[`${item.variantId}::${quantityRuleScopeKey(companyLocationId)}`]);
   const variantNode = item.product?.node?.variants?.edges?.find((e) => e.node.id === item.variantId)?.node;
-  const minQuantity = variantNode?.quantityRule?.minimum || 1;
+  const minQuantity = b2bOverlay[item.variantId]?.minimum || override?.minimum || variantNode?.quantityRule?.minimum || 1;
   const atMinimum = item.quantity <= minQuantity;
 
   // Runs on every click, for every product, unconditionally -- deliberately

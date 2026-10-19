@@ -25,9 +25,9 @@ import { cn } from "@/lib/utils";
 import { getProductBySlug, getRelatedProducts } from "@/lib/products";
 import { shopifyImageUrl } from "@/lib/shopify-image";
 import { fetchProductByHandle, fetchRelatedProducts, formatMoney, type ShopifyProductNode, type ShopifyVariantNode, type BuyerContext } from "@/lib/shopify";
-import { mergeProduct, shopifyNodeToProduct, useShopifyCollections, useB2BPriceOverlayMap } from "@/lib/shopify-overlay";
+import { mergeProduct, shopifyNodeToProduct, useShopifyCollections, useB2BPriceOverlayMap, useB2BQuantityRuleOverlayMap } from "@/lib/shopify-overlay";
 import { TAXONOMY, resolveLiveTitle } from "@/lib/taxonomy";
-import { useCartStore } from "@/stores/cartStore";
+import { useCartStore, quantityRuleScopeKey } from "@/stores/cartStore";
 import { useB2BStore } from "@/stores/b2bStore";
 import { getCustomerToken } from "@/lib/customer";
 import { useSaves } from "@/lib/saves";
@@ -292,10 +292,42 @@ function ProductDetail() {
   }, [loaderNode, loaderRelatedNodes]);
   const { overlay: pdpPriceOverlay, ready: pricesReady } = useB2BPriceOverlayMap(pdpVariantIds);
 
-  const node = useMemo(
+  // Only THIS product's own variants, not the related-products ids above --
+  // a B2B company-location quantity rule is only ever relevant to what's
+  // actually selectable on this page. See useB2BQuantityRuleOverlayMap for
+  // why this is a SEPARATE overlay from price: B2C/anonymous shoppers
+  // never trigger it at all (confirmed live that their correct answer is
+  // already the plain Storefront quantityRule read below).
+  const currentProductVariantIds = useMemo(
+    () => loaderNode?.variants?.edges?.map((e) => e.node.id) ?? [],
+    [loaderNode],
+  );
+  const { overlay: b2bQuantityRuleOverlay } = useB2BQuantityRuleOverlayMap(currentProductVariantIds);
+
+  const nodeWithPriceOverlay = useMemo(
     () => (loaderNode ? applyB2BPriceOverlay(loaderNode, pdpPriceOverlay) : loaderNode),
     [loaderNode, pdpPriceOverlay],
   );
+  // Same idea as the price overlay just above, for quantityRule -- so
+  // every consumer of `node` (Add to Cart/Buy Now's `product: { node }`
+  // payload, the Product Customizer's rawProductNode, the cart item
+  // snapshot CartLineItem later reads its own floor from) sees the
+  // B2B-resolved rule, not just the on-screen stepper. A no-op copy for
+  // any variant the overlay has nothing for (every B2C/anonymous case,
+  // and every variant without a B2B catalog override).
+  const node = useMemo(() => {
+    if (!nodeWithPriceOverlay || Object.keys(b2bQuantityRuleOverlay).length === 0) return nodeWithPriceOverlay;
+    return {
+      ...nodeWithPriceOverlay,
+      variants: {
+        ...nodeWithPriceOverlay.variants,
+        edges: nodeWithPriceOverlay.variants.edges.map((e) => {
+          const rule = b2bQuantityRuleOverlay[e.node.id];
+          return rule ? { ...e, node: { ...e.node, quantityRule: rule } } : e;
+        }),
+      },
+    };
+  }, [nodeWithPriceOverlay, b2bQuantityRuleOverlay]);
   const staticProductForSlug = useMemo(() => getProductBySlug(slug), [slug]);
   const product = useMemo(() => {
     if (!node) return loaderProduct;
@@ -435,6 +467,11 @@ function ProductDetail() {
   const addItem = useCartStore((s) => s.addItem);
   const items = useCartStore((s) => s.items);
   const createStandaloneCheckout = useCartStore((s) => s.createStandaloneCheckout);
+  const quantityRuleOverrides = useCartStore((s) => s.quantityRuleOverrides);
+  // Same buyer-scope key cartStore.ts's own recordQuantityRuleCorrection
+  // uses -- a correction learned for one company location (or no company
+  // at all) must never be read back for a different one in this tab.
+  const quantityRuleCompanyLocationId = useB2BStore((s) => s.companyLocationId);
 
   /* ---------------- Shopify-driven variant + gallery model ---------------- */
 
@@ -483,15 +520,45 @@ function ProductDetail() {
   const selectedVariant =
     variants.find((v) => v.id === selectedVariantId) ?? initialVariant;
 
-  // Shopify's own per-variant order quantity rule (see ShopifyVariantNode
-  // in shopify.ts) is the only source of truth for min/step/max -- never a
-  // hardcoded per-product number. Absent rule (or no selected variant yet,
-  // e.g. a quote-only product) falls back to the universal default: start
-  // at 1, step by 1, no cap.
+  // Three layers, highest priority first -- never a hardcoded per-product
+  // number:
+  //  1. b2bQuantityRuleOverlay -- a signed-in B2B buyer's actual catalog
+  //     rule for their company location, fetched PROACTIVELY via Admin API
+  //     contextualPricing (see useB2BQuantityRuleOverlayMap). This is the
+  //     one CONFIRMED LIVE this session to carry H935's real minimum of 25
+  //     -- the plain Storefront read below never does, for any buyer,
+  //     B2B or not (tested with/without @inContext(country:) and
+  //     buyerIdentity.countryCode).
+  //  2. quantityRuleOverrides -- a REACTIVE safety net: what an actual
+  //     cart mutation has revealed via MINIMUM_NOT_MET/etc (see
+  //     cartStore.ts). Only still relevant for a buyer the proactive B2B
+  //     overlay doesn't cover (e.g. Buy Now before this page's B2B status
+  //     resolves) or a rule this overlay doesn't know about for some other
+  //     reason -- normally overlay (1) already has the right answer by the
+  //     time this renders.
+  //  3. selectedVariant.quantityRule -- the plain Storefront API read.
+  //     CONFIRMED LIVE to be the CORRECT answer for B2C/anonymous buyers
+  //     (contextualPricing(country: IN) returns the identical value), so
+  //     this is never overridden for them -- only a real B2B buyer's own
+  //     resolved overlay (1) ever takes priority over it.
+  // Absent everywhere (or no selected variant yet, e.g. a quote-only
+  // product) falls back to the universal default: start at 1, step by 1,
+  // no cap.
   const quantityRule = selectedVariant?.quantityRule;
-  const min = quantityRule?.minimum || 1;
-  const step = quantityRule?.increment || 1;
-  const maxQty = quantityRule?.maximum ?? null;
+  const b2bOverlayRule = selectedVariant ? b2bQuantityRuleOverlay[selectedVariant.id] : undefined;
+  const retryOverride = selectedVariant ? quantityRuleOverrides[`${selectedVariant.id}::${quantityRuleScopeKey(quantityRuleCompanyLocationId)}`] : undefined;
+  const min = b2bOverlayRule?.minimum || retryOverride?.minimum || quantityRule?.minimum || 1;
+  const step = b2bOverlayRule?.increment || retryOverride?.increment || quantityRule?.increment || 1;
+  const maxQty = b2bOverlayRule?.maximum ?? retryOverride?.maximum ?? quantityRule?.maximum ?? null;
+
+  // The Product Customizer (and its own Buy Now/quote quantity controls)
+  // reads `selectedVariant.quantityRule` directly -- rather than re-derive
+  // the same three-layer merge a second time there, it's baked into this
+  // shallow copy once, here, and passed down instead of the raw variant.
+  const effectiveSelectedVariant = useMemo(
+    () => (selectedVariant ? { ...selectedVariant, quantityRule: { minimum: min, increment: step, maximum: maxQty } } : selectedVariant),
+    [selectedVariant, min, step, maxQty],
+  );
 
   const [activeImage, setActiveImage] = useState(() => {
     const i = indexForUrl(initialVariant?.image?.url);
@@ -737,9 +804,18 @@ function ProductDetail() {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedVariant?.id]);
-  const qtyMultiplier = quantity;
+  // The per-unit price, from Shopify's own price for this buyer's context
+  // (B2B contextual price or plain B2C price, via selectedVariant.price --
+  // see useB2BPriceOverlayMap) -- NEVER multiplied by the selected
+  // quantity. A B2B product's quantity selector can start well above 1
+  // (see min/step/maxQty above), and multiplying the main displayed price
+  // by that made a ₹419 unit price read as "₹10,475" the moment the
+  // minimum-quantity floor kicked in -- confirmed live for H3106 (min 25).
+  // The cart/checkout total IS correctly quantity × price elsewhere
+  // (CartLineItem.tsx, Shopify's own cart cost) -- this is only the PDP's
+  // own per-unit price display, which must never do that math itself.
   const displayPrice = hasNumericPrice
-    ? formatMoney(unitAmount * qtyMultiplier, currency)
+    ? formatMoney(unitAmount, currency)
     : product.price;
   const compareAmount = selectedVariant?.compareAtPrice
     ? parseFloat(selectedVariant.compareAtPrice.amount)
@@ -943,7 +1019,7 @@ function ProductDetail() {
                       </p>
                       {showCompareAt ? (
                         <p className="text-sm tabular-nums text-muted-foreground line-through">
-                          {formatMoney(compareAmount * qtyMultiplier, currency)}
+                          {formatMoney(compareAmount, currency)}
                         </p>
                       ) : null}
                     </div>
@@ -1116,7 +1192,7 @@ function ProductDetail() {
                 <Suspense fallback={null}>
                   <ProductCustomizer
                     product={product}
-                    selectedVariant={selectedVariant}
+                    selectedVariant={effectiveSelectedVariant}
                     rawProductNode={node}
                     open={customizerOpen}
                     onOpenChange={setCustomizerOpen}

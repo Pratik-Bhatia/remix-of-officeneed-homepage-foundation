@@ -12,6 +12,7 @@ import { fetchProducts, fetchAllProducts, fetchCollections, formatMoney, type Sh
 import { useBuyerContext } from "@/hooks/useBuyerContext";
 import { useB2BStore } from "@/stores/b2bStore";
 import { getB2BPriceOverlay, type B2BPriceOverlayMap } from "@/lib/b2b-pricing.functions";
+import { getB2BQuantityRuleOverlay, type QuantityRuleOverlayMap } from "@/lib/b2b-quantity-rules.functions";
 import { applyB2BPriceOverlayToAll } from "@/lib/b2b-pricing";
 import type { Product } from "@/lib/products";
 import { MAIN_CATEGORIES, productBelongsToCategory, resolveSubcategoryFromHandles, type MainCategory } from "@/lib/taxonomy";
@@ -596,6 +597,46 @@ export function useB2BPriceOverlayMap(variantIds: string[]): { overlay: B2BPrice
     // Dev-only (tree-shaken in production builds). Status/booleans only.
     console.debug("[useB2BPriceOverlayMap] status:", status, "| resolved:", resolved, "| ready:", ready);
   }
+  return { overlay: data ?? {}, ready };
+}
+
+/**
+ * B2B catalog quantity-rule overlay -- same Admin API contextualPricing
+ * mechanism and the exact same gating/caching/safety shape as
+ * useB2BPriceOverlayMap above (only ever fires once b2bStore has resolved
+ * a real company location; falls back to empty on any failure). See
+ * src/lib/b2b-quantity-rules.functions.ts for why this exists: the public
+ * Storefront API's ProductVariant.quantityRule does not reflect a B2B
+ * company-location-scoped catalog override (confirmed live against this
+ * store's real H935 product), while this Admin API field does -- and,
+ * confirmed in the same investigation, a plain country-context lookup
+ * returns the SAME minimum the Storefront API already reports, so B2C/
+ * anonymous shoppers never need this overlay at all (`enabled` stays
+ * false for them, exactly like the price overlay). */
+export function useB2BQuantityRuleOverlayMap(variantIds: string[]): { overlay: QuantityRuleOverlayMap; ready: boolean } {
+  const resolved = useB2BStore((s) => s.resolved);
+  const status = useB2BStore((s) => s.status);
+  const companyLocationId = useB2BStore((s) => s.companyLocationId);
+  const token = useB2BStore((s) => s.resolvedForToken);
+  const ids = [...new Set(variantIds)].sort();
+  const enabled = status === "b2b" && !!companyLocationId && !!token && ids.length > 0;
+  const { data, isFetched } = useQuery({
+    queryKey: ["shopify", "b2b-quantity-rule-overlay", companyLocationId ?? "none", ids.join(",")],
+    queryFn: async (): Promise<QuantityRuleOverlayMap> => {
+      if (!token || !companyLocationId) return {};
+      try {
+        return await getB2BQuantityRuleOverlay({ data: { customerAccessToken: token, companyLocationId, variantIds: ids } });
+      } catch (err) {
+        console.error("[B2B quantity rules] overlay fetch failed, falling back to the Storefront-read rule:", err instanceof Error ? err.message : err);
+        return {};
+      }
+    },
+    enabled,
+    staleTime: 0,
+    gcTime: 0,
+    retry: 1,
+  });
+  const ready = !resolved ? false : status === "b2b" && companyLocationId && ids.length > 0 ? isFetched : true;
   return { overlay: data ?? {}, ready };
 }
 

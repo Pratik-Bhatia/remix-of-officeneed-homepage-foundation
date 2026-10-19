@@ -44,16 +44,131 @@ function resolveLineImage(variantImage: ShopifyImage | null | undefined, product
   return variantImage ?? productNode?.featuredImage ?? productNode?.images?.edges?.[0]?.node ?? null;
 }
 
-/** Shopify's own configured minimum order quantity for this exact variant
- * -- read from the product node snapshot every CartItem already carries
- * (ShopifyVariantNode.quantityRule, see shopify.ts), never hardcoded per
- * product/handle. This is the same snapshot used for price/title, so it
- * reflects whatever Shopify returned when this item was added/looked up --
- * the live checkout mutation below is still the real enforcement point.
- * Falls back to 1 (no rule configured) when the snapshot has none. */
-function variantMinimumQuantity(item: Pick<CartItem, "product" | "variantId">): number {
+/** A quantity-rule field Shopify's own cart mutation just told us about,
+ * for one specific variant -- see QuantityRuleOverrides below for why this
+ * exists separately from ShopifyVariantNode.quantityRule. */
+export type QuantityRuleOverride = { minimum?: number; increment?: number; maximum?: number | null };
+/** `${variantId}::${scope}` -> whatever quantity-rule fields a cart
+ * mutation has actually revealed for it (merged incrementally -- only the
+ * field(s) a rejection disclosed, never a guess at the others). Keyed by
+ * BOTH variant and buyer scope (see quantityRuleScopeKey) -- a rule a B2B
+ * company-location buyer's mutation revealed must never be read back for
+ * a B2C/anonymous buyer in the same browser tab (or a different company
+ * location), since it may not apply to them at all. */
+export type QuantityRuleOverrides = Record<string, QuantityRuleOverride>;
+
+/** The buyer-scope half of a QuantityRuleOverrides key -- a B2B buyer's
+ * own company location when they have one, "anon" otherwise (covers both
+ * true anonymous shoppers and a signed-in B2C customer with no company,
+ * since the B2C rule is the same plain Storefront-read one regardless).
+ * Exported so React components (which read/display quantityRuleOverrides
+ * from outside this store's own closure) can key their own lookups
+ * identically to how corrections are recorded below. */
+export function quantityRuleScopeKey(companyLocationId?: string | null): string {
+  return companyLocationId || "anon";
+}
+
+function scopedVariantKey(variantId: string, companyLocationId?: string | null): string {
+  return `${variantId}::${quantityRuleScopeKey(companyLocationId)}`;
+}
+
+/** Shopify's own configured minimum order quantity for this exact variant.
+ *
+ * CONFIRMED LIVE (this session, against this store's real H935 product):
+ * ProductVariant.quantityRule, read via a plain product()/productVariant()
+ * Storefront query -- with or without @inContext(country:), with or
+ * without buyerIdentity.countryCode on a parallel cartCreate -- does NOT
+ * reflect a catalog/segment-scoped override (H935's real configured
+ * minimum of 25, confirmed via the Admin API's PriceList.quantityRules
+ * entry for it). The cart mutation itself DOES enforce it: an actual
+ * cartCreate at quantity 1 for H935 was rejected in production with
+ * `MINIMUM_NOT_MET -- "This item has a minimum of 25."`, immediately after
+ * our own read-based UI had shown/allowed quantity 1. That is this
+ * session's root cause for "Add to Cart/Buy Now fails" -- not a bug in the
+ * clamping arithmetic itself, which was already correct for whatever
+ * number it was given.
+ *
+ * So the product-node snapshot's quantityRule is only a BASELINE (correct
+ * for the common case -- confirmed true for every other product in a full
+ * 250-rule catalogue sweep) -- `overrides` is Shopify's own, strictly more
+ * authoritative answer once a real mutation has revealed it (see
+ * extractQuantityRuleCorrection below), and always wins when present. */
+function variantMinimumQuantity(item: Pick<CartItem, "product" | "variantId">, overrides: QuantityRuleOverrides, companyLocationId?: string | null): number {
+  const override = overrides[scopedVariantKey(item.variantId, companyLocationId)]?.minimum;
+  if (override) return override;
   const variantNode = item.product?.node?.variants?.edges?.find((e) => e.node.id === item.variantId)?.node;
   return variantNode?.quantityRule?.minimum || 1;
+}
+
+/** Shopify's own real answer, parsed from the exact UserError a rejected
+ * cart mutation returned -- never a hardcoded per-product number, never a
+ * blind guess. Only acts on the 3 error codes Shopify's own schema defines
+ * for a quantity-rule violation (CartErrorCode: MINIMUM_NOT_MET,
+ * MAXIMUM_EXCEEDED, INVALID_INCREMENT -- confirmed via this session's live
+ * introspection of CartUserError/CartErrorCode); the actual number comes
+ * from Shopify's own message text, since CartUserError has no separate
+ * structured numeric field for it. */
+function extractQuantityRuleCorrection(errors: UserError[]): { field: keyof QuantityRuleOverride; value: number } | null {
+  for (const err of errors) {
+    const code = (err.code ?? "").toUpperCase();
+    if (code !== "MINIMUM_NOT_MET" && code !== "MAXIMUM_EXCEEDED" && code !== "INVALID_INCREMENT") continue;
+    const match = err.message.match(/(\d+)/);
+    if (!match?.[1]) continue;
+    const value = Number.parseInt(match[1], 10);
+    if (!Number.isFinite(value) || value <= 0) continue;
+    if (code === "MINIMUM_NOT_MET") return { field: "minimum", value };
+    if (code === "MAXIMUM_EXCEEDED") return { field: "maximum", value };
+    return { field: "increment", value };
+  }
+  return null;
+}
+
+/** The quantity to retry a rejected mutation with, given what Shopify's
+ * own error just revealed -- minimum/maximum are the exact number Shopify
+ * will accept; increment means "must be a multiple of N", so round the
+ * originally-requested quantity up to the nearest valid multiple instead
+ * of overwriting it with N itself. */
+function applyQuantityRuleCorrection(requestedQuantity: number, correction: { field: keyof QuantityRuleOverride; value: number }): number {
+  if (correction.field === "minimum") return Math.max(requestedQuantity, correction.value);
+  if (correction.field === "maximum") return Math.min(requestedQuantity, correction.value);
+  return Math.max(correction.value, Math.ceil(requestedQuantity / correction.value) * correction.value);
+}
+
+/** Runs a quantity-bearing cart mutation via `run`, and if Shopify rejects
+ * it with a quantity-rule violation, records what Shopify just revealed
+ * and retries EXACTLY ONCE with the corrected quantity -- never more than
+ * once, so a mutation can never loop even if Shopify's own number were
+ * somehow still rejected. `run` is handed the quantity to actually send on
+ * that attempt; it owns building that mutation's own line input shape
+ * (cartCreate/cartLinesAdd/cartLinesUpdate all differ). Returns the final
+ * response payload (success, or still failing after the one retry) and
+ * the quantity that attempt actually used. */
+async function runWithQuantityRuleRetry<T extends { userErrors?: UserError[] | null }>(
+  variantId: string,
+  requestedQuantity: number,
+  run: (quantity: number) => Promise<T>,
+  recordCorrection: (variantId: string, correction: { field: keyof QuantityRuleOverride; value: number }) => void,
+): Promise<{ payload: T; quantity: number }> {
+  let quantity = requestedQuantity;
+  let payload = await run(quantity);
+  const correction = extractQuantityRuleCorrection(payload.userErrors ?? []);
+  if (correction) {
+    recordCorrection(variantId, correction);
+    const corrected = applyQuantityRuleCorrection(quantity, correction);
+    if (corrected !== quantity) {
+      quantity = corrected;
+      payload = await run(quantity);
+      // Tell the shopper WHY their quantity changed, same honesty as the
+      // existing stock-adjustment message below -- only once the retry
+      // actually succeeded (no point surfacing an internal retry attempt
+      // that still failed; reportProblems' own toast covers that case).
+      if (!extractQuantityRuleCorrection(payload.userErrors ?? [])) {
+        const label = correction.field === "maximum" ? "maximum" : correction.field === "increment" ? "quantity increment" : "minimum order quantity";
+        toast.warning(`This item's ${label} is ${correction.value}. Your quantity has been updated.`);
+      }
+    }
+  }
+  return { payload, quantity };
 }
 
 export interface CartDiscountCode {
@@ -367,7 +482,13 @@ function friendlyMessage(code: string | null | undefined, message: string): stri
 function reportProblems(errors: UserError[], warnings: CartWarning[] = []): boolean {
   const err = errors[0];
   if (err) {
-    console.error("Shopify cart error:", errors);
+    // TEMP DIAGNOSTIC (remove once the live "Add to Cart fails" regression
+    // is confirmed fixed): console.error(array) only ever showed a
+    // collapsed "Array(1)" in the browser console, never the actual
+    // field/code/message content -- stringify so the real Shopify error is
+    // visible. Never includes a token/secret; `errors` here is only ever
+    // Shopify's own cart userErrors array.
+    console.error("Shopify cart error:", JSON.stringify(errors));
     toast.error(friendlyMessage(err.code, err.message));
     return true;
   }
@@ -448,6 +569,13 @@ interface CartStore {
   deliveryAddress: CartDeliveryAddress | null;
   isLoading: boolean;
   isSyncing: boolean;
+  /** variantId -> quantity-rule field(s) a real cart mutation has revealed
+   * for it -- see variantMinimumQuantity's comment for why this exists
+   * (the product read can under-report a catalog-scoped rule that the
+   * cart mutation still enforces). Session-only, never persisted: a fresh
+   * page load re-derives it the same way if the mutation is attempted
+   * again, and it only ever grows more accurate, never stale-wrong. */
+  quantityRuleOverrides: QuantityRuleOverrides;
   addItem: (item: Omit<CartItem, "lineId">) => Promise<void>;
   updateQuantity: (variantId: string, quantity: number) => Promise<void>;
   removeItem: (variantId: string) => Promise<void>;
@@ -533,6 +661,25 @@ export const useCartStore = create<CartStore>()(
         return { orphaned, dropped: before - items.length };
       };
 
+      /** Records what a rejected mutation just revealed about this
+       * variant's real quantity rule -- merged field-by-field (a
+       * MINIMUM_NOT_MET rejection only ever reveals `minimum`, never
+       * `maximum`/`increment`, so this never overwrites a field Shopify
+       * hasn't actually told us about). Scoped by the CURRENT buyer's
+       * company location (see quantityRuleScopeKey) at the moment the
+       * correction is learned -- a B2B rule revealed for one company
+       * location, or an anonymous/B2C shopper's rule, is never read back
+       * for a different buyer scope sharing the same browser tab. */
+      const recordQuantityRuleCorrection = (variantId: string, correction: { field: keyof QuantityRuleOverride; value: number }) => {
+        const key = scopedVariantKey(variantId, currentBuyerIdentity()?.companyLocationId);
+        set((s) => ({
+          quantityRuleOverrides: {
+            ...s.quantityRuleOverrides,
+            [key]: { ...s.quantityRuleOverrides[key], [correction.field]: correction.value },
+          },
+        }));
+      };
+
       const removeOrphans = async (cartId: string, orphaned: string[]) => {
         if (orphaned.length === 0) return;
         try {
@@ -556,12 +703,15 @@ export const useCartStore = create<CartStore>()(
         deliveryAddress: null,
         isLoading: false,
         isSyncing: false,
+        quantityRuleOverrides: {},
 
         addItem: async (item) => {
           // Not just a UI concern -- every caller's own stepper already
           // floors at this, but this is the actual gate right before a
-          // Shopify mutation is sent.
-          const addMinQty = variantMinimumQuantity(item);
+          // Shopify mutation is sent. This is only a BASELINE floor (see
+          // variantMinimumQuantity's comment) -- each mutation attempt
+          // below still self-corrects against Shopify's own real answer.
+          const addMinQty = variantMinimumQuantity(item, get().quantityRuleOverrides, currentBuyerIdentity()?.companyLocationId);
           if (item.quantity < addMinQty) item = { ...item, quantity: addMinQty };
           set({ isLoading: true });
           const qtyBefore = get().items.find((i) => i.variantId === item.variantId)?.quantity ?? 0;
@@ -573,8 +723,7 @@ export const useCartStore = create<CartStore>()(
             // line's quantity without ever attaching this item's
             // attributes, silently losing the customization.
             const existing = item.lineAttributes?.length ? undefined : items.find((i) => i.variantId === item.variantId);
-            const lineInput = {
-              quantity: item.quantity,
+            const lineInputBase = {
               merchandiseId: item.variantId,
               ...(item.lineAttributes?.length ? { attributes: toCheckoutLineAttributes(item.lineAttributes) } : {}),
             };
@@ -582,14 +731,21 @@ export const useCartStore = create<CartStore>()(
             if (!cartId) {
               const buyerIdentity = currentBuyerIdentity();
               const attributes = attributionAttributes();
-              const data = await storefrontApiRequest(CART_CREATE_MUTATION, {
-                input: {
-                  lines: [lineInput],
-                  ...(buyerIdentity ? { buyerIdentity } : {}),
-                  ...(attributes.length ? { attributes } : {}),
+              const { payload } = await runWithQuantityRuleRetry(
+                item.variantId,
+                item.quantity,
+                async (quantity) => {
+                  const data = await storefrontApiRequest(CART_CREATE_MUTATION, {
+                    input: {
+                      lines: [{ ...lineInputBase, quantity }],
+                      ...(buyerIdentity ? { buyerIdentity } : {}),
+                      ...(attributes.length ? { attributes } : {}),
+                    },
+                  });
+                  return data?.data?.cartCreate ?? {};
                 },
-              });
-              const payload = data?.data?.cartCreate;
+                recordQuantityRuleCorrection,
+              );
               if (reportProblems(payload?.userErrors ?? [], payload?.warnings ?? [])) return;
               const cart = payload?.cart;
               if (!cart) return;
@@ -613,22 +769,36 @@ export const useCartStore = create<CartStore>()(
               }
             } else if (existing) {
               if (!existing.lineId) return;
-              const newQty = existing.quantity + item.quantity;
-              const data = await storefrontApiRequest(CART_LINES_UPDATE_MUTATION, {
-                cartId,
-                lines: [{ id: existing.lineId, quantity: newQty }],
-              });
-              const payload = data?.data?.cartLinesUpdate;
+              const existingLineId = existing.lineId;
+              const { payload } = await runWithQuantityRuleRetry(
+                item.variantId,
+                existing.quantity + item.quantity,
+                async (quantity) => {
+                  const data = await storefrontApiRequest(CART_LINES_UPDATE_MUTATION, {
+                    cartId,
+                    lines: [{ id: existingLineId, quantity }],
+                  });
+                  return data?.data?.cartLinesUpdate ?? {};
+                },
+                recordQuantityRuleCorrection,
+              );
               const errors: UserError[] = payload?.userErrors ?? [];
               if (isCartNotFoundError(errors)) { clearCart(); return; }
               if (reportProblems(errors, payload?.warnings ?? [])) return;
               if (payload?.cart) applyCart(payload.cart);
             } else {
-              const data = await storefrontApiRequest(CART_LINES_ADD_MUTATION, {
-                cartId,
-                lines: [lineInput],
-              });
-              const payload = data?.data?.cartLinesAdd;
+              const { payload } = await runWithQuantityRuleRetry(
+                item.variantId,
+                item.quantity,
+                async (quantity) => {
+                  const data = await storefrontApiRequest(CART_LINES_ADD_MUTATION, {
+                    cartId,
+                    lines: [{ ...lineInputBase, quantity }],
+                  });
+                  return data?.data?.cartLinesAdd ?? {};
+                },
+                recordQuantityRuleCorrection,
+              );
               const errors: UserError[] = payload?.userErrors ?? [];
               if (isCartNotFoundError(errors)) {
                 // Stale cart: start fresh with this item.
@@ -680,7 +850,7 @@ export const useCartStore = create<CartStore>()(
           // allowed regardless of the minimum -- that isn't "decreasing
           // below it", it's removing the line.
           const existingItem = get().items.find((i) => i.variantId === variantId);
-          const clampedQuantity = existingItem ? Math.max(quantity, variantMinimumQuantity(existingItem)) : quantity;
+          const clampedQuantity = existingItem ? Math.max(quantity, variantMinimumQuantity(existingItem, get().quantityRuleOverrides, currentBuyerIdentity()?.companyLocationId)) : quantity;
           set({
             isLoading: true,
             items: get().items.map((i) => (i.variantId === variantId ? { ...i, quantity: clampedQuantity } : i)),
@@ -693,11 +863,19 @@ export const useCartStore = create<CartStore>()(
               return;
             }
             try {
-              const data = await storefrontApiRequest(CART_LINES_UPDATE_MUTATION, {
-                cartId,
-                lines: [{ id: item.lineId, quantity: item.quantity }],
-              });
-              const payload = data?.data?.cartLinesUpdate;
+              const lineId = item.lineId;
+              const { payload } = await runWithQuantityRuleRetry(
+                variantId,
+                item.quantity,
+                async (qty) => {
+                  const data = await storefrontApiRequest(CART_LINES_UPDATE_MUTATION, {
+                    cartId,
+                    lines: [{ id: lineId, quantity: qty }],
+                  });
+                  return data?.data?.cartLinesUpdate ?? {};
+                },
+                recordQuantityRuleCorrection,
+              );
               const errors: UserError[] = payload?.userErrors ?? [];
               if (isCartNotFoundError(errors)) { clearCart(); return; }
               if (reportProblems(errors, payload?.warnings ?? [])) {
@@ -866,24 +1044,33 @@ export const useCartStore = create<CartStore>()(
         createStandaloneCheckout: async (item) => {
           // Same floor as addItem() -- Buy Now (plain PDP and the
           // Customizer's own Buy Now) both go through this one function.
-          const checkoutMinQty = variantMinimumQuantity(item);
+          // Only a BASELINE (see variantMinimumQuantity's comment) -- the
+          // cartCreate attempt below still self-corrects against
+          // Shopify's own real answer if this baseline is wrong.
+          const checkoutMinQty = variantMinimumQuantity(item, get().quantityRuleOverrides, currentBuyerIdentity()?.companyLocationId);
           if (item.quantity < checkoutMinQty) item = { ...item, quantity: checkoutMinQty };
           try {
             const buyerIdentity = currentBuyerIdentity();
             const attributes = attributionAttributes();
-            const lineInput = {
-              quantity: item.quantity,
+            const lineInputBase = {
               merchandiseId: item.variantId,
               ...(item.lineAttributes?.length ? { attributes: item.lineAttributes } : {}),
             };
-            const createData = await storefrontApiRequest(CART_CREATE_MUTATION, {
-              input: {
-                lines: [lineInput],
-                ...(buyerIdentity ? { buyerIdentity } : {}),
-                ...(attributes.length ? { attributes } : {}),
+            const { payload: createPayload } = await runWithQuantityRuleRetry(
+              item.variantId,
+              item.quantity,
+              async (quantity) => {
+                const createData = await storefrontApiRequest(CART_CREATE_MUTATION, {
+                  input: {
+                    lines: [{ ...lineInputBase, quantity }],
+                    ...(buyerIdentity ? { buyerIdentity } : {}),
+                    ...(attributes.length ? { attributes } : {}),
+                  },
+                });
+                return createData?.data?.cartCreate ?? {};
               },
-            });
-            const createPayload = createData?.data?.cartCreate;
+              recordQuantityRuleCorrection,
+            );
             if (reportProblems(createPayload?.userErrors ?? [], createPayload?.warnings ?? [])) return null;
             let cart = createPayload?.cart;
             if (!cart) {

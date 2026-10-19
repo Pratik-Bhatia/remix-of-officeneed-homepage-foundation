@@ -1,7 +1,8 @@
 import { haptic } from "@/lib/haptics";
 import { trackLead, trackInitiateCheckout } from "@/lib/meta-pixel";
 import { toast } from "sonner";
-import { useCartStore } from "@/stores/cartStore";
+import { useCartStore, quantityRuleScopeKey } from "@/stores/cartStore";
+import { useB2BStore } from "@/stores/b2bStore";
 import { processLogoServer } from "@/lib/image-processing.functions";
 ﻿import { useState, useRef, useEffect, useCallback } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -830,14 +831,22 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
   const [finalComponentStates, setFinalComponentStates] = useState<Record<string, ComponentCustomization>>({});
 
   // Shopify's own per-variant order quantity rule (see ShopifyVariantNode
-  // in shopify.ts) -- the single source of truth for this customizer's own
-  // minimum, same as the plain PDP. Orthogonal to the 25-unit UV-printing
-  // threshold just below: that one gates WHICH printing method is allowed
-  // at the current quantity, it is never a Shopify-configured, per-product
-  // minimum, so it's deliberately never combined into this floor.
-  const shopifyMinQty: number = selectedVariant?.quantityRule?.minimum || 1;
-  const shopifyQtyIncrement: number = selectedVariant?.quantityRule?.increment || 1;
-  const shopifyMaxQty: number | null = selectedVariant?.quantityRule?.maximum ?? null;
+  // in shopify.ts) is the baseline source of truth for this customizer's
+  // own minimum, same as the plain PDP -- but it can under-report a
+  // catalog/segment-scoped override (confirmed live this session, see
+  // cartStore.ts's variantMinimumQuantity comment); quantityRuleOverride is
+  // what a real cart mutation has actually revealed and always wins.
+  // Orthogonal to the 25-unit UV-printing threshold just below: that one
+  // gates WHICH printing method is allowed at the current quantity, it is
+  // never a Shopify-configured, per-product minimum, so it's deliberately
+  // never combined into this floor.
+  const quantityRuleCompanyLocationId = useB2BStore((s) => s.companyLocationId);
+  const quantityRuleOverride = useCartStore((s) =>
+    selectedVariant ? s.quantityRuleOverrides[`${selectedVariant.id}::${quantityRuleScopeKey(quantityRuleCompanyLocationId)}`] : undefined,
+  );
+  const shopifyMinQty: number = quantityRuleOverride?.minimum || selectedVariant?.quantityRule?.minimum || 1;
+  const shopifyQtyIncrement: number = quantityRuleOverride?.increment || selectedVariant?.quantityRule?.increment || 1;
+  const shopifyMaxQty: number | null = quantityRuleOverride?.maximum ?? selectedVariant?.quantityRule?.maximum ?? null;
   const clampToShopifyQuantityRule = (n: number) => Math.min(shopifyMaxQty ?? Infinity, Math.max(shopifyMinQty, n));
 
   const quantityNum = parseInt(formData.quantity, 10) || shopifyMinQty;
