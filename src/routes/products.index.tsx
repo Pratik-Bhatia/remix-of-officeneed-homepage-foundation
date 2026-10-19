@@ -8,6 +8,7 @@ import { searchProducts, getSearchSuggestion } from "@/lib/search";
 import { Navbar } from "@/components/officeneed/Navbar";
 import { Footer } from "@/components/officeneed/Footer";
 import { ProductCard } from "@/components/officeneed/ProductCard";
+import { ComingSoonBanner } from "@/components/officeneed/ComingSoonBanner";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -221,6 +222,19 @@ function ProductsPage() {
       return p.category === taxonomyMatch.node.title;
     });
   }, [catalogue, collection, isAllProducts, missingMapping, taxonomyMatch]);
+
+  // True only once the catalogue has actually finished loading (see
+  // useShopifyCatalogue -- it returns the STATIC fallback, which is an
+  // empty array in this app, for as long as the Shopify query hasn't
+  // resolved yet, so catalogue.length === 0 is a reliable "still loading"
+  // signal here) AND this specific category/subcategory genuinely has no
+  // products of its own -- never hardcoded, always the real, live
+  // categoryScoped count for whichever collection handle is selected.
+  const categoryHasNoProducts = !missingMapping && catalogue.length > 0 && categoryScoped.length === 0;
+  // A search query gets its own existing "No products found for ..."
+  // feedback instead -- more relevant to what the shopper just typed than
+  // the generic promotional banner.
+  const showComingSoonBanner = categoryHasNoProducts && !query.trim();
 
   const filterGroups = useMemo(
     () => buildFilterGroups(mainCategoryTitle, categoryScoped),
@@ -506,131 +520,151 @@ function ProductsPage() {
         <div className="bg-[#F5F5F7]">
         <div className="mx-auto w-full max-w-[1600px] px-5 py-10 sm:px-8 sm:py-12 lg:px-12 lg:py-16">
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-2">
-              <div className="relative min-w-0 flex-1 sm:w-72 sm:flex-none">
-                <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-                <Input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search products" className="pl-9 bg-white" />
-              </div>
-            </div>
+          {showComingSoonBanner ? (
+            // Zero products, no active search: the banner is the sole
+            // content here -- search, product count, sort/filter controls,
+            // and the default empty-state text are all skipped entirely
+            // (not just visually hidden) so nothing misleading renders
+            // underneath a category that genuinely has no products yet.
+            <ComingSoonBanner />
+          ) : (
+            <>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="relative min-w-0 flex-1 sm:w-72 sm:flex-none">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+                    <Input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search products" className="pl-9 bg-white" />
+                  </div>
+                </div>
 
-            <div className="flex items-center justify-between gap-3 sm:justify-end">
-              <p className="text-xs text-muted-foreground" aria-live="polite">
-                {visible.length} {visible.length === 1 ? "product" : "products"}
-              </p>
-              <div className="flex items-center gap-2">
-                {filterGroups.length > 0 && (
-                  <Sheet>
-                    <SheetTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="h-9 gap-2 bg-white text-sm font-medium"
-                      >
-                        <SlidersHorizontal className="size-4" aria-hidden />
-                        <span className="hidden sm:inline">Filter</span>
-                      </Button>
-                    </SheetTrigger>
-                    <SheetContent side="right" className="w-full sm:max-w-sm overflow-y-auto">
-                      <SheetHeader className="flex-row items-center justify-between space-y-0">
-                        <SheetTitle>Filter</SheetTitle>
-                      </SheetHeader>
-                      <div className="mt-6">
-                        {hasActiveFilters && (
+                <div className="flex items-center justify-between gap-3 sm:justify-end">
+                  <p className="text-xs text-muted-foreground" aria-live="polite">
+                    {visible.length} {visible.length === 1 ? "product" : "products"}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    {filterGroups.length > 0 && (
+                      <Sheet>
+                        <SheetTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="h-9 gap-2 bg-white text-sm font-medium"
+                          >
+                            <SlidersHorizontal className="size-4" aria-hidden />
+                            <span className="hidden sm:inline">Filter</span>
+                          </Button>
+                        </SheetTrigger>
+                        <SheetContent side="right" className="w-full sm:max-w-sm overflow-y-auto">
+                          <SheetHeader className="flex-row items-center justify-between space-y-0">
+                            <SheetTitle>Filter</SheetTitle>
+                          </SheetHeader>
+                          <div className="mt-6">
+                            {hasActiveFilters && (
+                              <button
+                                type="button"
+                                onClick={clearAllFilters}
+                                className="mb-6 text-sm font-medium text-primary hover:underline"
+                              >
+                                Clear all
+                              </button>
+                            )}
+                            <FilterList />
+                          </div>
+                        </SheetContent>
+                      </Sheet>
+                    )}
+                    <Select value={sort} onValueChange={(value) => setSort(value as ProductSort)}>
+                      <SelectTrigger className="h-9 w-[140px] sm:w-[200px] text-sm bg-white">
+                        <SelectValue placeholder="Sort by" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {productSortOptions.map((o) => (
+                          <SelectItem key={o} value={o}>{o}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+
+              {/* No permanent sidebar -- filters live in the Filter sheet above.
+                  The grid now uses the full catalogue width (see the desktop
+                  4-column class below), the same breakpoints (md/lg) already
+                  used elsewhere on this page rather than a new one-off value. */}
+              <div className="mt-8 sm:mt-10">
+                <div>
+                  {missingMapping ? (
+                    <div className="py-16 sm:py-20 text-center border rounded-2xl bg-secondary/20">
+                      <div className="mx-auto mb-5 flex size-14 items-center justify-center rounded-full bg-secondary text-muted-foreground">
+                        <PackageSearch className="size-6" aria-hidden />
+                      </div>
+                      <h3 className="text-xl sm:text-2xl font-display font-medium text-foreground mb-2">This collection is coming soon</h3>
+                      <p className="text-sm sm:text-base text-muted-foreground max-w-md mx-auto leading-relaxed">
+                        We're curating something special for this category. In the meantime, explore our other collections or get in touch and we'll help you find what you need.
+                      </p>
+                      <div className="mt-7 flex flex-col sm:flex-row items-center justify-center gap-3">
+                        <Button asChild>
+                          <Link to="/products">Browse all products</Link>
+                        </Button>
+                        <Button asChild variant="outline">
+                          <Link to="/contact-us">Talk to us</Link>
+                        </Button>
+                      </div>
+                    </div>
+                  ) : catalogue.length === 0 ? (
+                    <div className="grid grid-cols-2 gap-x-5 gap-y-10 sm:gap-x-6 md:grid-cols-3 lg:grid-cols-4">
+                      {/* Skeletons while loading */}
+                      {[1, 2, 3, 4].map((i) => (
+                        <div key={i} className="animate-pulse flex flex-col gap-4">
+                          <div className="aspect-square bg-secondary rounded-2xl"></div>
+                          <div className="h-4 bg-secondary rounded w-3/4"></div>
+                          <div className="h-4 bg-secondary rounded w-1/2"></div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : visible.length === 0 && query ? (
+                    <div>
+                      <p className="text-sm text-muted-foreground">
+                        No products found for "{query}".
+                      </p>
+                      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
+                        {searchSuggestion && (
                           <button
                             type="button"
-                            onClick={clearAllFilters}
-                            className="mb-6 text-sm font-medium text-primary hover:underline"
+                            onClick={() => setQuery(searchSuggestion)}
+                            className="text-sm font-medium text-primary hover:underline"
                           >
-                            Clear all
+                            Did you mean "{searchSuggestion}"?
                           </button>
                         )}
-                        <FilterList />
+                        <button
+                          type="button"
+                          onClick={() => setQuery("")}
+                          className="text-sm font-medium text-primary hover:underline"
+                        >
+                          Clear search
+                        </button>
                       </div>
-                    </SheetContent>
-                  </Sheet>
-                )}
-                <Select value={sort} onValueChange={(value) => setSort(value as ProductSort)}>
-                  <SelectTrigger className="h-9 w-[140px] sm:w-[200px] text-sm bg-white">
-                    <SelectValue placeholder="Sort by" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {productSortOptions.map((o) => (
-                      <SelectItem key={o} value={o}>{o}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </div>
-
-          {/* No permanent sidebar -- filters live in the Filter sheet above.
-              The grid now uses the full catalogue width (see the desktop
-              4-column class below), the same breakpoints (md/lg) already
-              used elsewhere on this page rather than a new one-off value. */}
-          <div className="mt-8 sm:mt-10">
-            <div>
-              {missingMapping ? (
-                <div className="py-16 sm:py-20 text-center border rounded-2xl bg-secondary/20">
-                  <div className="mx-auto mb-5 flex size-14 items-center justify-center rounded-full bg-secondary text-muted-foreground">
-                    <PackageSearch className="size-6" aria-hidden />
-                  </div>
-                  <h3 className="text-xl sm:text-2xl font-display font-medium text-foreground mb-2">This collection is coming soon</h3>
-                  <p className="text-sm sm:text-base text-muted-foreground max-w-md mx-auto leading-relaxed">
-                    We're curating something special for this category. In the meantime, explore our other collections or get in touch and we'll help you find what you need.
-                  </p>
-                  <div className="mt-7 flex flex-col sm:flex-row items-center justify-center gap-3">
-                    <Button asChild>
-                      <Link to="/products">Browse all products</Link>
-                    </Button>
-                    <Button asChild variant="outline">
-                      <Link to="/contact-us">Talk to us</Link>
-                    </Button>
-                  </div>
-                </div>
-              ) : catalogue.length === 0 ? (
-                <div className="grid grid-cols-2 gap-x-5 gap-y-10 sm:gap-x-6 md:grid-cols-3 lg:grid-cols-4">
-                  {/* Skeletons while loading */}
-                  {[1, 2, 3, 4].map((i) => (
-                    <div key={i} className="animate-pulse flex flex-col gap-4">
-                      <div className="aspect-square bg-secondary rounded-2xl"></div>
-                      <div className="h-4 bg-secondary rounded w-3/4"></div>
-                      <div className="h-4 bg-secondary rounded w-1/2"></div>
                     </div>
-                  ))}
-                </div>
-              ) : visible.length === 0 && query ? (
-                <div>
-                  <p className="text-sm text-muted-foreground">
-                    No products found for "{query}".
-                  </p>
-                  {searchSuggestion && (
-                    <button
-                      type="button"
-                      onClick={() => setQuery(searchSuggestion)}
-                      className="mt-2 text-sm font-medium text-primary hover:underline"
-                    >
-                      Did you mean "{searchSuggestion}"?
-                    </button>
+                  ) : visible.length === 0 && Object.keys(validActiveFilters).length > 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      No products match your search or filters. Try adjusting them.
+                    </p>
+                  ) : visible.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      There are currently no products available in this category.
+                    </p>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-x-5 gap-y-10 sm:gap-x-6 md:grid-cols-3 lg:grid-cols-4">
+                      {visible.map((p) => (
+                        <ProductCard key={p.slug} product={p} pricePending={!pricesReady} />
+                      ))}
+                    </div>
                   )}
                 </div>
-              ) : visible.length === 0 && Object.keys(validActiveFilters).length > 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  No products match your search or filters. Try adjusting them.
-                </p>
-              ) : visible.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  There are currently no products available in this category.
-                </p>
-              ) : (
-                <div className="grid grid-cols-2 gap-x-5 gap-y-10 sm:gap-x-6 md:grid-cols-3 lg:grid-cols-4">
-                  {visible.map((p) => (
-                    <ProductCard key={p.slug} product={p} pricePending={!pricesReady} />
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
+              </div>
+            </>
+          )}
 
         </div>
         </div>
