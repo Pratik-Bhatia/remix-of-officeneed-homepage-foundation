@@ -50,6 +50,13 @@
       "when": 1792377337056,
       "tag": "0006_add_customer_address_labels",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1792452489440,
+      "tag": "0007_add_enquiry_email_status",
+      "breakpoints": true
     }
   ]
 }

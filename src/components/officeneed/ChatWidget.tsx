@@ -730,7 +730,7 @@ export function ChatWidget() {
       setResultStatus({ enquiryId: result.enquiryId!, emailSent: result.customerEmailSent! });
       
       const successText = result.customerEmailSent 
-        ? `Your enquiry has been submitted successfully.\n\nWe've sent a confirmation to ${final.email}.\n\nEnquiry ID: ${result.enquiryId}` 
+        ? `Your enquiry has been submitted successfully.\n\nA confirmation email is on its way to ${final.email}.\n\nEnquiry ID: ${result.enquiryId}` 
         : `Your enquiry was received successfully.\n\nWe couldn't send the confirmation email right now, but our team has received your enquiry.\n\nEnquiry ID: ${result.enquiryId}`;
 
       setMessages((m) => [
