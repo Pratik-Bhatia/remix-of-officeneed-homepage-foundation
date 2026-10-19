@@ -2193,6 +2193,11 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
                       ) : !logo ? (
                         <p className="text-[13px] text-muted-foreground leading-relaxed">{LOGO_REQUIRED_MESSAGE}</p>
                       ) : null}
+                      {printingMethod === "Laser Engraving" && (
+                        <p className="text-[13px] text-muted-foreground leading-relaxed">
+                          Laser engraving supports single-colour images or company logos only. For best results, upload a high-resolution, single-colour logo or image with a transparent background.
+                        </p>
+                      )}
                     </div>
 
                     <div className={`space-y-5 transition-opacity duration-300 ${!hasProcessedLogo ? "opacity-40 pointer-events-none" : "opacity-100"}`}>

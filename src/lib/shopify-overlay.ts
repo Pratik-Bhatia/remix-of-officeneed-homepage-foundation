@@ -194,6 +194,28 @@ function classify(node: ShopifyProductNode): { category: Product["category"]; su
  *   Product Details schema (see product-details-schema.ts), so the PDP never
  *   shows two competing "PRODUCT DETAILS" accordions for the same product.
  */
+/**
+ * True only if `html` would actually show something to a shopper -- real
+ * text once every tag is stripped, or a genuinely visual element (image/
+ * video/svg) with no text. Confirmed live against this store's catalogue:
+ * extractStructuredData's header regex below (it recognizes "Material",
+ * "Dimensions", etc. as section headers so real <h3>Material</h3>-style
+ * descriptions split correctly) can ALSO match an inline bolded label like
+ * "<b>Material:</b>" sitting inside a "Technical Specifications:" bullet
+ * list -- splitting that list right before its own content and leaving the
+ * section ending there (here, "Product Details") with nothing but leftover
+ * opening tags such as "<ul><li><p>". A plain `content.trim()` check never
+ * catches this, since that string is non-empty -- it just has no VISIBLE
+ * content once the tags are stripped. 25 of 337 live products hit this
+ * exact pattern. The content isn't lost (the next recognized header, e.g.
+ * "Material", still captures and displays it) -- only the now-empty
+ * section is suppressed, exactly per the fix's own requirement to never
+ * render an accordion with genuinely missing/empty content. */
+function hasVisibleContent(html: string): boolean {
+  if (/<(img|svg|video)[\s/>]/i.test(html)) return true;
+  return html.replace(/<[^>]*>/g, " ").replace(/&nbsp;/gi, " ").replace(/\s+/g, " ").trim().length > 0;
+}
+
 function extractStructuredData(html: string, suppressProductDetails = false) {
   if (!html) return { descriptionHtml: html };
 
@@ -236,8 +258,8 @@ function extractStructuredData(html: string, suppressProductDetails = false) {
   for (const sec of sections) {
     const title = sec.title;
     const content = sec.contentHtml.trim();
-    if (!content) continue;
-    
+    if (!content || !hasVisibleContent(content)) continue;
+
     if (title === "DESCRIPTION") {
       result.descriptionHtml = content;
     } else if (title.includes("FEATURE")) {
