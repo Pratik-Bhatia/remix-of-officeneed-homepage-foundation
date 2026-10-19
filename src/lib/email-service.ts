@@ -150,7 +150,7 @@ export async function sendCustomerConfirmationEmail(params: {
         </div>
       `,
       ...(params.pdfBuffer
-        ? { attachments: toResendAttachments([{ filename: `Officeneed-Enquiry-${params.enquiryId}.pdf`, content: params.pdfBuffer }]) }
+        ? { attachments: [{ filename: `Officeneed-Enquiry-${params.enquiryId}.pdf`, content: params.pdfBuffer.toString("base64") }] }
         : {}),
     }, { idempotencyKey: `enquiry-customer-${params.enquiryId}` });
     if (error) {
@@ -226,10 +226,13 @@ export async function sendInternalNotificationEmail(params: {
           <p><em>${params.pdfBuffer ? "The complete enquiry PDF (including product breakdown) is attached to this email." : "The enquiry PDF could not be generated; details are listed above."}</em></p>
         </div>
       `,
-      attachments: toResendAttachments([
-        ...(params.pdfBuffer ? [{ filename: `Officeneed-Enquiry-${params.enquiryId}.pdf`, content: params.pdfBuffer }] : []),
-        ...(params.attachments ?? []),
-      ]),
+      ...(() => {
+        const atts = toResendAttachments([
+          ...(params.pdfBuffer ? [{ filename: `Officeneed-Enquiry-${params.enquiryId}.pdf`, content: params.pdfBuffer }] : []),
+          ...(params.attachments ?? []),
+        ]);
+        return atts ? { attachments: atts } : {};
+      })(),
     }, { idempotencyKey: `enquiry-internal-${params.enquiryId}` });
     if (error) {
       console.error(`[EmailService] internal notification rejected enquiry=${params.enquiryId}:`, error.name, error.message);
