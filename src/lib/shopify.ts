@@ -37,6 +37,14 @@ export interface ShopifyVariantNode {
   currentlyNotInStock?: boolean | null;
   image?: ShopifyImage | null;
   selectedOptions: Array<{ name: string; value: string }>;
+  /** Shopify's own per-variant order quantity rule -- the source of truth
+   * for minimum/maximum/increment, resolved by Shopify itself for the
+   * current buyer context (no @inContext(buyer:) is sent here, see the
+   * comment on fetchProductByHandle's `buyer` param below, so this is
+   * always the default/market-resolved rule, same as price). `minimum` is
+   * always >= 1 when present; absent/null only if Shopify returned no rule
+   * at all, in which case every caller falls back to 1/1/no-max. */
+  quantityRule?: { increment: number; minimum: number; maximum: number | null } | null;
 }
 
 export interface ShopifyProductNode {
@@ -109,6 +117,7 @@ const PRODUCT_FIELDS = `
         currentlyNotInStock
         image { id url altText }
         selectedOptions { name value }
+        quantityRule { increment minimum maximum }
       }
     }
   }

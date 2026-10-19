@@ -829,7 +829,18 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
   const [componentPreviews, setComponentPreviews] = useState<Record<string, string>>({});
   const [finalComponentStates, setFinalComponentStates] = useState<Record<string, ComponentCustomization>>({});
 
-  const quantityNum = parseInt(formData.quantity, 10) || 1;
+  // Shopify's own per-variant order quantity rule (see ShopifyVariantNode
+  // in shopify.ts) -- the single source of truth for this customizer's own
+  // minimum, same as the plain PDP. Orthogonal to the 25-unit UV-printing
+  // threshold just below: that one gates WHICH printing method is allowed
+  // at the current quantity, it is never a Shopify-configured, per-product
+  // minimum, so it's deliberately never combined into this floor.
+  const shopifyMinQty: number = selectedVariant?.quantityRule?.minimum || 1;
+  const shopifyQtyIncrement: number = selectedVariant?.quantityRule?.increment || 1;
+  const shopifyMaxQty: number | null = selectedVariant?.quantityRule?.maximum ?? null;
+  const clampToShopifyQuantityRule = (n: number) => Math.min(shopifyMaxQty ?? Infinity, Math.max(shopifyMinQty, n));
+
+  const quantityNum = parseInt(formData.quantity, 10) || shopifyMinQty;
   const isUvAvailable = quantityNum >= 25;
   const printingMethod = isUvAvailable ? userSelectedPrintingMethod : "Laser Engraving";
   const currentDisplayLogo = printingMethod === "Laser Engraving" ? laserLogo : uvLogo;
@@ -948,9 +959,10 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
       setIsSelected(false);
       setErrorMsg(null);
       setLogoNaturalDims(null);
-      setFormData(prev => ({ ...prev, quantity: "1" }));
+      setFormData(prev => ({ ...prev, quantity: String(shopifyMinQty) }));
     }
-  }, [open, product]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, product, selectedVariant?.id]);
 
   /**
    * When the user switches between Laser and UV (or quantity crosses the 25-unit
@@ -1528,8 +1540,12 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
       // if no price is available for any reason, rather than showing a
       // blank/zero total.
       const quotePrice = selectedVariant?.price ?? rawProductNode?.priceRange?.minVariantPrice;
+      // Same defense-in-depth floor as handleBuyNow above -- the quantity
+      // field already keeps itself clamped to Shopify's minimum, this is
+      // just the gate right before the quote is actually submitted.
+      const quoteQty = Math.max(shopifyMinQty, parseInt(formData.quantity, 10) || shopifyMinQty);
       const totalBilling = quotePrice
-        ? formatMoney(parseFloat(quotePrice.amount) * parseInt(formData.quantity, 10), quotePrice.currencyCode)
+        ? formatMoney(parseFloat(quotePrice.amount) * quoteQty, quotePrice.currencyCode)
         : undefined;
 
       const result = await submitCorporateQuote({
@@ -1538,7 +1554,7 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
           company: formData.company,
           email: formData.email,
           phone: formData.phone,
-          quantity: parseInt(formData.quantity, 10),
+          quantity: quoteQty,
           deliveryDate: formData.deliveryDate,
           location: formData.location,
           requirements: formData.requirements,
@@ -1687,7 +1703,7 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
       const effFlipV = isMultiComponentGiftSet ? (primaryCustomized?.flipV ?? false) : flipV;
       const effLogoPos = isMultiComponentGiftSet ? primaryCustomized?.logoPos : logoPos;
 
-      const qty = Math.max(1, parseInt(formData.quantity, 10) || 1);
+      const qty = Math.max(shopifyMinQty, parseInt(formData.quantity, 10) || shopifyMinQty);
 
       // Saves the full customization to Supabase BEFORE checkout and
       // returns only a compact record id -- see
@@ -2342,31 +2358,44 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
                 <div className="flex items-center justify-between mb-4">
                   <Label className="text-base font-semibold">Quantity</Label>
                   <div className="flex items-center gap-3">
-                    <span className="text-xs text-muted-foreground">Min 1</span>
+                    <span className="text-xs text-muted-foreground">Min {shopifyMinQty}</span>
                     <div className="inline-flex h-9 w-24 shrink-0 items-center border border-input rounded-md overflow-hidden bg-background">
                       <button
                         type="button"
                         aria-label="Decrease quantity"
-                        onClick={() => setFormData(prev => ({ ...prev, quantity: String(Math.max(1, quantityNum - 1)) }))}
+                        onClick={() => setFormData(prev => ({ ...prev, quantity: String(Math.max(shopifyMinQty, quantityNum - shopifyQtyIncrement)) }))}
                         className="px-2 h-full flex items-center justify-center text-foreground/60 hover:text-foreground hover:bg-muted/50 transition-colors"
                       >
                         <Minus className="w-3 h-3" strokeWidth={2} />
                       </button>
                       <Input
                         type="number"
-                        min={1}
+                        min={shopifyMinQty}
                         value={formData.quantity}
                         onChange={e => {
-                          const val = parseInt(e.target.value, 10);
-                          if (val < 1) return;
-                          setFormData({...formData, quantity: e.target.value});
+                          const next = e.target.value;
+                          // Digits only, but an empty field is allowed while
+                          // typing -- normalized to the minimum on blur
+                          // instead, same pattern as the plain PDP's
+                          // quantity field. Blocking on magnitude here (the
+                          // old `val < 1` check) would make it impossible
+                          // to type a minimum above a single digit, e.g.
+                          // "25", one keystroke at a time.
+                          if (next === "" || /^\d+$/.test(next)) {
+                            setFormData({ ...formData, quantity: next });
+                          }
+                        }}
+                        onBlur={() => {
+                          const parsed = parseInt(formData.quantity, 10);
+                          const finalQty = clampToShopifyQuantityRule(Number.isFinite(parsed) ? parsed : shopifyMinQty);
+                          setFormData(prev => ({ ...prev, quantity: String(finalQty) }));
                         }}
                         className="flex-1 min-w-0 h-full border-0 rounded-none bg-transparent px-1 font-medium text-center shadow-none focus-visible:ring-0 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                       />
                       <button
                         type="button"
                         aria-label="Increase quantity"
-                        onClick={() => setFormData(prev => ({ ...prev, quantity: String(quantityNum + 1) }))}
+                        onClick={() => setFormData(prev => ({ ...prev, quantity: String(clampToShopifyQuantityRule(quantityNum + shopifyQtyIncrement)) }))}
                         className="px-2 h-full flex items-center justify-center text-foreground/60 hover:text-foreground hover:bg-muted/50 transition-colors"
                       >
                         <Plus className="w-3 h-3" strokeWidth={2} />

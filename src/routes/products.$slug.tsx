@@ -307,13 +307,21 @@ function ProductDetail() {
   }, [loaderRelatedNodes, loaderRelated, pdpPriceOverlay]);
 
   const { collections, isLoading: collectionsLoading } = useShopifyCollections();
-  const [quantity, setQuantity] = useState<number>(product.minimumOrderQuantity || 1);
+  // Best-effort initial minimum straight from the raw Shopify node --
+  // `selectedVariant` doesn't exist yet this early in the component, and a
+  // product's configured minimum is in practice uniform across its
+  // variants (confirmed live against this store's catalogue), so this
+  // avoids a one-frame flash of "1" before the sync effect below (keyed on
+  // the real selectedVariant.quantityRule) corrects it. That effect, not
+  // this initializer, is the actual source of truth for every later render.
+  const initialMinQty = node?.variants?.edges?.[0]?.node?.quantityRule?.minimum || product.minimumOrderQuantity || 1;
+  const [quantity, setQuantity] = useState<number>(initialMinQty);
   // Raw text the quantity <input> displays while being edited -- kept
   // separate from `quantity` (the committed number everything else reads)
   // so the field can sit empty or mid-typed (e.g. "" or "5" on the way to
   // "50") without being clamped back to 1 on every keystroke. Only
   // normalized/synced to the cart on blur or Enter -- see commitQuantity.
-  const [quantityInput, setQuantityInput] = useState<string>(String(product.minimumOrderQuantity || 1));
+  const [quantityInput, setQuantityInput] = useState<string>(String(initialMinQty));
   const quantityInputFocusedRef = useRef(false);
   // Independent per-button loading flags -- Add to Cart and Buy Now (and
   // the sticky-bar "Add to Cart"/"Add" buttons, which are the same action)
@@ -428,9 +436,6 @@ function ProductDetail() {
   const items = useCartStore((s) => s.items);
   const createStandaloneCheckout = useCartStore((s) => s.createStandaloneCheckout);
 
-  const min = product.minimumOrderQuantity || 1;
-  const step = 1;
-
   /* ---------------- Shopify-driven variant + gallery model ---------------- */
 
   const variants = useMemo<ShopifyVariantNode[]>(
@@ -477,6 +482,16 @@ function ProductDetail() {
   );
   const selectedVariant =
     variants.find((v) => v.id === selectedVariantId) ?? initialVariant;
+
+  // Shopify's own per-variant order quantity rule (see ShopifyVariantNode
+  // in shopify.ts) is the only source of truth for min/step/max -- never a
+  // hardcoded per-product number. Absent rule (or no selected variant yet,
+  // e.g. a quote-only product) falls back to the universal default: start
+  // at 1, step by 1, no cap.
+  const quantityRule = selectedVariant?.quantityRule;
+  const min = quantityRule?.minimum || 1;
+  const step = quantityRule?.increment || 1;
+  const maxQty = quantityRule?.maximum ?? null;
 
   const [activeImage, setActiveImage] = useState(() => {
     const i = indexForUrl(initialVariant?.image?.url);
@@ -525,27 +540,33 @@ function ProductDetail() {
   // than adding more, so there's only ever one control adjusting quantity
   // at a time -- no compounding.
   useEffect(() => {
-    const next = cartQuantity !== undefined ? cartQuantity : product.minimumOrderQuantity || 1;
+    // A cart quantity below the variant's current minimum only happens if
+    // Shopify's configured rule changed after this line was added -- never
+    // silently keep the stale, now-invalid number.
+    const next = cartQuantity !== undefined ? Math.max(cartQuantity, min) : min;
     setQuantity(next);
     // Don't clobber what the shopper is actively typing -- the field
     // resyncs from the committed quantity once they blur/Enter instead.
     if (!quantityInputFocusedRef.current) setQuantityInput(String(next));
-  }, [cartQuantity, selectedVariant?.id, product.minimumOrderQuantity]);
+  }, [cartQuantity, selectedVariant?.id, min]);
+
+  const clampToQuantityRule = (n: number) => Math.min(maxQty ?? Infinity, Math.max(min, n));
 
   const handleQuantityChange = (newQty: number) => {
     if (!selectedVariant) return;
 
     if (!isItemInCart) {
-      setQuantity(Math.max(1, newQty));
+      setQuantity(clampToQuantityRule(newQty));
       return;
     }
 
     if (newQty <= 0) {
       useCartStore.getState().removeItem(selectedVariant.id);
-      setQuantity(1);
+      setQuantity(min);
     } else {
-      setQuantity(newQty);
-      useCartStore.getState().updateQuantity(selectedVariant.id, newQty);
+      const clamped = clampToQuantityRule(newQty);
+      setQuantity(clamped);
+      useCartStore.getState().updateQuantity(selectedVariant.id, clamped);
     }
   };
 
@@ -556,7 +577,7 @@ function ProductDetail() {
   // a single partial digit) never get force-corrected while typing.
   const commitQuantity = () => {
     const parsed = Number.parseInt(quantityInput, 10);
-    const finalQty = Number.isFinite(parsed) && parsed >= min ? parsed : min;
+    const finalQty = clampToQuantityRule(Number.isFinite(parsed) && parsed >= min ? parsed : min);
     setQuantityInput(String(finalQty));
     if (finalQty !== quantity) handleQuantityChange(finalQty);
   };
@@ -572,6 +593,13 @@ function ProductDetail() {
     if (!selectedVariant) return false;
     if (!selectedVariant.availableForSale) {
       toast.error("Sorry, this option is out of stock.");
+      return false;
+    }
+    // Defense in depth, not just the UI -- the stepper/input already keep
+    // `quantity` clamped to Shopify's own quantity rule, but this is the
+    // actual gate right before a cart/checkout mutation is sent.
+    if (quantity < min) {
+      toast.error(`Minimum order quantity for this item is ${min}.`);
       return false;
     }
     return true;
@@ -1030,7 +1058,7 @@ function ProductDetail() {
                       type="button"
                       aria-label="Increase quantity"
                       onClick={() => {
-                        const next = quantity + step;
+                        const next = clampToQuantityRule(quantity + step);
                         setQuantityInput(String(next));
                         handleQuantityChange(next);
                       }}
@@ -1259,7 +1287,7 @@ function ProductDetail() {
               <div className="flex h-11 items-center rounded-md border border-border bg-background">
                 <button
                   type="button"
-                  onClick={() => handleQuantityChange(quantity - 1)}
+                  onClick={() => handleQuantityChange(quantity - step)}
                   className="flex h-full w-10 items-center justify-center text-muted-foreground hover:bg-secondary/50 hover:text-foreground transition-colors"
                 >
                   <Minus className="size-3.5" strokeWidth={1.5} />
@@ -1269,7 +1297,7 @@ function ProductDetail() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => handleQuantityChange(quantity + 1)}
+                  onClick={() => handleQuantityChange(quantity + step)}
                   className="flex h-full w-10 items-center justify-center text-muted-foreground hover:bg-secondary/50 hover:text-foreground transition-colors"
                 >
                   <Plus className="size-3.5" strokeWidth={1.5} />
@@ -1336,7 +1364,7 @@ function ProductDetail() {
               <div className="flex h-11 shrink-0 items-center rounded-lg border border-border bg-background">
                 <button
                   type="button"
-                  onClick={() => handleQuantityChange(quantity - 1)}
+                  onClick={() => handleQuantityChange(quantity - step)}
                   className="flex h-full w-9 items-center justify-center text-muted-foreground hover:bg-secondary/50 hover:text-foreground transition-colors"
                 >
                   <Minus className="size-3.5" strokeWidth={1.5} />
@@ -1346,7 +1374,7 @@ function ProductDetail() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => handleQuantityChange(quantity + 1)}
+                  onClick={() => handleQuantityChange(quantity + step)}
                   className="flex h-full w-9 items-center justify-center text-muted-foreground hover:bg-secondary/50 hover:text-foreground transition-colors"
                 >
                   <Plus className="size-3.5" strokeWidth={1.5} />

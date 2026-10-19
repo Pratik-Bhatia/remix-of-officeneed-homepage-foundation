@@ -55,6 +55,15 @@ export function CartLineItem({
     (o) => o.value.trim().toLowerCase() !== "default title",
   );
 
+  // Shopify's own configured minimum for this exact variant, read from the
+  // product node snapshot this cart line already carries (see shopify.ts's
+  // ShopifyVariantNode.quantityRule) -- never a hardcoded per-product
+  // number. The decrement button below never lets this line drop below it;
+  // removing the line entirely (the Remove button) is always allowed.
+  const variantNode = item.product?.node?.variants?.edges?.find((e) => e.node.id === item.variantId)?.node;
+  const minQuantity = variantNode?.quantityRule?.minimum || 1;
+  const atMinimum = item.quantity <= minQuantity;
+
   // Runs on every click, for every product, unconditionally -- deliberately
   // never compares this item's handle/slug against the current route (no
   // "only navigate if different" guard). The Link's own `to`/`params`
@@ -122,7 +131,12 @@ export function CartLineItem({
 
         <div className="mt-3 flex items-center gap-4">
           <div className="flex items-center gap-3 rounded-full border border-border px-3 py-1.5">
-            <button aria-label="Decrease quantity" onClick={onDecrease} className="text-muted-foreground hover:text-foreground transition-colors">
+            <button
+              aria-label="Decrease quantity"
+              onClick={() => { if (!atMinimum) onDecrease(); }}
+              disabled={atMinimum}
+              className="text-muted-foreground hover:text-foreground transition-colors disabled:opacity-30 disabled:hover:text-muted-foreground disabled:cursor-not-allowed"
+            >
               <Minus className="size-3.5" strokeWidth={2} />
             </button>
             <span className="text-[13px] font-medium w-4 text-center tabular-nums">{item.quantity}</span>

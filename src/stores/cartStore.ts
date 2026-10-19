@@ -44,6 +44,18 @@ function resolveLineImage(variantImage: ShopifyImage | null | undefined, product
   return variantImage ?? productNode?.featuredImage ?? productNode?.images?.edges?.[0]?.node ?? null;
 }
 
+/** Shopify's own configured minimum order quantity for this exact variant
+ * -- read from the product node snapshot every CartItem already carries
+ * (ShopifyVariantNode.quantityRule, see shopify.ts), never hardcoded per
+ * product/handle. This is the same snapshot used for price/title, so it
+ * reflects whatever Shopify returned when this item was added/looked up --
+ * the live checkout mutation below is still the real enforcement point.
+ * Falls back to 1 (no rule configured) when the snapshot has none. */
+function variantMinimumQuantity(item: Pick<CartItem, "product" | "variantId">): number {
+  const variantNode = item.product?.node?.variants?.edges?.find((e) => e.node.id === item.variantId)?.node;
+  return variantNode?.quantityRule?.minimum || 1;
+}
+
 export interface CartDiscountCode {
   code: string;
   applicable: boolean;
@@ -546,6 +558,11 @@ export const useCartStore = create<CartStore>()(
         isSyncing: false,
 
         addItem: async (item) => {
+          // Not just a UI concern -- every caller's own stepper already
+          // floors at this, but this is the actual gate right before a
+          // Shopify mutation is sent.
+          const addMinQty = variantMinimumQuantity(item);
+          if (item.quantity < addMinQty) item = { ...item, quantity: addMinQty };
           set({ isLoading: true });
           const qtyBefore = get().items.find((i) => i.variantId === item.variantId)?.quantity ?? 0;
           try {
@@ -656,9 +673,17 @@ export const useCartStore = create<CartStore>()(
             await get().removeItem(variantId);
             return;
           }
+          // A caller (e.g. the cart drawer's own -/+ ) can still ask for a
+          // quantity below Shopify's configured minimum -- never below 0,
+          // which stays a removal, never silently reduced below the
+          // minimum. Dropping to 0/removing the line entirely is always
+          // allowed regardless of the minimum -- that isn't "decreasing
+          // below it", it's removing the line.
+          const existingItem = get().items.find((i) => i.variantId === variantId);
+          const clampedQuantity = existingItem ? Math.max(quantity, variantMinimumQuantity(existingItem)) : quantity;
           set({
             isLoading: true,
-            items: get().items.map((i) => (i.variantId === variantId ? { ...i, quantity } : i)),
+            items: get().items.map((i) => (i.variantId === variantId ? { ...i, quantity: clampedQuantity } : i)),
           });
           await enqueue(variantId, async () => {
             const { items, cartId, clearCart } = get();
@@ -839,6 +864,10 @@ export const useCartStore = create<CartStore>()(
         },
 
         createStandaloneCheckout: async (item) => {
+          // Same floor as addItem() -- Buy Now (plain PDP and the
+          // Customizer's own Buy Now) both go through this one function.
+          const checkoutMinQty = variantMinimumQuantity(item);
+          if (item.quantity < checkoutMinQty) item = { ...item, quantity: checkoutMinQty };
           try {
             const buyerIdentity = currentBuyerIdentity();
             const attributes = attributionAttributes();
