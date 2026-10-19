@@ -33,6 +33,31 @@ async function resolveOwnedAddressIds(customerAccessToken: string): Promise<{ cu
   return { customerId: customer.id, addressIds };
 }
 
+const OWNERSHIP_RETRY_DELAYS_MS = [300, 600, 1000];
+
+/** Same as resolveOwnedAddressIds, but retries a few times (with a short
+ * delay) if `mustIncludeAddressId` isn't in the result yet -- confirmed live:
+ * right after customerAddressCreate succeeds, Shopify's Storefront API can
+ * take a moment before that SAME address shows up in a fresh
+ * customer.addresses read, so a setAddressLabel call made immediately after
+ * creating the address can otherwise see it as "not owned" even though it
+ * unquestionably is (same token, address just created with it). Only used
+ * by setAddressLabel, which is the one call site that can run in that tight
+ * a sequence after a creation; getAddressLabels/deleteAddressLabel don't
+ * need this. */
+export async function resolveOwnedAddressIdsExpecting(
+  customerAccessToken: string,
+  mustIncludeAddressId: string,
+): Promise<{ customerId: string; addressIds: Set<string> }> {
+  let result = await resolveOwnedAddressIds(customerAccessToken);
+  for (const delayMs of OWNERSHIP_RETRY_DELAYS_MS) {
+    if (result.addressIds.has(mustIncludeAddressId)) break;
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+    result = await resolveOwnedAddressIds(customerAccessToken);
+  }
+  return result;
+}
+
 export const getAddressLabels = createServerFn({ method: "POST" })
   .inputValidator((input: { customerAccessToken: string }) => {
     if (!input?.customerAccessToken || typeof input.customerAccessToken !== "string") {
@@ -69,7 +94,7 @@ export const setAddressLabel = createServerFn({ method: "POST" })
     return { customerAccessToken: input.customerAccessToken, addressId: input.addressId, label: input.label };
   })
   .handler(async ({ data }): Promise<void> => {
-    const { customerId, addressIds } = await resolveOwnedAddressIds(data.customerAccessToken);
+    const { customerId, addressIds } = await resolveOwnedAddressIdsExpecting(data.customerAccessToken, data.addressId);
     if (!addressIds.has(data.addressId)) {
       throw new Error("This address does not belong to the signed-in customer.");
     }
