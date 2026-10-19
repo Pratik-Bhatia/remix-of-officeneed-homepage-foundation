@@ -212,6 +212,7 @@ export function CartDrawer({ triggerClassName }: { triggerClassName?: string }) 
                         onIncrease={() => updateQuantity(item.variantId, item.quantity + 1)}
                         onDecrease={() => updateQuantity(item.variantId, item.quantity - 1)}
                         onRemove={() => removeItem(item.variantId)}
+                        onNavigate={() => setIsOpen(false)}
                       />
                     ))}
                   </div>

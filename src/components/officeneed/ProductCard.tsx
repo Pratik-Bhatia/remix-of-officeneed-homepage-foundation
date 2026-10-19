@@ -10,6 +10,12 @@ import { cn } from "@/lib/utils";
 import { productBelongsToCategory, getCategoryByTitle, resolveLiveTitle } from "@/lib/taxonomy";
 import { useNormalizedImageScale } from "@/lib/image-content-scale";
 import { useShopifyCollections } from "@/lib/shopify-overlay";
+import { shopifyImageUrl } from "@/lib/shopify-image";
+
+// Grid cards never render wider than a few hundred px -- 600 comfortably
+// covers a ~300px card at 2x pixel density without requesting Shopify's
+// full original (often several thousand px) asset.
+const PRODUCT_CARD_IMAGE_WIDTH = 600;
 
 /** Resolves a stable classify()-derived category/subcategory string (e.g.
  * "Pen") to its current Shopify collection title (e.g. "Pen and Pencil"),
@@ -97,7 +103,7 @@ export function ProductCard({
   useEffect(() => {
     if (!hoverImage) return;
     const preload = new Image();
-    preload.src = hoverImage;
+    preload.src = shopifyImageUrl(hoverImage, PRODUCT_CARD_IMAGE_WIDTH);
   }, [hoverImage]);
 
   // Pointer Events tell us definitively whether this came from a mouse
@@ -147,6 +153,7 @@ export function ProductCard({
         to="/products/$slug"
         params={{ slug: product.slug }}
         aria-label={`View ${product.name}`}
+        preload="intent"
         className="group flex h-full flex-col outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-background"
       >
         {/* The white rounded/shadowed "card" surface belongs to the image
@@ -161,7 +168,7 @@ export function ProductCard({
           onPointerLeave={handlePointerLeave}
         >
           <img
-            src={displayedSrc}
+            src={shopifyImageUrl(displayedSrc, PRODUCT_CARD_IMAGE_WIDTH)}
             alt={product.name}
             loading="lazy"
             decoding="async"

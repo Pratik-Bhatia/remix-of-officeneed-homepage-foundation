@@ -1137,6 +1137,10 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
       setLogoUploadError(null);
 
       setLogoFile(file);
+      // Release the previous upload's blob before replacing it -- otherwise
+      // every re-upload (switching logos, retrying after a validation
+      // error) leaked the prior object for the rest of the page's lifetime.
+      if (logo?.startsWith("blob:")) URL.revokeObjectURL(logo);
       const url = URL.createObjectURL(file);
       setLogo(url);
       setIsSelected(true);
@@ -2136,7 +2140,7 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
                       </div>
                       
                       {!logo ? (
-                        <div className="border-2 border-dashed border-border rounded-xl p-8 flex flex-col items-center justify-center text-center bg-muted/20 hover:bg-muted/50 transition-colors cursor-pointer group">
+                        <div className="relative border-2 border-dashed border-border rounded-xl p-8 flex flex-col items-center justify-center text-center bg-muted/20 hover:bg-muted/50 transition-colors cursor-pointer group">
                           <div className="w-12 h-12 rounded-full bg-background border border-border shadow-sm flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
                             <Upload className="w-5 h-5 text-foreground/70" />
                           </div>

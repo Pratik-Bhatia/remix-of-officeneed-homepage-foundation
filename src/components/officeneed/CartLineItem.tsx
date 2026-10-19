@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { ShoppingBag, Minus, Plus } from "lucide-react";
 import type { CartItem } from "@/stores/cartStore";
 import { formatMoney } from "@/lib/shopify";
+import { shopifyImageUrl } from "@/lib/shopify-image";
 
 /**
  * A single cart line's presentation -- shared by CartDrawer and the full
@@ -14,11 +15,20 @@ export function CartLineItem({
   onIncrease,
   onDecrease,
   onRemove,
+  onNavigate,
 }: {
   item: CartItem;
   onIncrease: () => void;
   onDecrease: () => void;
   onRemove: () => void;
+  /** Called (not awaited) right before the image/title Link navigates --
+   * only ever needs an implementation in the cart DRAWER (closes the
+   * overlay so the PDP underneath is actually visible; without this the
+   * route still changes but the drawer stays open on top of it, looking
+   * exactly like nothing happened). The full /cart page has no overlay to
+   * close, so it simply omits this prop -- same optional pattern as
+   * CartProfileLinks' onNavigate. */
+  onNavigate?: () => void;
 }) {
   // The exact variant image selected when this line was added (Shopify's
   // own cart-line data, see cartStore.ts's resolveLineImage()) -- falls
@@ -45,10 +55,27 @@ export function CartLineItem({
     (o) => o.value.trim().toLowerCase() !== "default title",
   );
 
+  // Runs on every click, for every product, unconditionally -- deliberately
+  // never compares this item's handle/slug against the current route (no
+  // "only navigate if different" guard). The Link's own `to`/`params`
+  // already navigate correctly for a DIFFERENT product; this just adds the
+  // two things that still need to happen even when the shopper is already
+  // on this exact product's page, where a same-URL click is otherwise
+  // visually a no-op: closing the drawer (onNavigate, cart-drawer only) and
+  // resetting scroll to the top of the PDP, so clicking a cart item always
+  // produces a visible result either way.
+  const handleNavigateClick = () => {
+    onNavigate?.();
+    window.scrollTo({ top: 0, behavior: "instant" });
+  };
+
   const imageContent = image ? (
     <img
-      src={image.url}
+      src={shopifyImageUrl(image.url, 200)}
       alt={image.altText ?? title}
+      loading="lazy"
+      width={96}
+      height={96}
       className="size-full object-cover mix-blend-multiply"
     />
   ) : (
@@ -62,6 +89,7 @@ export function CartLineItem({
           to="/products/$slug"
           params={{ slug: handle }}
           aria-label={`View ${title}`}
+          onClick={handleNavigateClick}
           className="size-20 sm:size-24 shrink-0 overflow-hidden rounded-md bg-secondary/30 flex items-center justify-center p-2 outline-none transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
           {imageContent}
@@ -77,6 +105,7 @@ export function CartLineItem({
             <Link
               to="/products/$slug"
               params={{ slug: handle }}
+              onClick={handleNavigateClick}
               className="outline-none transition-colors hover:text-foreground/70 focus-visible:underline"
             >
               {title}

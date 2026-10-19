@@ -212,6 +212,25 @@ export function ChatWidget() {
     };
   }, [open]);
 
+  // Confirmed live (mobile viewport): ChatWidget is mounted once in
+  // __root.tsx and never unmounts on route changes, so if the chat is left
+  // open while navigating away -- e.g. the browser/gesture back button, or
+  // any navigation that doesn't go through one of this file's own
+  // setOpen(false) click handlers -- the scroll-lock effect above never
+  // gets its `[open]` dependency flipped back to false, so its cleanup
+  // never runs and document.body stays stuck at position: fixed on every
+  // page visited afterward, freezing all further scrolling site-wide
+  // (reported as the registration form on /account/profile "getting stuck"
+  // mid-scroll, but the real lock is global, not page-specific). Closing
+  // the chat on every route change guarantees that cleanup always fires.
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  useEffect(() => {
+    setOpen(false);
+    // Deliberately NOT including `open` here -- this must fire purely off
+    // pathname changing, never re-run just because `open` itself changed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]);
+
   useEffect(() => {
     const onOpen = (e: Event) => {
       const detail = (e as CustomEvent<OfficeGptOpenContext | undefined>).detail;

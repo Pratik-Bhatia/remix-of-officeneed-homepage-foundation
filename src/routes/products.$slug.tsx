@@ -1,6 +1,6 @@
 import { haptic } from "@/lib/haptics";
 import { trackViewContent, trackInitiateCheckout } from "@/lib/meta-pixel";
-import { useMemo, useState, useRef, useEffect } from "react";
+import { useMemo, useState, useRef, useEffect, lazy, Suspense } from "react";
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { Minus, Plus, ChevronLeft, ChevronRight, Loader2, ZoomIn, X, ShieldCheck, Lock, Award, Truck, BadgeCheck, Heart } from "lucide-react";
 import { Navbar } from "@/components/officeneed/Navbar";
@@ -8,12 +8,22 @@ import { Footer } from "@/components/officeneed/Footer";
 import { ProductCard } from "@/components/officeneed/ProductCard";
 import { ProductInformation } from "@/components/officeneed/ProductInformation";
 import { ProductReviews, ProductRatingSummary, MOCK_REVIEWS, type Review } from "@/components/officeneed/ProductReviews";
-import { ProductCustomizer } from "@/components/officeneed/ProductCustomizer";
+// Lazy -- the customizer (logo upload, canvas preview, printing-method
+// rules) is the single largest contributor to this route's JS chunk
+// (confirmed via build output) but is only ever needed once a shopper
+// actually clicks "Customize This Product" (most PDP visits never do).
+// Loaded on first open only -- see hasOpenedCustomizer below, which keeps
+// it mounted (preserving upload/placement state) across any later
+// close/reopen within the same visit.
+const ProductCustomizer = lazy(() =>
+  import("@/components/officeneed/ProductCustomizer").then((m) => ({ default: m.ProductCustomizer })),
+);
 import { RichText } from "@/components/officeneed/RichText";
 import { VariantSelectorDesktop, VariantSelectorMobile } from "@/components/officeneed/VariantSelector";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { getProductBySlug, getRelatedProducts } from "@/lib/products";
+import { shopifyImageUrl } from "@/lib/shopify-image";
 import { fetchProductByHandle, fetchRelatedProducts, formatMoney, type ShopifyProductNode, type ShopifyVariantNode, type BuyerContext } from "@/lib/shopify";
 import { mergeProduct, shopifyNodeToProduct, useShopifyCollections, useB2BPriceOverlayMap } from "@/lib/shopify-overlay";
 import { TAXONOMY, resolveLiveTitle } from "@/lib/taxonomy";
@@ -312,6 +322,12 @@ function ProductDetail() {
   const [isAddingToCart, setIsAddingToCart] = useState(false);
   const [isBuyingNow, setIsBuyingNow] = useState(false);
   const [customizerOpen, setCustomizerOpen] = useState(false);
+  // Once true, stays true for the rest of this PDP visit -- gates whether
+  // ProductCustomizer (lazy-loaded above) is mounted at all, so its chunk
+  // is only ever fetched the first time it's actually opened, while still
+  // staying mounted (not unmounting on close) so a shopper's in-progress
+  // logo/placement work survives closing and reopening the dialog.
+  const [hasOpenedCustomizer, setHasOpenedCustomizer] = useState(false);
   const [zoomOpen, setZoomOpen] = useState(false);
   const purchaseSectionRef = useRef<HTMLDivElement>(null);
   const [showStickyBar, setShowStickyBar] = useState(false);
@@ -779,7 +795,7 @@ function ProductDetail() {
                         )}
                       >
                         <img
-                          src={media.url}
+                          src={shopifyImageUrl(media.url, 150)}
                           alt=""
                           loading="lazy"
                           className="h-full w-full object-contain p-1"
@@ -787,13 +803,16 @@ function ProductDetail() {
                       </button>
                     ))}
                   </div>
-                
-                
+
+
                 {/* Main Image */}
                 <div className="product-main-image order-1 lg:order-2 w-full max-w-[1080px] aspect-square lg:aspect-auto lg:h-[calc(100vh-200px)] lg:max-h-[1080px] relative overflow-hidden rounded-2xl bg-secondary/30 border border-border/50 group flex items-center justify-center p-4 sm:p-8">
                   <img
-                    src={activeMedia?.url ?? product.images[0]}
+                    src={shopifyImageUrl(activeMedia?.url ?? product.images[0], 1200)}
                     alt={activeMedia?.alt || `${product.name} - image ${activeImage + 1}`}
+                    width={1080}
+                    height={1080}
+                    fetchPriority="high"
                     className="w-full h-full object-contain mix-blend-multiply block" style={{ maxHeight: "1080px" }}
                   />
                   
@@ -939,7 +958,7 @@ function ProductDetail() {
                           >
                             {thumb ? (
                               <img
-                                src={thumb}
+                                src={shopifyImageUrl(thumb, 48)}
                                 alt=""
                                 loading="lazy"
                                 className="size-5 sm:size-6 shrink-0 rounded-[4px] bg-transparent object-cover"
@@ -1040,23 +1059,30 @@ function ProductDetail() {
                       Add your company's branding and see how your gift could look before requesting a quote.
                     </p>
                   </div>
-                  <Button 
-                    size="lg" 
+                  <Button
+                    size="lg"
                     className="w-full sm:w-auto shrink-0"
-                    onClick={() => setCustomizerOpen(true)}
+                    onClick={() => {
+                      setHasOpenedCustomizer(true);
+                      setCustomizerOpen(true);
+                    }}
                   >
                     Customize This Product
                   </Button>
                 </div>
               )}
-              
-              <ProductCustomizer
-                product={product}
-                selectedVariant={selectedVariant}
-                rawProductNode={node}
-                open={customizerOpen}
-                onOpenChange={setCustomizerOpen}
-              />
+
+              {hasOpenedCustomizer && (
+                <Suspense fallback={null}>
+                  <ProductCustomizer
+                    product={product}
+                    selectedVariant={selectedVariant}
+                    rawProductNode={node}
+                    open={customizerOpen}
+                    onOpenChange={setCustomizerOpen}
+                  />
+                </Suspense>
+              )}
 
               
               {/* Zoom Lightbox */}
@@ -1076,7 +1102,7 @@ function ProductDetail() {
                   
                   <div className="relative w-full h-full max-w-[90vw] max-h-[90vh] flex items-center justify-center">
                     <img
-                      src={activeMedia?.url ?? product.images[0]}
+                      src={shopifyImageUrl(activeMedia?.url ?? product.images[0], 1600)}
                       alt={activeMedia?.alt || `${product.name} - zoomed`}
                       className="w-full h-full object-contain"
                     />
@@ -1116,7 +1142,7 @@ function ProductDetail() {
                               : "border-border opacity-50 hover:opacity-100",
                           )}
                         >
-                          <img src={media.url} alt="" className="h-full w-full object-contain p-1" />
+                          <img src={shopifyImageUrl(media.url, 100)} alt="" loading="lazy" className="h-full w-full object-contain p-1" />
                         </button>
                       ))}
                     </div>
@@ -1210,7 +1236,7 @@ function ProductDetail() {
           {/* Desktop layout */}
           <div className="hidden lg:flex w-full items-center justify-between gap-6">
             <div className="flex items-center gap-4 flex-1 min-w-0">
-              <img src={activeMedia?.url ?? product.images[0]} className="size-12 shrink-0 rounded-md object-contain bg-secondary/30 border border-border p-0.5" alt="" />
+              <img src={shopifyImageUrl(activeMedia?.url ?? product.images[0], 100)} loading="lazy" className="size-12 shrink-0 rounded-md object-contain bg-secondary/30 border border-border p-0.5" alt="" />
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium truncate text-foreground">{product.name}</p>
                 <p className="text-sm font-medium text-muted-foreground">{pricePending ? priceSkeleton : displayPrice}</p>
@@ -1265,7 +1291,8 @@ function ProductDetail() {
                 an awkward width or forces truncation mid-word. */}
             <div className="flex items-start gap-3">
               <img
-                src={activeMedia?.url ?? product.images[0]}
+                src={shopifyImageUrl(activeMedia?.url ?? product.images[0], 100)}
+                loading="lazy"
                 className="size-11 shrink-0 rounded-lg object-contain bg-secondary/30 border border-border p-1"
                 alt=""
               />
