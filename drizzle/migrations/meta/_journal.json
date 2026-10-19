@@ -43,6 +43,13 @@
       "when": 1791970490522,
       "tag": "0005_fix_b2b_admin_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792377337056,
+      "tag": "0006_add_customer_address_labels",
+      "breakpoints": true
     }
   ]
 }
