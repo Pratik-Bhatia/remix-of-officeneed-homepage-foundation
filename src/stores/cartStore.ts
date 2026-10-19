@@ -4,7 +4,7 @@ import { persist, createJSONStorage } from "zustand/middleware";
 import { toast } from "sonner";
 import { storefrontApiRequest, type ShopifyProduct, type ShopifyProductNode, type ShopifyImage } from "@/lib/shopify";
 import { getCustomerToken } from "@/lib/customer";
-import { useB2BStore } from "@/stores/b2bStore";
+import { useB2BStore, getEffectiveCompanyLocationId } from "@/stores/b2bStore";
 import { appendAttribution, getAttribution } from "@/lib/attribution";
 import { getCustomerCart, saveCustomerCart } from "@/lib/customer-cart.functions";
 import { trackAddToCart } from "@/lib/meta-pixel";
@@ -239,6 +239,12 @@ const FULL_CART_FIELDS = `
     subtotalAmount { amount currencyCode }
     totalAmount { amount currencyCode }
   }
+  buyerIdentity {
+    purchasingCompany {
+      company { id }
+      location { id }
+    }
+  }
   ${DELIVERY_FIELDS}
   lines(first: 100) {
     edges {
@@ -421,7 +427,12 @@ function itemsFromRemote(cart: any): CartItem[] {
 function currentBuyerIdentity(): { customerAccessToken: string; countryCode: string; companyLocationId?: string } | null {
   const token = getCustomerToken();
   if (!token) return null;
-  const { companyLocationId } = useB2BStore.getState();
+  // Only the EFFECTIVE location -- eligible (status) AND the shopper is
+  // actively in Business shopping mode. An eligible B2B customer who has
+  // switched to Personal Shopping must never have companyLocationId
+  // attached here, or B2B pricing/quantity rules would silently keep
+  // applying to a cart they believe is priced as an individual.
+  const companyLocationId = getEffectiveCompanyLocationId(useB2BStore.getState());
   return companyLocationId
     ? { customerAccessToken: token, countryCode: "IN", companyLocationId }
     : { customerAccessToken: token, countryCode: "IN" };
@@ -594,6 +605,13 @@ interface CartStore {
     | { url: string }
     | { url: null; reason: "no-cart" | "no-checkout-url" | "cart-not-found" | "user-error" | "exception" }
   >;
+  /** Re-attaches the existing cart's buyer identity to whichever mode
+   * (Personal/Business Shopping) is currently active and refreshes its
+   * cost/items immediately -- used right after a mode switch, not only
+   * at checkout. No-ops (returns true) when there's no cart or no buyer
+   * to attach. Returns false only on a genuine failure the caller should
+   * surface (already toasted via the existing reportProblems mechanism). */
+  reconcileBuyerIdentity: () => Promise<boolean>;
   /**
    * Buy Now: creates a brand-new, standalone Shopify cart for exactly this
    * one line and returns its checkout URL -- WITHOUT ever touching this
@@ -691,6 +709,58 @@ export const useCartStore = create<CartStore>()(
           if (cart) applyCart(cart);
         } catch (error) {
           console.error("Failed to remove unavailable lines:", error);
+        }
+      };
+
+      /** Shopify's documented semantics for clearing an already-attached
+       * companyLocationId via cartBuyerIdentityUpdate are not confirmed
+       * (see currentBuyerIdentity's own comment) -- this is the fallback
+       * for a switch TO Personal Shopping where the cart's own
+       * buyerIdentity.purchasingCompany still isn't null afterward: build
+       * a brand-new cart with the same lines and discount codes and no
+       * buyerIdentity, and swap it in. Never silently leaves a B2B-priced
+       * cart behind a shopper who believes they switched to Personal
+       * Shopping. Delivery address, if one was set, does NOT carry over
+       * to the new cart (cartCreate has no mechanism to copy it) -- an
+       * accepted, minor side effect of this rare fallback path, not the
+       * common case. */
+      const rebuildCartWithoutCompanyLocation = async (): Promise<boolean> => {
+        const { items, discountCodes } = get();
+        if (items.length === 0) {
+          set({ cartId: null, items: [], checkoutUrl: null, discountCodes: [], cost: { subtotal: null, total: null }, deliveryAddress: null });
+          return true;
+        }
+        const lines = items.map((item) => ({
+          merchandiseId: item.variantId,
+          quantity: item.quantity,
+          ...(item.lineAttributes?.length ? { attributes: toCheckoutLineAttributes(item.lineAttributes) } : {}),
+        }));
+        try {
+          const data = await storefrontApiRequest(CART_CREATE_MUTATION, {
+            input: {
+              lines,
+              ...(discountCodes.length ? { discountCodes: discountCodes.map((d) => d.code) } : {}),
+            },
+          });
+          const payload = data?.data?.cartCreate;
+          if (reportProblems(payload?.userErrors ?? [], payload?.warnings ?? [])) return false;
+          const cart = payload?.cart;
+          if (!cart) return false;
+          const { valid } = extractLines(cart);
+          set({
+            cartId: cart.id,
+            checkoutUrl: formatCheckoutUrl(cart.checkoutUrl),
+            items: reconcileItems(items, valid),
+            discountCodes: cart.discountCodes ?? [],
+            cost: extractCost(cart),
+            deliveryAddress: null,
+          });
+          const token = getCustomerToken();
+          if (token) saveCustomerCart({ data: { token, cartId: cart.id } }).catch(() => {});
+          return true;
+        } catch (error) {
+          console.error("Failed to rebuild cart without company location:", error);
+          return false;
         }
       };
 
@@ -1038,6 +1108,48 @@ export const useCartStore = create<CartStore>()(
           } catch (error) {
             console.error("Failed to attach customer to cart:", error);
             return checkoutUrl ? { url: checkoutUrl } : { url: null, reason: "exception" as const };
+          }
+        },
+
+        /** Re-attaches the cart's buyer identity under whichever mode is
+         * CURRENTLY active and refreshes cost/items immediately --
+         * usable mid-session (e.g. right after a Personal/Business
+         * Shopping switch), not just right before checkout like
+         * prepareCheckout. Kept as its own implementation rather than a
+         * shared low-level extraction from prepareCheckout: the two have
+         * different failure-handling needs (prepareCheckout always
+         * degrades to "send them to checkout with whatever's current";
+         * this one needs to detect and self-correct a company location
+         * that didn't actually clear -- see rebuildCartWithoutCompanyLocation). */
+        reconcileBuyerIdentity: async () => {
+          const { cartId, clearCart } = get();
+          if (!cartId) return true;
+          const buyerIdentity = currentBuyerIdentity();
+          if (!buyerIdentity) return true; // anonymous -- nothing to attach
+          try {
+            const data = await storefrontApiRequest(CART_BUYER_IDENTITY_UPDATE_MUTATION, {
+              cartId,
+              buyerIdentity,
+            });
+            const errors: UserError[] = data?.data?.cartBuyerIdentityUpdate?.userErrors ?? [];
+            if (isCartNotFoundError(errors)) {
+              clearCart();
+              return true;
+            }
+            if (reportProblems(errors, [])) return false;
+            const updatedCart = data?.data?.cartBuyerIdentityUpdate?.cart;
+            if (!updatedCart) return false;
+
+            const effectiveCompanyLocationId = getEffectiveCompanyLocationId(useB2BStore.getState());
+            const actualLocationId = updatedCart?.buyerIdentity?.purchasingCompany?.location?.id ?? null;
+            if (effectiveCompanyLocationId === null && actualLocationId !== null) {
+              return await rebuildCartWithoutCompanyLocation();
+            }
+            applyCart(updatedCart);
+            return true;
+          } catch (error) {
+            console.error("Failed to reconcile buyer identity:", error);
+            return false;
           }
         },
 

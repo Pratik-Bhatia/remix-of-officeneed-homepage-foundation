@@ -10,7 +10,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { fetchProducts, fetchAllProducts, fetchCollections, formatMoney, type ShopifyProductNode, type ShopifyCollectionNode, type BuyerContext } from "@/lib/shopify";
 import { useBuyerContext } from "@/hooks/useBuyerContext";
-import { useB2BStore } from "@/stores/b2bStore";
+import { useB2BStore, getEffectiveCompanyLocationId } from "@/stores/b2bStore";
 import { getB2BPriceOverlay, type B2BPriceOverlayMap } from "@/lib/b2b-pricing.functions";
 import { getB2BQuantityRuleOverlay, type QuantityRuleOverlayMap } from "@/lib/b2b-quantity-rules.functions";
 import { applyB2BPriceOverlayToAll } from "@/lib/b2b-pricing";
@@ -572,10 +572,15 @@ function buyerCacheConfig(
 export function useB2BPriceOverlayMap(variantIds: string[]): { overlay: B2BPriceOverlayMap; ready: boolean } {
   const resolved = useB2BStore((s) => s.resolved);
   const status = useB2BStore((s) => s.status);
-  const companyLocationId = useB2BStore((s) => s.companyLocationId);
+  // Only the EFFECTIVE location -- eligible (status) AND the shopper is
+  // currently in Business shopping mode (see getEffectiveCompanyLocationId
+  // in b2bStore.ts). An eligible B2B customer who's switched to Personal
+  // Shopping must see this overlay go empty/disabled, same as a genuine
+  // B2C shopper -- never a stale company price.
+  const companyLocationId = useB2BStore((s) => getEffectiveCompanyLocationId(s));
   const token = useB2BStore((s) => s.resolvedForToken);
   const ids = [...new Set(variantIds)].sort();
-  const enabled = status === "b2b" && !!companyLocationId && !!token && ids.length > 0;
+  const enabled = !!companyLocationId && !!token && ids.length > 0;
   const { data, isFetched } = useQuery({
     queryKey: ["shopify", "b2b-price-overlay", companyLocationId ?? "none", ids.join(",")],
     queryFn: async (): Promise<B2BPriceOverlayMap> => {
@@ -592,7 +597,7 @@ export function useB2BPriceOverlayMap(variantIds: string[]): { overlay: B2BPrice
     gcTime: 0,
     retry: 1,
   });
-  const ready = !resolved ? false : status === "b2b" && companyLocationId && ids.length > 0 ? isFetched : true;
+  const ready = !resolved ? false : companyLocationId && ids.length > 0 ? isFetched : true;
   if (import.meta.env.DEV) {
     // Dev-only (tree-shaken in production builds). Status/booleans only.
     console.debug("[useB2BPriceOverlayMap] status:", status, "| resolved:", resolved, "| ready:", ready);
@@ -615,11 +620,14 @@ export function useB2BPriceOverlayMap(variantIds: string[]): { overlay: B2BPrice
  * false for them, exactly like the price overlay). */
 export function useB2BQuantityRuleOverlayMap(variantIds: string[]): { overlay: QuantityRuleOverlayMap; ready: boolean } {
   const resolved = useB2BStore((s) => s.resolved);
-  const status = useB2BStore((s) => s.status);
-  const companyLocationId = useB2BStore((s) => s.companyLocationId);
+  // Only the EFFECTIVE location -- see useB2BPriceOverlayMap's comment
+  // above for why (an eligible B2B customer who's switched to Personal
+  // Shopping must see this overlay go empty, same as a genuine B2C
+  // shopper).
+  const companyLocationId = useB2BStore((s) => getEffectiveCompanyLocationId(s));
   const token = useB2BStore((s) => s.resolvedForToken);
   const ids = [...new Set(variantIds)].sort();
-  const enabled = status === "b2b" && !!companyLocationId && !!token && ids.length > 0;
+  const enabled = !!companyLocationId && !!token && ids.length > 0;
   const { data, isFetched } = useQuery({
     queryKey: ["shopify", "b2b-quantity-rule-overlay", companyLocationId ?? "none", ids.join(",")],
     queryFn: async (): Promise<QuantityRuleOverlayMap> => {
@@ -636,7 +644,7 @@ export function useB2BQuantityRuleOverlayMap(variantIds: string[]): { overlay: Q
     gcTime: 0,
     retry: 1,
   });
-  const ready = !resolved ? false : status === "b2b" && companyLocationId && ids.length > 0 ? isFetched : true;
+  const ready = !resolved ? false : companyLocationId && ids.length > 0 ? isFetched : true;
   return { overlay: data ?? {}, ready };
 }
 

@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { ShoppingBag, Minus, Plus } from "lucide-react";
 import { useCartStore, quantityRuleScopeKey, type CartItem } from "@/stores/cartStore";
-import { useB2BStore } from "@/stores/b2bStore";
+import { useB2BStore, getEffectiveCompanyLocationId } from "@/stores/b2bStore";
 import { formatMoney } from "@/lib/shopify";
 import { shopifyImageUrl } from "@/lib/shopify-image";
 import { useB2BQuantityRuleOverlayMap } from "@/lib/shopify-overlay";
@@ -73,7 +73,7 @@ export function CartLineItem({
   // The decrement button below never lets this line drop below it;
   // removing the line entirely (the Remove button) is always allowed.
   const { overlay: b2bOverlay } = useB2BQuantityRuleOverlayMap([item.variantId]);
-  const companyLocationId = useB2BStore((s) => s.companyLocationId);
+  const companyLocationId = useB2BStore((s) => getEffectiveCompanyLocationId(s));
   const override = useCartStore((s) => s.quantityRuleOverrides[`${item.variantId}::${quantityRuleScopeKey(companyLocationId)}`]);
   const variantNode = item.product?.node?.variants?.edges?.find((e) => e.node.id === item.variantId)?.node;
   const minQuantity = b2bOverlay[item.variantId]?.minimum || override?.minimum || variantNode?.quantityRule?.minimum || 1;

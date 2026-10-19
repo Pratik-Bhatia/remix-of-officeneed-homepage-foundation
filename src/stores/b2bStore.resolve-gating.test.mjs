@@ -54,6 +54,7 @@ function resetStore() {
     customerId: null,
     resolvedForToken: null,
     resolved: false,
+    shoppingMode: "b2c",
   });
 }
 

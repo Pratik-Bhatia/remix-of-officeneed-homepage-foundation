@@ -2,7 +2,7 @@ import { haptic } from "@/lib/haptics";
 import { trackLead, trackInitiateCheckout } from "@/lib/meta-pixel";
 import { toast } from "sonner";
 import { useCartStore, quantityRuleScopeKey } from "@/stores/cartStore";
-import { useB2BStore } from "@/stores/b2bStore";
+import { useB2BStore, getEffectiveCompanyLocationId } from "@/stores/b2bStore";
 import { processLogoServer } from "@/lib/image-processing.functions";
 ﻿import { useState, useRef, useEffect, useCallback } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -840,7 +840,7 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
   // gates WHICH printing method is allowed at the current quantity, it is
   // never a Shopify-configured, per-product minimum, so it's deliberately
   // never combined into this floor.
-  const quantityRuleCompanyLocationId = useB2BStore((s) => s.companyLocationId);
+  const quantityRuleCompanyLocationId = useB2BStore((s) => getEffectiveCompanyLocationId(s));
   const quantityRuleOverride = useCartStore((s) =>
     selectedVariant ? s.quantityRuleOverrides[`${selectedVariant.id}::${quantityRuleScopeKey(quantityRuleCompanyLocationId)}`] : undefined,
   );

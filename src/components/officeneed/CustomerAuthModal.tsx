@@ -68,6 +68,7 @@ export function CustomerAuthModal({
   open = false,
   onOpenChange = () => {},
   embedded = false,
+  initialEntryType,
 }: {
   /** Modal mode only -- ignored when `embedded` is true. */
   open?: boolean;
@@ -80,6 +81,16 @@ export function CustomerAuthModal({
    * actual form: see AuthSurface below, which is the only thing that
    * differs between the two modes. */
   embedded?: boolean;
+  /** Which tab (Individual/Corporate) an ANONYMOUS open defaults to --
+   * used by the Personal/Business Shopping mode switcher's "use a
+   * different email" flow (src/components/officeneed/
+   * ShoppingModeSwitcher.tsx), which signs the shopper out first so this
+   * modal opens on the right tab for whichever identity they're
+   * switching TO, instead of always defaulting to "customer". Ignored
+   * whenever the open-effect's own signed-in -> upgrade auto-detection
+   * applies (that always forces "company" regardless) -- this only ever
+   * matters for a genuinely anonymous open. */
+  initialEntryType?: "customer" | "company" | undefined;
 }) {
   const [mode, setMode] = useState<"signin" | "register" | "forgot">("signin");
   // Whether the neutral "we've sent a link" confirmation is showing, in
@@ -154,7 +165,13 @@ export function CustomerAuthModal({
       const signedIn = !!getCustomerToken();
       setUpgrade(signedIn);
       setMode(signedIn ? "register" : "signin");
-      setEntryType(signedIn ? "company" : "customer");
+      // A signed-in open always forces "company" (the existing upgrade
+      // flow) regardless of initialEntryType -- that prop only ever
+      // matters for a genuinely anonymous open (the mode switcher's "use
+      // a different email" flow signs out BEFORE dispatching this, so in
+      // practice `signedIn` is already false by the time this runs for
+      // that flow -- this ternary is just defense in depth).
+      setEntryType(signedIn ? "company" : (initialEntryType ?? "customer"));
       setGstError(null);
       setPhoneError(null);
       setRecoverySent(false);

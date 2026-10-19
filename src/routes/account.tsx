@@ -20,6 +20,7 @@ import { clearSaves, refreshSaves } from "@/lib/saves";
 import { cn } from "@/lib/utils";
 import { getApplicationDraft } from "@/lib/business-application-draft";
 import { useB2BStore } from "@/stores/b2bStore";
+import { ShoppingModeSwitcher } from "@/components/officeneed/ShoppingModeSwitcher";
 
 export const Route = createFileRoute("/account")({
   head: () => ({
@@ -49,6 +50,7 @@ const navItems = [
  * never anything client-controlled. */
 function B2BAccountStatus() {
   const b2bStatus = useB2BStore((s) => s.status);
+  const shoppingMode = useB2BStore((s) => s.shoppingMode);
   const locations = useB2BStore((s) => s.locations);
   const companyLocationId = useB2BStore((s) => s.companyLocationId);
   const selectLocation = useB2BStore((s) => s.selectLocation);
@@ -88,6 +90,12 @@ function B2BAccountStatus() {
     );
   }
   if (b2bStatus !== "b2b" && b2bStatus !== "needs-location") return null;
+  // This customer is eligible but has chosen Personal Shopping -- hide the
+  // company bar/location controls entirely (see getEffectiveCompanyLocationId
+  // for the matching pricing/quantity-rule gate). The switcher above already
+  // shows their account type; this bar only shows while actively in
+  // Business Shopping mode.
+  if (shoppingMode !== "b2b") return null;
 
   return (
     <div className="mt-4 mb-6 flex flex-wrap items-center gap-3 rounded-xl border border-border bg-background px-4 py-3 text-sm">
@@ -206,7 +214,12 @@ function AccountLayout() {
             </header>
           ) : null}
 
-          {status === "in" ? <B2BAccountStatus /> : null}
+          {status === "in" ? (
+            <>
+              <ShoppingModeSwitcher />
+              <B2BAccountStatus />
+            </>
+          ) : null}
 
           {status === "checking" ? (
             <div className="rounded-2xl border border-border p-10 text-center text-sm text-muted-foreground">

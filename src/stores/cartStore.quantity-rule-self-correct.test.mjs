@@ -321,7 +321,7 @@ test("a quantity-rule correction learned for one B2B company location is never a
   // 1. A signed-in B2B buyer at company location "A" triggers the
   // correction via a real (mocked) MINIMUM_NOT_MET rejection + retry.
   mockCustomerToken = "token-company-a";
-  useB2BStore.setState({ status: "b2b", companyLocationId: "gid://shopify/CompanyLocation/A", resolved: true, resolvedForToken: "token-company-a" });
+  useB2BStore.setState({ status: "b2b", shoppingMode: "b2b", companyLocationId: "gid://shopify/CompanyLocation/A", resolved: true, resolvedForToken: "token-company-a" });
   const urlForA = await useCartStore.getState().createStandaloneCheckout(itemFor(product, 1));
   assert.ok(urlForA, "company A's own corrected purchase must still succeed");
   assert.deepEqual(cartCreateAttemptedQuantities, [1, 25]);
@@ -335,7 +335,7 @@ test("a quantity-rule correction learned for one B2B company location is never a
   // from company A's remembered 25, since the anonymous scope key is
   // different and was never written to.
   mockCustomerToken = null;
-  useB2BStore.setState({ status: "idle", companyLocationId: null, resolved: true, resolvedForToken: null });
+  useB2BStore.setState({ status: "idle", shoppingMode: "b2c", companyLocationId: null, resolved: true, resolvedForToken: null });
   cartCreateAttemptedQuantities = [];
   rejectUntilQuantityAtLeast = null; // this anonymous buyer's own real rule is "no override" -- qty 1 must succeed as-is.
   const urlAnon = await useCartStore.getState().createStandaloneCheckout(itemFor(product, 1));
@@ -344,7 +344,7 @@ test("a quantity-rule correction learned for one B2B company location is never a
 
   // 3. A DIFFERENT company (B) must also never read company A's entry.
   mockCustomerToken = "token-company-b";
-  useB2BStore.setState({ status: "b2b", companyLocationId: "gid://shopify/CompanyLocation/B", resolved: true, resolvedForToken: "token-company-b" });
+  useB2BStore.setState({ status: "b2b", shoppingMode: "b2b", companyLocationId: "gid://shopify/CompanyLocation/B", resolved: true, resolvedForToken: "token-company-b" });
   cartCreateAttemptedQuantities = [];
   rejectUntilQuantityAtLeast = null; // company B's own real rule, for this test, is also "no override".
   const urlB = await useCartStore.getState().createStandaloneCheckout(itemFor(product, 1));
@@ -353,5 +353,5 @@ test("a quantity-rule correction learned for one B2B company location is never a
 
   // Reset shared mock state for any tests that might run after this one.
   mockCustomerToken = null;
-  useB2BStore.setState({ status: "idle", companyLocationId: null, resolved: true, resolvedForToken: null });
+  useB2BStore.setState({ status: "idle", shoppingMode: "b2c", companyLocationId: null, resolved: true, resolvedForToken: null });
 });

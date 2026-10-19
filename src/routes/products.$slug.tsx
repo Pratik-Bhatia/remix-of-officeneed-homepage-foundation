@@ -28,7 +28,7 @@ import { fetchProductByHandle, fetchRelatedProducts, formatMoney, type ShopifyPr
 import { mergeProduct, shopifyNodeToProduct, useShopifyCollections, useB2BPriceOverlayMap, useB2BQuantityRuleOverlayMap } from "@/lib/shopify-overlay";
 import { TAXONOMY, resolveLiveTitle } from "@/lib/taxonomy";
 import { useCartStore, quantityRuleScopeKey } from "@/stores/cartStore";
-import { useB2BStore } from "@/stores/b2bStore";
+import { useB2BStore, getEffectiveCompanyLocationId } from "@/stores/b2bStore";
 import { getCustomerToken } from "@/lib/customer";
 import { useSaves } from "@/lib/saves";
 import { setPendingSave } from "@/lib/pending-save";
@@ -102,7 +102,11 @@ export const Route = createFileRoute("/products/$slug")({
       // above), so useB2BStore's module-level state is always this one
       // browser's own, never shared across unrelated requests.
       await useB2BStore.getState().resolve(token);
-      companyLocationId = useB2BStore.getState().companyLocationId;
+      // Only the EFFECTIVE location -- eligible AND currently in Business
+      // shopping mode (see getEffectiveCompanyLocationId in b2bStore.ts).
+      // A persisted "b2c" choice must stop this loader from baking in B2B
+      // pricing, same as an ineligible customer would get.
+      companyLocationId = getEffectiveCompanyLocationId(useB2BStore.getState());
     }
 
     // See setPrivateCacheHeader's own comment above for why this matters
@@ -471,7 +475,7 @@ function ProductDetail() {
   // Same buyer-scope key cartStore.ts's own recordQuantityRuleCorrection
   // uses -- a correction learned for one company location (or no company
   // at all) must never be read back for a different one in this tab.
-  const quantityRuleCompanyLocationId = useB2BStore((s) => s.companyLocationId);
+  const quantityRuleCompanyLocationId = useB2BStore((s) => getEffectiveCompanyLocationId(s));
 
   /* ---------------- Shopify-driven variant + gallery model ---------------- */
 

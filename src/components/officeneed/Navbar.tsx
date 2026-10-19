@@ -91,7 +91,14 @@ export function Navbar() {
 
   const [searchOpen, setSearchOpen] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
-  
+  // Which tab the auth modal opens on for an anonymous visitor -- set by
+  // the Personal/Business Shopping mode switcher's "use a different
+  // email" flow via open-auth-modal's optional CustomEvent detail (see
+  // ShoppingModeSwitcher.tsx); every other dispatch site uses the plain
+  // Event form, which has no `.detail`, so this stays undefined (the
+  // modal's own default) for all of them.
+  const [authEntryType, setAuthEntryType] = useState<"customer" | "company" | undefined>(undefined);
+
   const { status } = useCustomer();
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
@@ -101,8 +108,10 @@ export function Navbar() {
   const { collections } = useShopifyCollections();
 
   useEffect(() => {
-    const handleOpenAuth = () => {
+    const handleOpenAuth = (e: Event) => {
       if (AUTH_POPUP_SUPPRESSED_ROUTES.includes(pathname)) return;
+      const entryType = (e as CustomEvent<{ entryType?: "customer" | "company" }>).detail?.entryType;
+      setAuthEntryType(entryType);
       setAuthOpen(true);
     };
     window.addEventListener("open-auth-modal", handleOpenAuth);
@@ -452,7 +461,7 @@ export function Navbar() {
       </div>
 
       <SearchModal open={searchOpen} onOpenChange={setSearchOpen} />
-      <CustomerAuthModal open={authOpen} onOpenChange={setAuthOpen} />
+      <CustomerAuthModal open={authOpen} onOpenChange={setAuthOpen} initialEntryType={authEntryType} />
     </>
   );
 }

@@ -347,13 +347,14 @@ function BusinessDetailsFormDialog({
 function BusinessAccountSection() {
   const { token } = useCustomerContext();
   const status = useB2BStore((s) => s.status);
+  const shoppingMode = useB2BStore((s) => s.shoppingMode);
   const companyLocationId = useB2BStore((s) => s.companyLocationId);
   const [details, setDetails] = useState<B2BLocationDetails | null>(null);
   const [loading, setLoading] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
 
   useEffect(() => {
-    if (status !== "b2b" || !token) {
+    if (status !== "b2b" || shoppingMode !== "b2b" || !token) {
       setDetails(null);
       return;
     }
@@ -372,9 +373,9 @@ function BusinessAccountSection() {
     return () => {
       cancelled = true;
     };
-  }, [status, token, companyLocationId]);
+  }, [status, shoppingMode, token, companyLocationId]);
 
-  if (status !== "b2b") return null;
+  if (status !== "b2b" || shoppingMode !== "b2b") return null;
 
   const addressLine = details
     ? [details.address1, details.address2, [details.city, details.state, details.pin].filter(Boolean).join(", "), details.country]
@@ -440,6 +441,7 @@ function BusinessAccountSection() {
 
 function ProfilePage() {
   const { customer, token, reload } = useCustomerContext();
+  const shoppingMode = useB2BStore((s) => s.shoppingMode);
   const [saving, setSaving] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [editingAddress, setEditingAddress] = useState<CustomerAddress | null>(null);
@@ -552,6 +554,7 @@ function ProfilePage() {
 
       <BusinessAccountSection />
 
+      {shoppingMode === "b2c" ? (
       <div className="mt-6 rounded-2xl border border-border bg-background p-5 sm:p-6">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-medium text-foreground">Address Book</h3>
@@ -636,8 +639,9 @@ function ProfilePage() {
           </div>
         )}
       </div>
+      ) : null}
 
-      {token ? (
+      {shoppingMode === "b2c" && token ? (
         <AddressFormDialog
           open={formOpen}
           onOpenChange={setFormOpen}
