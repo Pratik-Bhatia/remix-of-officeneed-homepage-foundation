@@ -295,6 +295,33 @@ export type Database = {
         }
         Relationships: []
       }
+      customer_address_labels: {
+        Row: {
+          created_at: string
+          id: string
+          label: string
+          shopify_address_id: string
+          shopify_customer_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          label: string
+          shopify_address_id: string
+          shopify_customer_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          label?: string
+          shopify_address_id?: string
+          shopify_customer_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       customer_business_details: {
         Row: {
           address1: string | null

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Loader2, MapPin, Pencil } from "lucide-react";
 import {
@@ -11,10 +11,12 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useCartStore, type DeliveryAddressInput } from "@/stores/cartStore";
 import { useB2BStore } from "@/stores/b2bStore";
 import { useReactiveCustomerToken } from "@/hooks/useBuyerContext";
-import { fetchCustomer, type CustomerAddress } from "@/lib/customer";
+import { fetchCustomer, createCustomerAddress, type CustomerAddress } from "@/lib/customer";
+import { setAddressLabel } from "@/lib/address-labels.functions";
 
 function Field({
   id,
@@ -103,16 +105,23 @@ function DeliveryAddressDialog({
   savedAddresses,
   mostRecentOrderAddress,
   isB2B,
+  token,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   savedAddresses: CustomerAddress[];
   mostRecentOrderAddress: CustomerAddress | null;
   isB2B: boolean;
+  token: string;
 }) {
   const setDeliveryAddress = useCartStore((s) => s.setDeliveryAddress);
   const setDeliveryAddressFromSaved = useCartStore((s) => s.setDeliveryAddressFromSaved);
   const [busy, setBusy] = useState(false);
+  const [saveToBook, setSaveToBook] = useState(false);
+
+  useEffect(() => {
+    if (open) setSaveToBook(false);
+  }, [open]);
 
   // The most-recently-processed order's shipping address, matched against
   // the saved address book by content (Shopify gives no id linking the
@@ -198,10 +207,42 @@ function DeliveryAddressDialog({
     setBusy(true);
     try {
       const ok = await setDeliveryAddress(input);
-      if (ok) {
+      if (!ok) return;
+      if (!saveToBook) {
         toast.success("Delivery address set for this order.");
         onOpenChange(false);
+        return;
       }
+      // The cart's one-time address is already set (above) regardless of
+      // what happens next -- a failure saving it to the Address Book must
+      // never be reported as if the order's delivery address itself failed,
+      // and never undoes that already-successful write.
+      try {
+        const saved = await createCustomerAddress(token, {
+          firstName: input.firstName,
+          lastName: input.lastName,
+          company: null,
+          address1: input.address1,
+          address2: input.address2 ?? null,
+          city: input.city,
+          province: input.province,
+          zip: input.zip,
+          country: "India",
+          phone: input.phone ?? null,
+        });
+        if (saved.id) {
+          await setAddressLabel({ data: { customerAccessToken: token, addressId: saved.id, label: "Other" } }).catch(
+            (error) => console.error("Failed to label the saved address:", error),
+          );
+        }
+        toast.success("Delivery address set for this order and saved to your Address Book.");
+      } catch (error) {
+        console.error("Failed to save address to Address Book:", error);
+        toast.error(
+          "Delivery address set for this order, but we couldn't save it to your Address Book -- you can add it manually from Account → Address Book.",
+        );
+      }
+      onOpenChange(false);
     } finally {
       setBusy(false);
     }
@@ -264,6 +305,10 @@ function DeliveryAddressDialog({
               <Field id="zip" label="PIN / Postal Code" />
             </div>
             <Field id="phone" label="Phone (optional)" type="tel" />
+            <label className="flex items-center gap-2 text-sm text-foreground/90">
+              <Checkbox checked={saveToBook} onCheckedChange={(checked) => setSaveToBook(checked === true)} />
+              Save this address to my Address Book for future orders
+            </label>
             <Button type="submit" className="w-full rounded-full" disabled={busy}>
               {busy ? <Loader2 className="size-4 animate-spin mr-2" /> : null}
               Use this delivery address
@@ -293,11 +338,18 @@ export function DeliveryAddressSelector() {
   const status = useB2BStore((s) => s.status);
   const token = useReactiveCustomerToken();
   const deliveryAddress = useCartStore((s) => s.deliveryAddress);
+  const setDeliveryAddressFromSaved = useCartStore((s) => s.setDeliveryAddressFromSaved);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [savedAddresses, setSavedAddresses] = useState<CustomerAddress[]>([]);
   const [mostRecentOrderAddress, setMostRecentOrderAddress] = useState<CustomerAddress | null>(null);
+  // Fires at most once per token (reset below whenever the token changes,
+  // e.g. sign-out then sign back in) -- never re-fires just because this
+  // component re-renders, and never overrides a delivery address the
+  // shopper (or this same auto-pick) already set.
+  const autoPreselected = useRef(false);
 
   useEffect(() => {
+    autoPreselected.current = false;
     if (!token) {
       setSavedAddresses([]);
       setMostRecentOrderAddress(null);
@@ -309,6 +361,11 @@ export function DeliveryAddressSelector() {
         if (cancelled) return;
         setSavedAddresses(customer?.addresses ?? []);
         setMostRecentOrderAddress(customer?.mostRecentOrderAddress ?? null);
+        const defaultAddressId = customer?.defaultAddress?.id;
+        if (!autoPreselected.current && defaultAddressId && !useCartStore.getState().deliveryAddress) {
+          autoPreselected.current = true;
+          setDeliveryAddressFromSaved(defaultAddressId);
+        }
       })
       .catch(() => {
         if (!cancelled) {
@@ -319,7 +376,7 @@ export function DeliveryAddressSelector() {
     return () => {
       cancelled = true;
     };
-  }, [token]);
+  }, [token, setDeliveryAddressFromSaved]);
 
   if (!token) return null;
 
@@ -364,6 +421,7 @@ export function DeliveryAddressSelector() {
         savedAddresses={savedAddresses}
         mostRecentOrderAddress={mostRecentOrderAddress}
         isB2B={isB2B}
+        token={token}
       />
     </div>
   );

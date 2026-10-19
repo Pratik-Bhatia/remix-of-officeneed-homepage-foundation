@@ -12,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   updateCustomer,
   createCustomerAddress,
@@ -24,10 +25,12 @@ import {
 import { useCustomerContext } from "@/lib/customer-context";
 import { useB2BStore } from "@/stores/b2bStore";
 import { getB2BLocationDetails, updateB2BLocationDetails, type B2BLocationDetails } from "@/lib/b2b-location.functions";
+import { getAddressLabels, setAddressLabel, deleteAddressLabel, ADDRESS_LABELS, type AddressLabel } from "@/lib/address-labels.functions";
 import { normalizeIndianPhone } from "@/lib/contact-phone";
 import { toIndiaZoneCode } from "@/lib/india-zones";
 
 const PIN_CODE_PATTERN = /^\d{6}$/;
+const DEFAULT_ADDRESS_LABEL: AddressLabel = "Other";
 
 /** Phone is optional on every form on this page -- empty input returns
  * null (unchanged, matches each form's prior "omit if empty" behavior).
@@ -94,16 +97,23 @@ function AddressFormDialog({
   open,
   onOpenChange,
   editing,
+  initialLabel,
   token,
   onSaved,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   editing: CustomerAddress | null;
+  initialLabel: AddressLabel;
   token: string;
   onSaved: () => Promise<void>;
 }) {
   const [busy, setBusy] = useState(false);
+  const [label, setLabel] = useState<AddressLabel>(initialLabel);
+
+  useEffect(() => {
+    if (open) setLabel(initialLabel);
+  }, [open, initialLabel]);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -130,18 +140,28 @@ function AddressFormDialog({
     if (!address1) { toast.error("Address is required."); return; }
     if (!city) { toast.error("City is required."); return; }
     if (!country) { toast.error("Country is required."); return; }
-    // toIndiaZoneCode is only used to validate the state name here -- unlike
-    // the B2B company-address forms, Shopify's MailingAddressInput.province
-    // field (customerAddressCreate/Update) wants the plain state NAME, not
-    // the 2-letter zone code those forms send to CompanyAddressInput, so the
-    // raw trimmed text is still what gets stored once it's confirmed valid.
-    if (!toIndiaZoneCode(province)) {
-      toast.error("Please enter a valid Indian state (e.g. Maharashtra).");
-      return;
-    }
-    if (!PIN_CODE_PATTERN.test(zip)) {
-      toast.error("Enter a valid 6-digit PIN code.");
-      return;
+    // State/PIN format rules are India-specific (toIndiaZoneCode, 6-digit
+    // PIN) -- only enforced when Country is actually India, so a genuinely
+    // non-Indian address (should this store ever ship outside India) isn't
+    // rejected by rules that were never meant to apply to it. toIndiaZoneCode
+    // itself is only ever used to VALIDATE the state name here -- unlike the
+    // B2B company-address forms, Shopify's MailingAddressInput.province field
+    // (customerAddressCreate/Update) wants the plain state NAME, not the
+    // 2-letter zone code those forms send to CompanyAddressInput, so the raw
+    // trimmed text is still what gets stored once it's confirmed valid.
+    const isIndia = /^(india|in)$/i.test(country);
+    if (isIndia) {
+      if (!toIndiaZoneCode(province)) {
+        toast.error("Please enter a valid Indian state (e.g. Maharashtra).");
+        return;
+      }
+      if (!PIN_CODE_PATTERN.test(zip)) {
+        toast.error("Enter a valid 6-digit PIN code.");
+        return;
+      }
+    } else {
+      if (!province) { toast.error("State/region is required."); return; }
+      if (!zip) { toast.error("Postal code is required."); return; }
     }
     const input: CustomerAddressInput = {
       firstName,
@@ -157,12 +177,17 @@ function AddressFormDialog({
     };
     setBusy(true);
     try {
-      if (editing?.id) {
-        await updateCustomerAddress(token, editing.id, input);
-        toast.success("Address updated.");
-      } else {
-        await createCustomerAddress(token, input);
-        toast.success("Address added.");
+      const saved = editing?.id
+        ? await updateCustomerAddress(token, editing.id, input)
+        : await createCustomerAddress(token, input);
+      toast.success(editing?.id ? "Address updated." : "Address added.");
+      if (saved.id) {
+        try {
+          await setAddressLabel({ data: { customerAccessToken: token, addressId: saved.id, label } });
+        } catch (labelError) {
+          console.error("Failed to save address label:", labelError);
+          toast.error("Address saved, but the label couldn't be saved.");
+        }
       }
       onOpenChange(false);
       await onSaved();
@@ -181,6 +206,21 @@ function AddressFormDialog({
           <DialogDescription>This is saved to your Officeneed account and available at checkout.</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 py-2">
+          <div className="space-y-2">
+            <Label className="text-xs font-medium tracking-wide text-muted-foreground">Label</Label>
+            <Select value={label} onValueChange={(value) => setLabel(value as AddressLabel)}>
+              <SelectTrigger className="rounded-xl">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {ADDRESS_LABELS.map((option) => (
+                  <SelectItem key={option} value={option}>
+                    {option}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field id="firstName" label="First Name" defaultValue={editing?.firstName ?? ""} />
             <Field id="lastName" label="Last Name" defaultValue={editing?.lastName ?? ""} />
@@ -394,6 +434,24 @@ function ProfilePage() {
   const [formOpen, setFormOpen] = useState(false);
   const [editingAddress, setEditingAddress] = useState<CustomerAddress | null>(null);
   const [busyAddressId, setBusyAddressId] = useState<string | null>(null);
+  const [labels, setLabels] = useState<Record<string, AddressLabel>>({});
+
+  const reloadLabels = async (currentToken: string) => {
+    try {
+      const result = await getAddressLabels({ data: { customerAccessToken: currentToken } });
+      setLabels(result);
+    } catch (error) {
+      console.error("Failed to load address labels:", error);
+    }
+  };
+
+  useEffect(() => {
+    if (!token) {
+      setLabels({});
+      return;
+    }
+    reloadLabels(token);
+  }, [token]);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -424,6 +482,17 @@ function ProfilePage() {
     try {
       await deleteCustomerAddress(token, addressId);
       await reload();
+      // Best-effort -- the address itself is already gone (the real data);
+      // a label row left behind for a deleted address is harmless orphan
+      // metadata, never surfaced as an error to the customer.
+      deleteAddressLabel({ data: { customerAccessToken: token, addressId } }).catch((error) => {
+        console.error("Failed to clean up address label:", error);
+      });
+      setLabels((prev) => {
+        const next = { ...prev };
+        delete next[addressId];
+        return next;
+      });
       toast.success("Address removed.");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not remove this address.");
@@ -499,12 +568,18 @@ function ProfilePage() {
             {addresses.map((address, index) => {
               const isDefault = !!customer?.defaultAddress?.id && customer.defaultAddress.id === address.id;
               const isBusy = busyAddressId === address.id;
+              const addressLabel = address.id ? labels[address.id] ?? DEFAULT_ADDRESS_LABEL : DEFAULT_ADDRESS_LABEL;
               return (
                 <div key={address.id ?? index} className="rounded-xl border border-border p-4">
                   <div className="flex items-start justify-between gap-2">
-                    <p className="text-xs font-medium tracking-wide text-muted-foreground">
-                      {isDefault ? "Default address" : "Saved address"}
-                    </p>
+                    <div className="flex items-center gap-2">
+                      <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-foreground">
+                        {addressLabel}
+                      </span>
+                      <p className="text-xs font-medium tracking-wide text-muted-foreground">
+                        {isDefault ? "Default address" : "Saved address"}
+                      </p>
+                    </div>
                     <div className="flex gap-1">
                       <button
                         type="button"
@@ -557,8 +632,12 @@ function ProfilePage() {
           open={formOpen}
           onOpenChange={setFormOpen}
           editing={editingAddress}
+          initialLabel={(editingAddress?.id && labels[editingAddress.id]) || DEFAULT_ADDRESS_LABEL}
           token={token}
-          onSaved={reload}
+          onSaved={async () => {
+            await reload();
+            await reloadLabels(token);
+          }}
         />
       ) : null}
     </section>
