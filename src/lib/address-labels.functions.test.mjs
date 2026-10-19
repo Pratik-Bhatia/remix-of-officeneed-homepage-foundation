@@ -36,7 +36,7 @@ test("resolveOwnedAddressIdsExpecting: retries until a freshly-created address s
     const addresses = calls < 2 ? [] : [{ id: "gid://shopify/MailingAddress/1" }];
     return { id: "gid://shopify/Customer/1", addresses };
   };
-  const result = await resolveOwnedAddressIdsExpecting("tok", "gid://shopify/MailingAddress/1");
+  const result = await resolveOwnedAddressIdsExpecting("tok", "gid://shopify/MailingAddress/1", [10, 10, 10]);
   assert.ok(result.addressIds.has("gid://shopify/MailingAddress/1"));
   assert.equal(calls, 2, "should stop retrying as soon as the address appears");
 });
@@ -47,7 +47,7 @@ test("resolveOwnedAddressIdsExpecting: still rejects an address that genuinely n
     calls++;
     return { id: "gid://shopify/Customer/1", addresses: [{ id: "gid://shopify/MailingAddress/999" }] };
   };
-  const result = await resolveOwnedAddressIdsExpecting("tok", "gid://shopify/MailingAddress/1");
+  const result = await resolveOwnedAddressIdsExpecting("tok", "gid://shopify/MailingAddress/1", [10, 10, 10]);
   assert.ok(!result.addressIds.has("gid://shopify/MailingAddress/1"));
   assert.ok(calls > 1, "must exhaust retries before giving up, not reject on the first miss");
 });

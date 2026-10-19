@@ -231,7 +231,11 @@ function DeliveryAddressDialog({
           phone: input.phone ?? null,
         });
         if (saved.id) {
-          await setAddressLabel({ data: { customerAccessToken: token, addressId: saved.id, label: "Other" } }).catch(
+          // Not awaited -- see the matching comment in account.profile.tsx's
+          // AddressFormDialog for why (Shopify read-after-write lag can
+          // outlast a short wait; this already retries generously
+          // server-side and shouldn't delay closing this dialog).
+          setAddressLabel({ data: { customerAccessToken: token, addressId: saved.id, label: "Other" } }).catch(
             (error) => console.error("Failed to label the saved address:", error),
           );
         }

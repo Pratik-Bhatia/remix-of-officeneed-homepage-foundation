@@ -182,12 +182,22 @@ function AddressFormDialog({
         : await createCustomerAddress(token, input);
       toast.success(editing?.id ? "Address updated." : "Address added.");
       if (saved.id) {
-        try {
-          await setAddressLabel({ data: { customerAccessToken: token, addressId: saved.id, label } });
-        } catch (labelError) {
-          console.error("Failed to save address label:", labelError);
-          toast.error("Address saved, but the label couldn't be saved.");
-        }
+        // Deliberately NOT awaited -- confirmed live that Shopify's
+        // Storefront API can take several seconds (sometimes longer than a
+        // short retry budget) before a just-created-or-edited address shows
+        // up in a fresh ownership-check read, even though it unquestionably
+        // belongs to this customer. setAddressLabel already retries
+        // generously server-side; blocking the save button/dialog on that
+        // would make an ordinary address save feel slow for no reason the
+        // shopper can see. Runs detached; refreshes the label once it
+        // actually lands, and only surfaces a toast if it still ultimately
+        // fails after every retry.
+        setAddressLabel({ data: { customerAccessToken: token, addressId: saved.id, label } })
+          .then(() => onSaved())
+          .catch((labelError) => {
+            console.error("Failed to save address label:", labelError);
+            toast.error("Address saved, but the label couldn't be saved.");
+          });
       }
       onOpenChange(false);
       await onSaved();

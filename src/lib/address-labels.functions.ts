@@ -33,24 +33,29 @@ async function resolveOwnedAddressIds(customerAccessToken: string): Promise<{ cu
   return { customerId: customer.id, addressIds };
 }
 
-const OWNERSHIP_RETRY_DELAYS_MS = [300, 600, 1000];
+// Confirmed live: this isn't limited to a just-created address -- an EDIT
+// of an address that already existed (updateCustomerAddress) can also,
+// intermittently, not yet show up in the very next customer.addresses read
+// on the Storefront API, and the lag isn't always short (observed
+// outlasting an earlier, tighter ~1.9s retry budget in production). This is
+// Shopify-side propagation/caching behavior this app has no control over,
+// so the retry budget here is deliberately generous (up to ~9.5s across 6
+// attempts) -- safe to do because setAddressLabel is called detached/non-
+// blocking from the UI (see account.profile.tsx and DeliveryAddressSelector.tsx),
+// never something the save button or dialog waits on.
+const OWNERSHIP_RETRY_DELAYS_MS = [500, 1000, 1500, 2000, 2500, 3000];
 
-/** Same as resolveOwnedAddressIds, but retries a few times (with a short
- * delay) if `mustIncludeAddressId` isn't in the result yet -- confirmed live:
- * right after customerAddressCreate succeeds, Shopify's Storefront API can
- * take a moment before that SAME address shows up in a fresh
- * customer.addresses read, so a setAddressLabel call made immediately after
- * creating the address can otherwise see it as "not owned" even though it
- * unquestionably is (same token, address just created with it). Only used
- * by setAddressLabel, which is the one call site that can run in that tight
- * a sequence after a creation; getAddressLabels/deleteAddressLabel don't
- * need this. */
+/** Same as resolveOwnedAddressIds, but retries (see OWNERSHIP_RETRY_DELAYS_MS
+ * above) if `mustIncludeAddressId` isn't in the result yet. Only used by
+ * setAddressLabel, which is the one call site that can run right after a
+ * create/update; getAddressLabels/deleteAddressLabel don't need this. */
 export async function resolveOwnedAddressIdsExpecting(
   customerAccessToken: string,
   mustIncludeAddressId: string,
+  retryDelaysMs: number[] = OWNERSHIP_RETRY_DELAYS_MS,
 ): Promise<{ customerId: string; addressIds: Set<string> }> {
   let result = await resolveOwnedAddressIds(customerAccessToken);
-  for (const delayMs of OWNERSHIP_RETRY_DELAYS_MS) {
+  for (const delayMs of retryDelaysMs) {
     if (result.addressIds.has(mustIncludeAddressId)) break;
     await new Promise((resolve) => setTimeout(resolve, delayMs));
     result = await resolveOwnedAddressIds(customerAccessToken);
