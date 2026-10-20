@@ -3,6 +3,7 @@ import { ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { primaryNavCategories, navCategoryTarget, getLiveNavLabel } from "@/lib/navigation";
 import { useShopifyCollections } from "@/lib/shopify-overlay";
+import exclusiveLogo from "@/assets/officeneed-exclusive-logo.svg.asset.json";
 
 /**
  * Homepage "Shop by Category" grid. Reuses the site's single existing
@@ -34,12 +35,15 @@ export function ShopByCategory() {
         <div className="mt-8 grid grid-cols-2 gap-4 sm:mt-10 sm:gap-5 lg:grid-cols-5 lg:gap-6">
           {primaryNavCategories.map((cat) => {
             const target = navCategoryTarget(cat.id);
-            const image = getImage(target.collection);
             const label = getLiveNavLabel(collections, cat.label);
             // The edge-to-edge SVG previously occupied 74% of the image well
             // after 13% padding on each side. Render it at 82% of that size
             // (60.68% of the well), centered without resizing the card.
             const isExclusive = cat.id === "officeneed-exclusive";
+            // The Exclusive card always renders the owner-supplied brand mark
+            // (Logo_only.svg, CDN-hosted) instead of the Shopify-hosted
+            // collection image.
+            const image = isExclusive ? exclusiveLogo.url : getImage(target.collection);
 
             return (
               <Link

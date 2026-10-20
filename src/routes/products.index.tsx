@@ -7,6 +7,7 @@ import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from "@/co
 import { buildFilterGroups, computePriceBuckets, productMatchesFilters, normalizeFilterValue, type FilterGroup } from "@/lib/filters";
 import { searchProducts, getSearchSuggestion } from "@/lib/search";
 import { Navbar } from "@/components/officeneed/Navbar";
+import exclusiveLogo from "@/assets/officeneed-exclusive-logo.svg.asset.json";
 import { Footer } from "@/components/officeneed/Footer";
 import { ProductCard } from "@/components/officeneed/ProductCard";
 import { ComingSoonBanner } from "@/components/officeneed/ComingSoonBanner";
@@ -194,6 +195,9 @@ function ProductsPage() {
 
   /** Returns the Shopify-hosted image URL for a collection, or null if not yet loaded / unavailable. */
   const getCollectionImage = (handle: string): string | null => {
+    // Officeneed Exclusive always renders the owner-supplied brand mark
+    // (Logo_only.svg, CDN-hosted) instead of the Shopify-hosted collection SVG.
+    if (handle === TAXONOMY["Officeneed Exclusive"].handle) return exclusiveLogo.url;
     const shopifyCol = collections.find(c => c.handle === handle);
     if (handle === "consumables") {
       console.log("[icon-debug] consumables lookup →", { shopifyCol, allHandles: collections.map(c => c.handle) });
