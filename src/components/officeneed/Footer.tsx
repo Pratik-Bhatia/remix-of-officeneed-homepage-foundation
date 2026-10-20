@@ -18,7 +18,6 @@ import visaAsset from "@/assets/payment-visa.png";
 import mastercardAsset from "@/assets/payment-mastercard.png";
 import amexAsset from "@/assets/payment-amex.png";
 import upiAsset from "@/assets/payment-upi.png";
-import rupayAsset from "@/assets/payment-rupay.png";
 
 
 const benefits = [
@@ -79,7 +78,6 @@ const paymentMethods = [
   { label: "Mastercard", asset: mastercardAsset },
   { label: "American Express", asset: amexAsset },
   { label: "UPI", asset: upiAsset },
-  { label: "RuPay", asset: rupayAsset },
 ];
 
 function MobileBenefitsCarousel() {
