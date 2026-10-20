@@ -296,14 +296,12 @@ export function ChatWidget() {
   const [footerVisible, setFooterVisible] = useState(false);
   useEffect(() => {
     let observer: IntersectionObserver | null = null;
-    let frame = 0;
-    let tries = 0;
+    let watched: HTMLElement | null = null;
     const attach = () => {
-      const footer = document.querySelector("footer");
-      if (!footer) {
-        if (++tries < 30) frame = requestAnimationFrame(attach);
-        return;
-      }
+      const footer = document.querySelector<HTMLElement>("footer");
+      if (!footer || footer === watched) return;
+      observer?.disconnect();
+      watched = footer;
       observer = new IntersectionObserver(
         (entries) => setFooterVisible(entries.some((entry) => entry.isIntersecting)),
         { threshold: 0 },
@@ -311,8 +309,15 @@ export function ChatWidget() {
       observer.observe(footer);
     };
     attach();
+    // Late-loading content can replace the footer node, which would leave the
+    // observer watching a detached element, so re-attach whenever the watched
+    // node leaves the document.
+    const mutations = new MutationObserver(() => {
+      if (!watched || !document.contains(watched)) attach();
+    });
+    mutations.observe(document.body, { childList: true, subtree: true });
     return () => {
-      if (frame) cancelAnimationFrame(frame);
+      mutations.disconnect();
       observer?.disconnect();
     };
   }, []);
