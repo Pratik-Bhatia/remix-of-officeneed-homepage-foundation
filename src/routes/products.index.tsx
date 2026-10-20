@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { Search, SlidersHorizontal, PackageSearch } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { buildFilterGroups, computePriceBuckets, type FilterGroup } from "@/lib/filters";
 import { searchProducts, getSearchSuggestion } from "@/lib/search";
@@ -309,30 +310,46 @@ function ProductsPage() {
     }
   }, [activeSubcategoryHandle]);
 
+  // Which filter sections are expanded. Kept here (not inside FilterList) so
+  // ticking a checkbox -- which re-renders the page -- never collapses them.
+  // All sections start collapsed.
+  const [openFilterSections, setOpenFilterSections] = useState<string[]>([]);
+  const totalSelectedFilters = Object.values(validActiveFilters).reduce((n, v) => n + v.length, 0);
+
   const FilterList = () => {
     if (filterGroups.length === 0) return null;
     return (
-      <div className="flex flex-col gap-8">
-        {filterGroups.map((group) => (
-          <div key={group.id}>
-            <h3 className="text-sm font-medium tracking-tight mb-4">{group.label}</h3>
-            <div className="space-y-3">
-              {group.options.map((option) => (
-                <label key={option.value} className="flex items-center gap-3 cursor-pointer group/label">
-                  <Checkbox
-                    checked={activeFilters[group.id]?.includes(option.value) ?? false}
-                    onCheckedChange={() => toggleFilter(group.id, option.value)}
-                    className="border-muted-foreground/30 data-[state=checked]:border-primary transition-colors"
-                  />
-                  <span className="text-sm text-muted-foreground group-hover/label:text-foreground transition-colors select-none">
-                    {option.label}
-                  </span>
-                </label>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
+      <Accordion type="multiple" value={openFilterSections} onValueChange={setOpenFilterSections} className="border-t border-border">
+        {filterGroups.map((group) => {
+          const selectedCount = (activeFilters[group.id] ?? []).filter((v) => group.options.some((o) => o.value === v)).length;
+          return (
+            <AccordionItem key={group.id} value={group.id} className="border-border">
+              <AccordionTrigger className="min-h-12 py-3 text-sm font-medium text-foreground tracking-tight hover:no-underline rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                <span>
+                  {group.label}
+                  {selectedCount > 0 && <span className="ml-1 text-muted-foreground">({selectedCount})</span>}
+                </span>
+              </AccordionTrigger>
+              <AccordionContent className="pb-4">
+                <div className="space-y-3">
+                  {group.options.map((option) => (
+                    <label key={option.value} className="flex items-center gap-3 cursor-pointer group/label">
+                      <Checkbox
+                        checked={activeFilters[group.id]?.includes(option.value) ?? false}
+                        onCheckedChange={() => toggleFilter(group.id, option.value)}
+                        className="border-muted-foreground/30 data-[state=checked]:border-primary transition-colors"
+                      />
+                      <span className="text-sm text-muted-foreground group-hover/label:text-foreground transition-colors select-none">
+                        {option.label}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          );
+        })}
+      </Accordion>
     );
   };
 
@@ -552,9 +569,12 @@ function ProductsPage() {
                           >
                             <SlidersHorizontal className="size-4" aria-hidden />
                             <span className="hidden sm:inline">Filter</span>
+                            {totalSelectedFilters > 0 && (
+                              <span className="text-xs text-muted-foreground">({totalSelectedFilters})</span>
+                            )}
                           </Button>
                         </SheetTrigger>
-                        <SheetContent side="right" className="w-full sm:max-w-sm overflow-y-auto">
+                        <SheetContent side="right" className="w-full sm:max-w-sm overflow-y-auto pb-28">
                           <SheetHeader className="flex-row items-center justify-between space-y-0">
                             <SheetTitle>Filter</SheetTitle>
                           </SheetHeader>
