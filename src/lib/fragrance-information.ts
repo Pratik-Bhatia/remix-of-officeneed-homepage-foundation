@@ -1,6 +1,6 @@
 import { marked } from "marked";
 import { parseDocument } from "htmlparser2";
-import { getText, removeElement, replaceElement } from "domutils";
+import { getText, textContent, removeElement, replaceElement } from "domutils";
 import render from "dom-serializer";
 import type { Product } from "./products";
 
@@ -21,7 +21,7 @@ export const FRAGRANCE_METAFIELD_IDENTIFIERS = fields.flatMap(({ key }) =>
 );
 
 function plain(value: string): string {
-  return getText(parseDocument(value)).replace(/\*\*|__/g, "").replace(/\s+/g, " ").trim();
+  return textContent(parseDocument(value)).replace(/\*\*|__/g, "").replace(/\s+/g, " ").trim();
 }
 
 function metafieldText(value: string | undefined): string | undefined {
@@ -41,11 +41,13 @@ const labelPattern = fields.flatMap((field) => field.aliases).join("|");
 const labelRegex = new RegExp(`(?:^|\\n|\\s)(?:[-•]\\s*)?(${labelPattern})\\s*:\\s*`, "gi");
 const retainedLabelRegex = /(?:\n|\s)(Overall Character|Best For)\s*:/i;
 const sectionHeading = /^(?:Product Details|Specifications|Technical Specifications|Fragrance Notes)\s*:?$/i;
-const blockTags = new Set(["p", "li", "div", "h1", "h2", "h3", "h4", "h5", "h6", "tr"]);
+const blockTags = new Set(["p", "li", "div", "ul", "ol", "table", "tbody", "h1", "h2", "h3", "h4", "h5", "h6", "tr"]);
 
 /** Pure, browser/SSR-safe parsing. Keep the original DOM except extracted rows/headings. */
 export function parseFragranceDescription(source: string) {
-  const html = marked.parse(source, { async: false, breaks: true });
+  const html = /<[a-z][^>]*>/i.test(source) && !/\*\*[^*]+\*\*/.test(source)
+    ? source
+    : marked.parse(source, { async: false, breaks: true });
   const document = parseDocument(html);
   const values = new Map<string, string>();
   type Node = typeof document | (typeof document.children)[number];
@@ -111,7 +113,7 @@ export function parseFragranceDescription(source: string) {
 
 /** Per-field precedence: populated metafield, structured application data, description. */
 export function resolveFragranceInformation(
-  product: Pick<Product, "description" | "descriptionHtml" | "specifications" | "fragranceNotes" | "customSections">,
+  product: { description: string; descriptionHtml?: string | undefined; specifications?: Product["specifications"]; fragranceNotes?: Product["fragranceNotes"]; customSections?: Product["customSections"] },
   getMetafieldValue: (namespace: string, key: string) => string | undefined = () => undefined,
 ) {
   const parsed = parseFragranceDescription(product.descriptionHtml ?? product.description);
@@ -137,7 +139,7 @@ export function resolveFragranceInformation(
     }
     return structured.get(key) || parsed.values.get(key);
   }
-  const specifications = fields.slice(0, 5).flatMap((field) => {
+  const specifications: Array<{ label: string; value: string }> = fields.slice(0, 5).flatMap((field) => {
     const resolved = value(field.key);
     return resolved ? [{ label: field.label, value: resolved }] : [];
   });
