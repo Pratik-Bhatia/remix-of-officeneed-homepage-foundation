@@ -287,6 +287,42 @@ export function ChatWidget() {
     return () => window.removeEventListener("officeneed:customizer-toggle", onCustomizerToggle);
   }, []);
 
+  // Fourth independent source: the footer's own content (contact details,
+  // payment badges) occupies this same bottom-right corner once the shopper
+  // reaches the end of the page, so the launcher fades out while the footer
+  // is on screen and returns as soon as they scroll back up. The footer is
+  // rendered by a sibling component, hence the DOM lookup here rather than an
+  // event like the three sources above.
+  const [footerVisible, setFooterVisible] = useState(false);
+  useEffect(() => {
+    let observer: IntersectionObserver | null = null;
+    let watched: HTMLElement | null = null;
+    const attach = () => {
+      const footer = document.querySelector<HTMLElement>("footer");
+      if (!footer || footer === watched) return;
+      observer?.disconnect();
+      watched = footer;
+      observer = new IntersectionObserver(
+        (entries) => setFooterVisible(entries.some((entry) => entry.isIntersecting)),
+        { threshold: 0 },
+      );
+      observer.observe(footer);
+    };
+    attach();
+    // Late-loading content can replace the footer node, which would leave the
+    // observer watching a detached element, so re-attach whenever the watched
+    // node leaves the document.
+    const mutations = new MutationObserver(() => {
+      if (!watched || !document.contains(watched)) attach();
+    });
+    mutations.observe(document.body, { childList: true, subtree: true });
+    return () => {
+      mutations.disconnect();
+      observer?.disconnect();
+    };
+  }, []);
+
+
   // Kick off (or re-seed) the conversation -- generic by default, or
   // context-aware based on the shopper's current page. Runs whenever the
   // widget opens while `!hasAnswered`, i.e. the shopper hasn't yet given a
@@ -835,7 +871,7 @@ export function ChatWidget() {
       {/* Floating Launcher Button -- the single OfficeGPT entry point */}
       <div className={cn(
         "fixed bottom-6 right-6 z-[100] transition-all duration-300",
-        open || navOverlayOpen || stickyBarOpen || customizerOpen ? "opacity-0 pointer-events-none translate-y-4 scale-95" : "opacity-100 translate-y-0 scale-100"
+        open || navOverlayOpen || stickyBarOpen || customizerOpen || footerVisible ? "opacity-0 pointer-events-none translate-y-4 scale-95" : "opacity-100 translate-y-0 scale-100"
       )}>
         <button
           onClick={openLauncher}

@@ -9,3 +9,4 @@
 - [x] Footer American Express badge: replaced from the uploaded `American_Express_logo_2018.svg`, background transparent, verified in the footer.
 - [x] Footer UPI badge: replaced with the uploaded `UPI-Logo.png`, white background removed, grey lettering lightened for the dark footer bar.
 - [x] Footer RuPay badge: removed from the payment row at the user's request (file kept in `src/assets` in case it is wanted again).
+- [x] Needle launcher: fades out while the footer is on screen (IntersectionObserver on `<footer>`, re-attaches if the node is replaced), returns on scroll up; click-to-open still verified desktop and mobile; not published.
