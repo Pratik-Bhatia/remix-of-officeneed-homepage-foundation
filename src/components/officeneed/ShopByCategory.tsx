@@ -36,12 +36,14 @@ export function ShopByCategory() {
           {primaryNavCategories.map((cat) => {
             const target = navCategoryTarget(cat.id);
             const label = getLiveNavLabel(collections, cat.label);
-            // The edge-to-edge SVG previously occupied 74% of the image well
-            // after 13% padding on each side. Render it at 82% of that size
-            // (60.68% of the well), centered without resizing the card.
+            // The owner-supplied brand mark now ships with its own internal
+            // margin: measured against a 600px canvas, the mark (ring + ®)
+            // spans 504px, i.e. 84% of the SVG. The previous edge-to-edge file
+            // was rendered at 60.68% of the well, so keep the mark at that same
+            // visual size with 60.68% / 0.84 = 72.17% of the well.
             const isExclusive = cat.id === "officeneed-exclusive";
             // The Exclusive card always renders the owner-supplied brand mark
-            // (Logo_only.svg, CDN-hosted) instead of the Shopify-hosted
+            // (180x180.svg, CDN-hosted) instead of the Shopify-hosted
             // collection image.
             const image = isExclusive ? exclusiveLogo.url : getImage(target.collection);
 
@@ -66,7 +68,7 @@ export function ShopByCategory() {
                         // contain (never cover): the logo's aspect ratio must
                         // hold and nothing may crop inside the rounded well.
                         isExclusive
-                          ? "absolute inset-0 m-auto h-[60.68%] w-[60.68%]"
+                          ? "absolute inset-0 m-auto h-[72.17%] w-[72.17%]"
                           : "h-full w-full p-8 sm:p-10",
                       )}
                     />

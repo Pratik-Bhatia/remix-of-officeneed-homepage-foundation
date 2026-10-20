@@ -448,14 +448,15 @@ function ProductsPage() {
                                 alt={liveTitle}
                                 className={cn(
                                   "w-full h-full object-contain mix-blend-multiply dark:mix-blend-normal",
-                                  // Officeneed Exclusive's logo SVG is drawn
-                                  // edge-to-edge in its own viewBox (no
-                                  // internal margin), so without its own
-                                  // padding the circular outline touches this
-                                  // icon box on every side and reads as cut
-                                  // off. Small percentage padding, this icon
-                                  // only -- all other category icons unchanged.
-                                  node.handle === TAXONOMY["Officeneed Exclusive"].handle && "p-[12%]",
+                                  // Officeneed Exclusive's brand mark ships with
+                                  // its own internal margin (the mark spans 84%
+                                  // of its SVG canvas). The icon box previously
+                                  // used 12% padding against an edge-to-edge
+                                  // file, so 12% -> 4.8% keeps the mark at the
+                                  // same visual size here. Small percentage
+                                  // padding, this icon only -- all other
+                                  // category icons unchanged.
+                                  node.handle === TAXONOMY["Officeneed Exclusive"].handle && "p-[4.8%]",
                                 )}
                               />
                             ) : (
