@@ -196,7 +196,7 @@ function ProductsPage() {
   /** Returns the Shopify-hosted image URL for a collection, or null if not yet loaded / unavailable. */
   const getCollectionImage = (handle: string): string | null => {
     // Officeneed Exclusive always renders the owner-supplied brand mark
-    // (Logo_only.svg, CDN-hosted) instead of the Shopify-hosted collection SVG.
+    // (180x180.svg, CDN-hosted) instead of the Shopify-hosted collection SVG.
     if (handle === TAXONOMY["Officeneed Exclusive"].handle) return exclusiveLogo.url;
     const shopifyCol = collections.find(c => c.handle === handle);
     if (handle === "consumables") {
