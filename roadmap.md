@@ -10,3 +10,4 @@
 - [x] Footer UPI badge: replaced with the uploaded `UPI-Logo.png`, white background removed, grey lettering lightened for the dark footer bar.
 - [x] Footer RuPay badge: removed from the payment row at the user's request (file kept in `src/assets` in case it is wanted again).
 - [x] Needle launcher: fades out while the footer is on screen (IntersectionObserver on `<footer>`, re-attaches if the node is replaced), returns on scroll up; click-to-open still verified desktop and mobile; not published.
+- [x] Officeneed Exclusive brand mark: replaced with the user's new `180x180.svg` (CDN asset pointer updated); its built-in 84% canvas margin compensated in `ShopByCategory.tsx` (72.17% of the well) and `products.index.tsx` (padding 12% -> 4.8%) so the mark renders at the same visual size; verified unclipped with the ® symbol on desktop/tablet/mobile; not published.

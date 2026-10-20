@@ -196,7 +196,7 @@ function ProductsPage() {
   /** Returns the Shopify-hosted image URL for a collection, or null if not yet loaded / unavailable. */
   const getCollectionImage = (handle: string): string | null => {
     // Officeneed Exclusive always renders the owner-supplied brand mark
-    // (Logo_only.svg, CDN-hosted) instead of the Shopify-hosted collection SVG.
+    // (180x180.svg, CDN-hosted) instead of the Shopify-hosted collection SVG.
     if (handle === TAXONOMY["Officeneed Exclusive"].handle) return exclusiveLogo.url;
     const shopifyCol = collections.find(c => c.handle === handle);
     if (handle === "consumables") {
@@ -448,14 +448,15 @@ function ProductsPage() {
                                 alt={liveTitle}
                                 className={cn(
                                   "w-full h-full object-contain mix-blend-multiply dark:mix-blend-normal",
-                                  // Officeneed Exclusive's logo SVG is drawn
-                                  // edge-to-edge in its own viewBox (no
-                                  // internal margin), so without its own
-                                  // padding the circular outline touches this
-                                  // icon box on every side and reads as cut
-                                  // off. Small percentage padding, this icon
-                                  // only -- all other category icons unchanged.
-                                  node.handle === TAXONOMY["Officeneed Exclusive"].handle && "p-[12%]",
+                                  // Officeneed Exclusive's brand mark ships with
+                                  // its own internal margin (the mark spans 84%
+                                  // of its SVG canvas). The icon box previously
+                                  // used 12% padding against an edge-to-edge
+                                  // file, so 12% -> 4.8% keeps the mark at the
+                                  // same visual size here. Small percentage
+                                  // padding, this icon only -- all other
+                                  // category icons unchanged.
+                                  node.handle === TAXONOMY["Officeneed Exclusive"].handle && "p-[4.8%]",
                                 )}
                               />
                             ) : (
