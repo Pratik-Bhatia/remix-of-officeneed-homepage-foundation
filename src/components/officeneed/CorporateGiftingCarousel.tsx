@@ -17,11 +17,40 @@ export const CORPORATE_GIFT_SET_HANDLES = [
   "premium-6-in-1-executive-gift-set-with-16gb-pendrive",
 ] as const;
 
+/** Matches a multi-item gift set by name (mirrors shopify-overlay.ts's
+ * Gift Sets rule) -- used together with the resolved "Gift Sets"
+ * subcategory so a set whose collection mapping is missing still shows. */
+const GIFT_SET_NAME = /gift\s*sets?|hamper|bundle/i;
+
+/** Same cap as the Bestsellers row -- enough to fill the carousel on wide
+ * screens without dumping the whole category into the homepage. */
+const CORPORATE_GIFT_LIMIT = 12;
+
+/**
+ * The curated sets above first (in display order, missing/unpublished ones
+ * skipped), then every other real Corporate Gifting gift set from the live
+ * catalogue, so the row fills naturally instead of showing only the
+ * handful of curated handles. No product appears twice; nothing is
+ * invented when the store has fewer sets than the limit.
+ */
 export function selectCorporateGifts(products: Product[]): Product[] {
-  return CORPORATE_GIFT_SET_HANDLES.flatMap((handle) => {
-    const p = products.find((x) => x.slug === handle);
-    return p && inBestsellerCategory(p, "Corporate Gifting") ? [p] : [];
-  });
+  const isGiftSet = (p: Product) =>
+    p.subcategories.includes("Gift Sets") || GIFT_SET_NAME.test(p.name);
+
+  const seen = new Set<string>();
+  const out: Product[] = [];
+  const push = (p: Product | undefined) => {
+    if (!p || seen.has(p.slug) || out.length >= CORPORATE_GIFT_LIMIT) return;
+    if (!inBestsellerCategory(p, "Corporate Gifting") || !isGiftSet(p)) return;
+    seen.add(p.slug);
+    out.push(p);
+  };
+
+  for (const handle of CORPORATE_GIFT_SET_HANDLES) {
+    push(products.find((x) => x.slug === handle));
+  }
+  for (const p of products) push(p);
+  return out;
 }
 
 export function CorporateGiftingCarousel() {
