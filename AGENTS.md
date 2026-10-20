@@ -8,3 +8,5 @@
 > Commits you push to the connected branch sync back to Lovable and show up in
 > the editor, so keep the branch in a working state.
 <!-- LOVABLE:END -->
+
+- Google Analytics uses the public connector measurement ID in a root-mounted browser tracker; initialize once and send pathname-only page views on navigation to avoid query-string data exposure and duplicate initial events.
