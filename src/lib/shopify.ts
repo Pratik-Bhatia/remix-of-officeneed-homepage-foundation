@@ -8,6 +8,7 @@
 import { toast } from "sonner";
 import { proxyStorefrontRequest } from "@/lib/shopify.functions";
 import { REQUIRED_METAFIELD_IDENTIFIERS } from "@/lib/product-details-schema";
+import { FRAGRANCE_METAFIELD_IDENTIFIERS } from "@/lib/fragrance-information";
 
 // Kept in sync with src/lib/shopify.functions.ts's SHOPIFY_API_VERSION --
 // see that file's comment for the live verification behind this value.
@@ -137,7 +138,7 @@ export const STOREFRONT_QUERY = `
 // Only the single-product PDP query fetches metafields -- the bulk catalogue
 // query (STOREFRONT_QUERY, used for the /products grid) deliberately doesn't,
 // since Product Details is only ever rendered on the PDP.
-const METAFIELD_IDENTIFIERS_GQL = REQUIRED_METAFIELD_IDENTIFIERS
+const METAFIELD_IDENTIFIERS_GQL = [...REQUIRED_METAFIELD_IDENTIFIERS, ...FRAGRANCE_METAFIELD_IDENTIFIERS]
   .map((m) => `{namespace: "${m.namespace}", key: "${m.key}"}`)
   .join(", ");
 

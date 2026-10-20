@@ -20,6 +20,7 @@ import { deriveFilterAttributes } from "@/lib/filters";
 import { buildProductSpecifications, hasStructuredSchema } from "@/lib/product-details-schema";
 import { getDevFallbackMetafieldValue } from "@/lib/product-details-dev-fallback";
 import { deriveKeyFeatures } from "@/lib/key-features";
+import { resolveFragranceInformation } from "@/lib/fragrance-information";
 
 export type ShopifyIndex = Map<string, ShopifyProductNode>;
 
@@ -422,7 +423,11 @@ export function shopifyNodeToProduct(node: ShopifyProductNode): Product {
     : `${node.title}  available through Officeneed.`;
 
   const hasSchema = hasStructuredSchema(mainCategory);
-  const extracted = extractStructuredData(node.descriptionHtml || "", hasSchema);
+  // Fragrance uses DOM/Markdown extraction rather than the legacy header splitter,
+  // which missed Markdown and placed notes in optional raw custom sections.
+  const extracted = category === "Fragrance Gifting"
+    ? resolveFragranceInformation({ description, descriptionHtml: node.descriptionHtml }, metafieldLookup(node))
+    : extractStructuredData(node.descriptionHtml || "", hasSchema);
   const specifications = buildProductSpecifications(mainCategory, metafieldLookup(node));
 
   // Once Product Details is a real, structured schema for this category,

@@ -1,11 +1,18 @@
 import { Plus, Minus } from "lucide-react";
 import type { Product } from "@/lib/products";
+import { resolveFragranceInformation } from "@/lib/fragrance-information";
 
-export function ProductInformation({ product }: { product: Product }) {
+export function ProductInformation({ product: sourceProduct }: { product: Product }) {
+  const isFragrance = sourceProduct.category === "Fragrance Gifting";
+  // Derive on every current-product render, including static-product fallback;
+  // no local parsed state can leak across navigation or source updates.
+  const product = isFragrance
+    ? { ...sourceProduct, ...resolveFragranceInformation(sourceProduct) }
+    : sourceProduct;
   const sections: { title: string; content: React.ReactNode }[] = [];
 
   // 1. DESCRIPTION
-  if (product.descriptionHtml || product.description) {
+  if (isFragrance || product.descriptionHtml || product.description) {
     sections.push({
       title: "DESCRIPTION",
       content: (
@@ -18,22 +25,25 @@ export function ProductInformation({ product }: { product: Product }) {
         // touching the actual HTML content or any other element.
         <div
           className="prose prose-sm max-w-none text-muted-foreground [&_strong]:font-normal [&_b]:font-normal"
-          dangerouslySetInnerHTML={{ __html: product.descriptionHtml || `<p>${product.description}</p>` }}
+          dangerouslySetInnerHTML={{ __html: isFragrance
+            ? product.descriptionHtml || "<p>Description is not available for this fragrance.</p>"
+            : product.descriptionHtml || `<p>${product.description}</p>` }}
         />
       ),
     });
   }
 
   // 2. PRODUCT DETAILS & SPECIFICATIONS
-  if (product.specifications && product.specifications.length > 0) {
+  if (isFragrance || (product.specifications && product.specifications.length > 0)) {
     sections.push({
       title: "PRODUCT DETAILS",
       content: (
         <div className="grid grid-cols-1 gap-y-3 text-[13px]">
-          {product.specifications.map(spec => (
-            <div key={spec.label} className="flex justify-between border-b border-border/40 pb-2">
+          {!product.specifications?.length && <p className="text-muted-foreground">Product details are not available for this fragrance.</p>}
+          {product.specifications?.map(spec => (
+            <div key={spec.label} className="flex justify-between gap-4 border-b border-border/40 pb-2">
               <span className="text-foreground/80">{spec.label}</span>
-              <span className="font-medium text-foreground text-right">{spec.value}</span>
+              <span className="min-w-0 break-words font-medium text-foreground text-right">{spec.value}</span>
             </div>
           ))}
         </div>
@@ -42,27 +52,29 @@ export function ProductInformation({ product }: { product: Product }) {
   }
 
   // 3. FRAGRANCE NOTES
-  if (product.fragranceNotes) {
+  if (isFragrance || product.fragranceNotes) {
     sections.push({
       title: "FRAGRANCE NOTES",
       content: (
         <div className="grid grid-cols-1 gap-y-3 text-[13px]">
-          {product.fragranceNotes.top && (
-            <div className="flex justify-between border-b border-border/40 pb-2">
+          {!product.fragranceNotes?.top && !product.fragranceNotes?.heart && !product.fragranceNotes?.base &&
+            <p className="text-muted-foreground">Fragrance notes are not available for this fragrance.</p>}
+          {product.fragranceNotes?.top && (
+            <div className="flex justify-between gap-4 border-b border-border/40 pb-2">
               <span className="text-foreground/80">Top Notes</span>
-              <span className="font-medium text-foreground text-right">{product.fragranceNotes.top}</span>
+              <span className="min-w-0 break-words font-medium text-foreground text-right">{product.fragranceNotes.top}</span>
             </div>
           )}
-          {product.fragranceNotes.heart && (
-            <div className="flex justify-between border-b border-border/40 pb-2">
+          {product.fragranceNotes?.heart && (
+            <div className="flex justify-between gap-4 border-b border-border/40 pb-2">
               <span className="text-foreground/80">Heart Notes</span>
-              <span className="font-medium text-foreground text-right">{product.fragranceNotes.heart}</span>
+              <span className="min-w-0 break-words font-medium text-foreground text-right">{product.fragranceNotes.heart}</span>
             </div>
           )}
-          {product.fragranceNotes.base && (
-            <div className="flex justify-between border-b border-border/40 pb-2">
+          {product.fragranceNotes?.base && (
+            <div className="flex justify-between gap-4 border-b border-border/40 pb-2">
               <span className="text-foreground/80">Base Notes</span>
-              <span className="font-medium text-foreground text-right">{product.fragranceNotes.base}</span>
+              <span className="min-w-0 break-words font-medium text-foreground text-right">{product.fragranceNotes.base}</span>
             </div>
           )}
         </div>

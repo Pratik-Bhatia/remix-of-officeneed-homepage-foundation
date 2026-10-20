@@ -99,3 +99,19 @@ test("a product with no recognized header phrases at all is completely unaffecte
   assert.equal(product.customSections, undefined);
   assert.equal(product.descriptionHtml, html);
 });
+
+test("fragrance conversion queries and resolves dedicated fields without raw duplicate accordions", async () => {
+  const { PRODUCT_BY_HANDLE_QUERY } = await import("@/lib/shopify");
+  assert.match(PRODUCT_BY_HANDLE_QUERY, /namespace: "product_fragrance", key: "top_notes"/);
+  const product = shopifyNodeToProduct(baseNode({
+    collections: { edges: [{ node: { handle: "perfumes" } }] },
+    descriptionHtml: "<p>Intro.</p><h3>Product Details</h3><p>Origin: France</p><h3>Fragrance Notes</h3><p>Top Notes: Raspberry</p><p>Best For: Evenings.</p>",
+    metafields: [{ namespace: "product_fragrance", key: "origin", value: "Italy" }, { namespace: "product_fragrance", key: "top_notes", value: "Rose" }],
+  }));
+  assert.equal(product.category, "Fragrance Gifting");
+  assert.deepEqual(product.specifications, [{ label: "Origin", value: "Italy" }]);
+  assert.equal(product.fragranceNotes.top, "Rose");
+  assert.equal(product.customSections, undefined);
+  assert.doesNotMatch(product.descriptionHtml, /France|Raspberry/);
+  assert.match(product.descriptionHtml, /Best For: Evenings/);
+});
