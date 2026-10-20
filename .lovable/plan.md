@@ -2,6 +2,15 @@
 
 No code, URL, redirect, database, Shopify or deployment changes. The output is a written report only.
 
+## Launch-safety rules
+
+- Nothing gets modified: files, dependencies, environment variables, records, Shopify, DNS, redirects, payment, email or deployment settings.
+- The access-code cover page is not removed, bypassed or changed.
+- Account switching, pending B2B approval, sign-in, quantity rules, pricing, cart and checkout are not touched.
+- `/products?collection=perfumes` is treated as an existing URL to investigate. It is not assumed to be a bug.
+- Each proposed URL change lists its benefits, risks, backward compatibility and whether it needs redirects. None of them get implemented.
+- Findings are labelled as confirmed defect, recommendation or unverified assumption.
+
 ## Steps
 
 1. **Route inventory from code** — read every file in `src/routes` (including `api/` server routes, `admin/*`, `account.*`, `shop.*`, `products.*`, `blog.*`), the root not-found handling, and route guards. Record path, component, access level (public / signed-in / admin), and search params (`validateSearch`).
