@@ -272,7 +272,7 @@ export const submitEnquiry = createServerFn({ method: "POST" })
     let customerEmailSent = skipCustomerEmail;
     let internalEmailSent = skipInternalEmail;
 
-    if (pdfBuffer && !skipCustomerEmail) {
+    if (!skipCustomerEmail) {
       customerEmailSent = await sendCustomerConfirmationEmail({
         email: data.email,
         name: data.name,
@@ -284,7 +284,7 @@ export const submitEnquiry = createServerFn({ method: "POST" })
       });
     }
 
-    if (pdfBuffer && !skipInternalEmail) {
+    if (!skipInternalEmail) {
       const subtotal = (data.selectedProducts || []).reduce((acc, p) => acc + (p.priceNum * p.quantity), 0);
 
       internalEmailSent = await sendInternalNotificationEmail({
@@ -314,7 +314,7 @@ export const submitEnquiry = createServerFn({ method: "POST" })
     // send (via skip) as having been attempted too, so a retry whose PDF
     // generation fails this time doesn't wrongly report "not_attempted"
     // when one of the two emails was already genuinely sent earlier.
-    const pdfAttempted = pdfBuffer !== null || skipCustomerEmail || skipInternalEmail;
+    const pdfAttempted = true; // emails are now always attempted, with or without the PDF
     const emailStatus = computeEnquiryEmailStatus(customerEmailSent, internalEmailSent, pdfAttempted);
     if (enquiryRowId) {
       try {

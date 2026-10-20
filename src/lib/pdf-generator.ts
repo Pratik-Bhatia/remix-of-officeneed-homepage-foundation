@@ -639,7 +639,10 @@ export async function generateEnquiryPDF(data: EnquiryPDFData): Promise<Buffer> 
       }
     });
 
-    currentY = (doc as any).lastAutoTable.finalY + 10;
+    // lastAutoTable can be missing in some runtimes; fall back to the
+    // cursor captured in didDrawPage.
+    const tableEnd = (doc as any).lastAutoTable?.finalY;
+    currentY = (typeof tableEnd === "number" ? tableEnd : currentY) + 10;
   } else {
     doc.setFontSize(14);
     doc.setFont("Roboto", "bold");
@@ -651,8 +654,9 @@ export async function generateEnquiryPDF(data: EnquiryPDFData): Promise<Buffer> 
     currentY += 15;
   }
 
-  // @ts-expect-error autoTable adds lastAutoTable property
-  let finalY = doc.lastAutoTable.finalY + 10;
+  // Previously read doc.lastAutoTable.finalY here, which crashed whenever
+  // no products table was drawn (Needle enquiries without products).
+  let finalY = currentY;
   
   // Pricing Summary
   if (finalY > 250) {
