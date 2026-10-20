@@ -439,7 +439,21 @@ function ProductsPage() {
                             {collectionsLoading ? (
                               <div className="w-full h-full rounded-xl bg-muted animate-pulse" aria-hidden />
                             ) : getCollectionImage(node.handle || "") ? (
-                              <img src={getCollectionImage(node.handle || "")!} alt={liveTitle} className="w-full h-full object-contain mix-blend-multiply dark:mix-blend-normal" />
+                              <img
+                                src={getCollectionImage(node.handle || "")!}
+                                alt={liveTitle}
+                                className={cn(
+                                  "w-full h-full object-contain mix-blend-multiply dark:mix-blend-normal",
+                                  // Officeneed Exclusive's logo SVG is drawn
+                                  // edge-to-edge in its own viewBox (no
+                                  // internal margin), so without its own
+                                  // padding the circular outline touches this
+                                  // icon box on every side and reads as cut
+                                  // off. Small percentage padding, this icon
+                                  // only -- all other category icons unchanged.
+                                  node.handle === TAXONOMY["Officeneed Exclusive"].handle && "p-[12%]",
+                                )}
+                              />
                             ) : (
                               <div className="w-full h-full rounded-xl bg-muted/50" aria-hidden />
                             )}

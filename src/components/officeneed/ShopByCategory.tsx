@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { ArrowRight } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { primaryNavCategories, navCategoryTarget, getLiveNavLabel } from "@/lib/navigation";
 import { useShopifyCollections } from "@/lib/shopify-overlay";
 
@@ -35,6 +36,15 @@ export function ShopByCategory() {
             const target = navCategoryTarget(cat.id);
             const image = getImage(target.collection);
             const label = getLiveNavLabel(collections, cat.label);
+            // The Officeneed Exclusive collection logo (Untitled-1.svg) is
+            // drawn edge-to-edge inside its own viewBox -- zero internal
+            // margin around the circular outline and (R) mark. Fixed-px
+            // padding therefore produced breathing room that swung with the
+            // card size (10.7% of the card on 2-col tablet vs ~19-21% on
+            // desktop/mobile). Percentage padding keeps it inside the
+            // requested 10-15% band at every breakpoint; every other
+            // category image keeps the original p-8/sm:p-10 treatment.
+            const isExclusive = cat.id === "officeneed-exclusive";
 
             return (
               <Link
@@ -52,7 +62,12 @@ export function ShopByCategory() {
                       alt={label}
                       loading="lazy"
                       decoding="async"
-                      className="h-full w-full object-contain p-8 transition-transform duration-500 ease-out group-hover:scale-[1.04] sm:p-10"
+                      className={cn(
+                        "h-full w-full object-contain transition-transform duration-500 ease-out group-hover:scale-[1.04]",
+                        // contain (never cover): the logo's aspect ratio must
+                        // hold and nothing may crop inside the rounded well.
+                        isExclusive ? "p-[13%]" : "p-8 sm:p-10",
+                      )}
                     />
                   ) : (
                     <div className="h-full w-full bg-white" aria-hidden />
