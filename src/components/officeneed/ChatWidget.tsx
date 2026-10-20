@@ -287,6 +287,37 @@ export function ChatWidget() {
     return () => window.removeEventListener("officeneed:customizer-toggle", onCustomizerToggle);
   }, []);
 
+  // Fourth independent source: the footer's own content (contact details,
+  // payment badges) occupies this same bottom-right corner once the shopper
+  // reaches the end of the page, so the launcher fades out while the footer
+  // is on screen and returns as soon as they scroll back up. The footer is
+  // rendered by a sibling component, hence the DOM lookup here rather than an
+  // event like the three sources above.
+  const [footerVisible, setFooterVisible] = useState(false);
+  useEffect(() => {
+    let observer: IntersectionObserver | null = null;
+    let frame = 0;
+    let tries = 0;
+    const attach = () => {
+      const footer = document.querySelector("footer");
+      if (!footer) {
+        if (++tries < 30) frame = requestAnimationFrame(attach);
+        return;
+      }
+      observer = new IntersectionObserver(
+        (entries) => setFooterVisible(entries.some((entry) => entry.isIntersecting)),
+        { threshold: 0 },
+      );
+      observer.observe(footer);
+    };
+    attach();
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+      observer?.disconnect();
+    };
+  }, []);
+
+
   // Kick off (or re-seed) the conversation -- generic by default, or
   // context-aware based on the shopper's current page. Runs whenever the
   // widget opens while `!hasAnswered`, i.e. the shopper hasn't yet given a
