@@ -182,9 +182,11 @@ export function deriveFilterAttributes(
   }
 
   if (mainCategory === "Computer Peripherals") {
-    const tags = node.tags ?? [];
-    attrs["connectivity"] = tags.filter((t) => CONNECTIVITY_TAGS.includes(t.toLowerCase()));
-    attrs["type"] = tags.filter((t) => !CONNECTIVITY_TAGS.includes(t.toLowerCase()));
+    // Normalised (trim + collapse whitespace + lowercase) and de-duplicated so
+    // merchant tags like "Mouse" / "mouse " / "MOUSE" collapse into one option.
+    const tags = uniq((node.tags ?? []).map(normalizeFilterValue).filter(Boolean));
+    attrs["connectivity"] = tags.filter((t) => CONNECTIVITY_TAGS.includes(t));
+    attrs["type"] = tags.filter((t) => !CONNECTIVITY_TAGS.includes(t));
   }
 
   return attrs;
@@ -200,8 +202,40 @@ function labelForValue(mainCategory: MainCategory, kind: string, value: string):
   if (kind === "volume") {
     return value.replace(/ml$/i, " ml");
   }
-  // scentFamily (already clean words) and Computer Peripherals type/connectivity (raw merchant tags).
+  if (mainCategory === "Computer Peripherals" && (kind === "type" || kind === "connectivity")) {
+    return value.replace(/\b\w/g, (c) => c.toUpperCase());
+  }
   return value;
+}
+
+/** Canonical comparable form of a filter value: trimmed, single-spaced, lowercase. */
+export function normalizeFilterValue(v: string): string {
+  return v.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function uniq<T>(xs: T[]): T[] {
+  return [...new Set(xs)];
+}
+
+/**
+ * Filter combination rule: groups combine with AND, options within one group
+ * combine with OR. A product missing a group's attribute never matches that
+ * group. Price is tested against the supplied buckets.
+ */
+export function productMatchesFilters(
+  product: Pick<Product, "priceAmount" | "filterAttributes">,
+  active: Record<string, string[]>,
+  priceBuckets: PriceBucket[] = [],
+): boolean {
+  return Object.entries(active).every(([groupId, required]) => {
+    if (!required.length) return true;
+    if (groupId === "price") {
+      if (typeof product.priceAmount !== "number") return false;
+      return required.some((v) => priceBuckets.find((b) => b.value === v)?.test(product.priceAmount!));
+    }
+    const have = new Set((product.filterAttributes?.[groupId] ?? []).map(normalizeFilterValue));
+    return required.some((v) => have.has(normalizeFilterValue(v)));
+  });
 }
 
 /**
