@@ -42,9 +42,9 @@ function Logo({ className }: { className?: string }) {
       <img
         src={logoUrl}
         alt="Officeneed — Expect More"
-        width={150}
-        height={37.5}
-        className={cn("block h-auto w-[120px] object-contain md:w-[135px] xl:w-[150px]", className)}
+        width={195}
+        height={48.75}
+        className={cn("block h-auto w-[156px] object-contain md:w-[175.5px] xl:w-[195px]", className)}
       />
     </Link>
   );
