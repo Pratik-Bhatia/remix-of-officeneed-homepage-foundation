@@ -5,7 +5,7 @@ declare global {
   }
 }
 
-const measurementId = (import.meta.env.VITE_LOVABLE_CONNECTOR_GOOGLE_ANALYTICS_API_KEY ?? "").trim();
+const measurementId = (import.meta.env['VITE_LOVABLE_CONNECTOR_GOOGLE_ANALYTICS_API_KEY'] ?? "").trim();
 let initialized = false;
 let lastPath: string | undefined;
 
@@ -24,7 +24,7 @@ export function trackGooglePageView(path: string) {
     if (!document.querySelector('script[data-officeneed-google-analytics]')) {
       const script = document.createElement("script");
       script.async = true;
-      script.dataset.officeneedGoogleAnalytics = "true";
+      script.dataset['officeneedGoogleAnalytics'] = "true";
       script.src = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(measurementId)}`;
       document.head.appendChild(script);
     }
