@@ -48,7 +48,7 @@ export function parseFragranceDescription(source: string) {
   const html = marked.parse(source, { async: false, breaks: true });
   const document = parseDocument(html);
   const values = new Map<string, string>();
-  type Node = (typeof document.children)[number];
+  type Node = typeof document | (typeof document.children)[number];
 
   function readRow(node: Node): boolean {
     const text = getText(node).replace(/\*\*|__/g, "").trim();
@@ -114,7 +114,7 @@ export function resolveFragranceInformation(
   product: Pick<Product, "description" | "descriptionHtml" | "specifications" | "fragranceNotes" | "customSections">,
   getMetafieldValue: (namespace: string, key: string) => string | undefined = () => undefined,
 ) {
-  const parsed = parseFragranceDescription(product.descriptionHtml?.trim() || product.description);
+  const parsed = parseFragranceDescription(product.descriptionHtml ?? product.description);
   const structured = new Map<string, string>();
   for (const spec of product.specifications ?? []) {
     const field = fields.find((item) => item.aliases.some((alias) => alias.toLowerCase() === spec.label.trim().toLowerCase()));
@@ -145,15 +145,20 @@ export function resolveFragranceInformation(
   specifications.push(...(product.specifications ?? []).filter((spec) =>
     !fields.some((field) => field.aliases.some((alias) => alias.toLowerCase() === spec.label.trim().toLowerCase())),
   ));
+  const retainedSections: NonNullable<Product["customSections"]> = [];
+  let descriptionHtml = parsed.descriptionHtml;
+  for (const section of product.customSections ?? []) {
+    if (!sectionHeading.test(section.title)) {
+      retainedSections.push(section);
+      continue;
+    }
+    const remaining = parseFragranceDescription(section.contentHtml).descriptionHtml;
+    if (plain(remaining)) descriptionHtml += remaining;
+  }
   return {
-    descriptionHtml: parsed.descriptionHtml,
+    descriptionHtml,
     specifications,
     fragranceNotes: { top: value("top_notes"), heart: value("heart_notes"), base: value("base_notes") },
-    customSections: product.customSections?.flatMap((section) => {
-      if (!sectionHeading.test(section.title)) return [section];
-      const remaining = parseFragranceDescription(section.contentHtml).descriptionHtml;
-      // Unrecognized prose (e.g. Overall Character) remains available, never silently discarded.
-      return plain(remaining) ? [{ title: "DESCRIPTION", contentHtml: remaining }] : [];
-    }),
+    customSections: retainedSections.length ? retainedSections : undefined,
   };
 }
