@@ -36,14 +36,9 @@ export function ShopByCategory() {
             const target = navCategoryTarget(cat.id);
             const image = getImage(target.collection);
             const label = getLiveNavLabel(collections, cat.label);
-            // The Officeneed Exclusive collection logo (Untitled-1.svg) is
-            // drawn edge-to-edge inside its own viewBox -- zero internal
-            // margin around the circular outline and (R) mark. Fixed-px
-            // padding therefore produced breathing room that swung with the
-            // card size (10.7% of the card on 2-col tablet vs ~19-21% on
-            // desktop/mobile). Percentage padding keeps it inside the
-            // requested 10-15% band at every breakpoint; every other
-            // category image keeps the original p-8/sm:p-10 treatment.
+            // The edge-to-edge SVG previously occupied 74% of the image well
+            // after 13% padding on each side. Render it at 82% of that size
+            // (60.68% of the well), centered without resizing the card.
             const isExclusive = cat.id === "officeneed-exclusive";
 
             return (
@@ -63,10 +58,12 @@ export function ShopByCategory() {
                       loading="lazy"
                       decoding="async"
                       className={cn(
-                        "h-full w-full object-contain transition-transform duration-500 ease-out group-hover:scale-[1.04]",
+                        "object-contain object-center transition-transform duration-500 ease-out group-hover:scale-[1.04]",
                         // contain (never cover): the logo's aspect ratio must
                         // hold and nothing may crop inside the rounded well.
-                        isExclusive ? "p-[13%]" : "p-8 sm:p-10",
+                        isExclusive
+                          ? "absolute inset-0 m-auto h-[60.68%] w-[60.68%]"
+                          : "h-full w-full p-8 sm:p-10",
                       )}
                     />
                   ) : (
