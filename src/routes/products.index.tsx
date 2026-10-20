@@ -315,7 +315,7 @@ function ProductsPage() {
     return (
       <Accordion type="multiple" value={openFilterSections} onValueChange={setOpenFilterSections} className="border-t border-border">
         {filterGroups.map((group) => {
-          const selectedCount = (activeFilters[group.id] ?? []).filter((v) => group.options.some((o) => o.value === v)).length;
+          const selectedCount = (validActiveFilters[group.id] ?? []).length;
           return (
             <AccordionItem key={group.id} value={group.id} className="border-border">
               <AccordionTrigger className="min-h-12 py-3 text-sm font-medium text-foreground tracking-tight hover:no-underline rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
@@ -329,7 +329,7 @@ function ProductsPage() {
                   {group.options.map((option) => (
                     <label key={option.value} className="flex items-center gap-3 cursor-pointer group/label">
                       <Checkbox
-                        checked={activeFilters[group.id]?.includes(option.value) ?? false}
+                        checked={validActiveFilters[group.id]?.includes(option.value) ?? false}
                         onCheckedChange={() => toggleFilter(group.id, option.value)}
                         className="border-muted-foreground/30 data-[state=checked]:border-primary transition-colors"
                       />
