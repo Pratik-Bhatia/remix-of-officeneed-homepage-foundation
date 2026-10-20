@@ -4,7 +4,7 @@ import { Search, SlidersHorizontal, PackageSearch } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { buildFilterGroups, computePriceBuckets, type FilterGroup } from "@/lib/filters";
+import { buildFilterGroups, computePriceBuckets, productMatchesFilters, normalizeFilterValue, type FilterGroup } from "@/lib/filters";
 import { searchProducts, getSearchSuggestion } from "@/lib/search";
 import { Navbar } from "@/components/officeneed/Navbar";
 import { Footer } from "@/components/officeneed/Footer";
@@ -254,12 +254,16 @@ function ProductsPage() {
   // and incorrectly filtering out every product (e.g. a leftover Fragrance
   // "Scent Family" pick that would otherwise never match a Corporate item).
   const validActiveFilters = useMemo(() => {
-    const validValuesByKind = new Map(filterGroups.map((g) => [g.id, new Set(g.options.map((o) => o.value))]));
+    // Old/shared links may carry differently-cased values ("Mouse"); map them
+    // onto the canonical option value.
+    const validValuesByKind = new Map(
+      filterGroups.map((g) => [g.id, new Map(g.options.map((o) => [normalizeFilterValue(o.value), o.value]))]),
+    );
     const result: Record<string, string[]> = {};
     for (const [kind, values] of Object.entries(activeFilters)) {
       const validSet = validValuesByKind.get(kind);
       if (!validSet) continue;
-      const kept = values.filter((v) => validSet.has(v));
+      const kept = [...new Set(values.map((v) => validSet.get(normalizeFilterValue(v))).filter((v): v is string => !!v))];
       if (kept.length) result[kind] = kept;
     }
     return result;
@@ -285,17 +289,7 @@ function ProductsPage() {
 
   const visible = useMemo(() => {
     const filtered = searched.filter((p) => {
-      const passesFilters = Object.entries(validActiveFilters).every(([groupId, requiredValues]) => {
-        if (!requiredValues.length) return true;
-        if (groupId === "price") {
-          if (typeof p.priceAmount !== "number") return false;
-          return requiredValues.some((v) => priceBuckets.find((b) => b.value === v)?.test(p.priceAmount!));
-        }
-        const productValues = p.filterAttributes?.[groupId] || [];
-        return requiredValues.some((v) => productValues.includes(v));
-      });
-
-      return passesFilters;
+      return productMatchesFilters(p, validActiveFilters, priceBuckets);
     });
     return sortProducts(filtered, sort);
   }, [searched, sort, validActiveFilters, priceBuckets]);
@@ -321,7 +315,7 @@ function ProductsPage() {
     return (
       <Accordion type="multiple" value={openFilterSections} onValueChange={setOpenFilterSections} className="border-t border-border">
         {filterGroups.map((group) => {
-          const selectedCount = (activeFilters[group.id] ?? []).filter((v) => group.options.some((o) => o.value === v)).length;
+          const selectedCount = (validActiveFilters[group.id] ?? []).length;
           return (
             <AccordionItem key={group.id} value={group.id} className="border-border">
               <AccordionTrigger className="min-h-12 py-3 text-sm font-medium text-foreground tracking-tight hover:no-underline rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
@@ -335,7 +329,7 @@ function ProductsPage() {
                   {group.options.map((option) => (
                     <label key={option.value} className="flex items-center gap-3 cursor-pointer group/label">
                       <Checkbox
-                        checked={activeFilters[group.id]?.includes(option.value) ?? false}
+                        checked={validActiveFilters[group.id]?.includes(option.value) ?? false}
                         onCheckedChange={() => toggleFilter(group.id, option.value)}
                         className="border-muted-foreground/30 data-[state=checked]:border-primary transition-colors"
                       />
