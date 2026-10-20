@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { ArrowRight } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { primaryNavCategories, navCategoryTarget, getLiveNavLabel } from "@/lib/navigation";
 import { useShopifyCollections } from "@/lib/shopify-overlay";
 
