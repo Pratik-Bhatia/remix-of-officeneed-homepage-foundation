@@ -7,6 +7,7 @@ import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from "@/co
 import { buildFilterGroups, computePriceBuckets, productMatchesFilters, normalizeFilterValue, type FilterGroup } from "@/lib/filters";
 import { searchProducts, getSearchSuggestion } from "@/lib/search";
 import { Navbar } from "@/components/officeneed/Navbar";
+import exclusiveLogo from "@/assets/officeneed-exclusive-logo.svg.asset.json";
 import { Footer } from "@/components/officeneed/Footer";
 import { ProductCard } from "@/components/officeneed/ProductCard";
 import { ComingSoonBanner } from "@/components/officeneed/ComingSoonBanner";
