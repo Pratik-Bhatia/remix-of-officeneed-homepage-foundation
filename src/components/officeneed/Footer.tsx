@@ -76,8 +76,7 @@ const socials = [
 
 const paymentMethods = [
   { label: "Visa", asset: visaAsset },
-  // Mastercard's wordmark is black, so it sits on a light chip to stay legible on the dark footer bar.
-  { label: "Mastercard", asset: mastercardAsset, tile: "bg-white/95 p-1" },
+  { label: "Mastercard", asset: mastercardAsset },
   { label: "American Express", asset: amexAsset },
   { label: "UPI", asset: upiAsset },
   { label: "RuPay", asset: rupayAsset },
@@ -397,13 +396,13 @@ export function Footer() {
             </div>
 
             <ul className="flex flex-wrap items-center gap-3">
-              {paymentMethods.map(({ label, asset, tile }) => (
+              {paymentMethods.map(({ label, asset }) => (
                 <li key={label} className="shrink-0">
                   <img
                     src={asset}
                     alt={label}
                     loading="lazy"
-                    className={`h-8 w-auto min-w-[40px] rounded-md border border-background/20 object-contain ${tile ?? ""}`}
+                    className="h-8 w-auto min-w-[40px] rounded-md border border-background/20 object-contain"
                   />
                 </li>
               ))}
