@@ -463,6 +463,51 @@ export type Database = {
         }
         Relationships: []
       }
+      logo_processing_concurrency_slots: {
+        Row: {
+          created_at: string
+          expires_at: string
+          identity_key: string
+          slot_id: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at: string
+          identity_key: string
+          slot_id?: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          identity_key?: string
+          slot_id?: string
+        }
+        Relationships: []
+      }
+      logo_processing_daily_counters: {
+        Row: {
+          count: number
+          day: string
+          scope: string
+          scope_key: string
+          updated_at: string
+        }
+        Insert: {
+          count?: number
+          day: string
+          scope: string
+          scope_key: string
+          updated_at?: string
+        }
+        Update: {
+          count?: number
+          day?: string
+          scope?: string
+          scope_key?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       logo_processing_usage: {
         Row: {
           created_at: string
@@ -730,12 +775,54 @@ export type Database = {
       }
     }
     Functions: {
+      extend_logo_processing_lease: {
+        Args: {
+          p_extension_seconds?: number
+          p_fingerprint: string
+          p_owner_token: string
+        }
+        Returns: boolean
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
           _user_id: string
         }
         Returns: boolean
+      }
+      reclaim_stale_logo_processing_cache: {
+        Args: {
+          p_fingerprint: string
+          p_lease_seconds?: number
+          p_owner_token: string
+        }
+        Returns: boolean
+      }
+      release_logo_processing_concurrency_slot: {
+        Args: { p_slot_id: string }
+        Returns: boolean
+      }
+      reserve_logo_processing_concurrency_slot: {
+        Args: {
+          p_identity_key: string
+          p_lease_seconds?: number
+          p_limit: number
+        }
+        Returns: {
+          reserved: boolean
+          slot_id: string
+        }[]
+      }
+      reserve_logo_processing_daily_quota: {
+        Args: {
+          p_global_daily_limit: number
+          p_identity_key: string
+          p_user_daily_limit: number
+        }
+        Returns: {
+          rejected_scope: string
+          reserved: boolean
+        }[]
       }
     }
     Enums: {

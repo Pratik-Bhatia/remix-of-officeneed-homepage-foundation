@@ -64,6 +64,13 @@
       "when": 1792577579837,
       "tag": "0008_add_logo_processing_safeguards",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1792577624375,
+      "tag": "0009_add_logo_processing_atomic_quota",
+      "breakpoints": true
     }
   ]
 }
