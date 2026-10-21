@@ -71,6 +71,13 @@
       "when": 1792577624375,
       "tag": "0009_add_logo_processing_atomic_quota",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1792577654036,
+      "tag": "0010_revoke_logo_processing_functions_from_clients",
+      "breakpoints": true
     }
   ]
 }
