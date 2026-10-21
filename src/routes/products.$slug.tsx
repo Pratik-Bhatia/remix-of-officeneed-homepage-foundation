@@ -375,6 +375,8 @@ function ProductDetail() {
   const [zoomOpen, setZoomOpen] = useState(false);
   const purchaseSectionRef = useRef<HTMLDivElement>(null);
   const [showStickyBar, setShowStickyBar] = useState(false);
+  const corporateCtaRef = useRef<HTMLDivElement>(null);
+  const [ctaOverlapsWidget, setCtaOverlapsWidget] = useState(false);
   const [reviews, setReviews] = useState<Review[]>([]);
 
   // Wishlist -- same useSaves()/toggleSave() every ProductCard uses, no
@@ -437,22 +439,46 @@ function ProductDetail() {
   }, [slug]);
 
   useEffect(() => {
+    // Same bottom-right corner the floating chat launcher (ChatWidget.tsx,
+    // fixed bottom-6 right-6) always occupies -- a generous proxy box
+    // around its ~56px footprint, not the exact rect, since this only
+    // needs to catch "something is about to sit under it", not pixel-
+    // perfect collision. On most viewports the Corporate Gifting CTA sits
+    // well above this; it's only short-viewport-height desktops/laptops
+    // (confirmed live at 1024x600) where the whole page fits close enough
+    // to the fold that the CTA's "Customize This Product" button lands
+    // inside this corner WITHOUT the shopper ever scrolling -- a case the
+    // existing showStickyBar check below can't catch, since that only
+    // fires once the purchase section scrolls fully out of view.
+    const WIDGET_CORNER_PX = 110;
     const handleScroll = () => {
-      if (!purchaseSectionRef.current) return;
-      // When the bottom of the purchase section scrolls above the viewport, show the sticky bar.
-      const rect = purchaseSectionRef.current.getBoundingClientRect();
-      if (rect.bottom < 0) {
-        setShowStickyBar(true);
+      if (purchaseSectionRef.current) {
+        // When the bottom of the purchase section scrolls above the viewport, show the sticky bar.
+        const rect = purchaseSectionRef.current.getBoundingClientRect();
+        setShowStickyBar(rect.bottom < 0);
+      }
+      if (corporateCtaRef.current) {
+        const ctaRect = corporateCtaRef.current.getBoundingClientRect();
+        const overlapsCorner =
+          ctaRect.right > window.innerWidth - WIDGET_CORNER_PX &&
+          ctaRect.bottom > window.innerHeight - WIDGET_CORNER_PX &&
+          ctaRect.top < window.innerHeight &&
+          ctaRect.left < window.innerWidth;
+        setCtaOverlapsWidget(overlapsCorner);
       } else {
-        setShowStickyBar(false);
+        setCtaOverlapsWidget(false);
       }
     };
-    
+
     window.addEventListener("scroll", handleScroll, { passive: true });
+    window.addEventListener("resize", handleScroll, { passive: true });
     // Trigger once on mount in case the user loads the page already scrolled down
     handleScroll();
-    
-    return () => window.removeEventListener("scroll", handleScroll);
+
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+      window.removeEventListener("resize", handleScroll);
+    };
   }, []);
 
   // The floating chat launcher (ChatWidget.tsx, fixed bottom-6 right-6) has
@@ -467,6 +493,17 @@ function ProductDetail() {
   useEffect(() => {
     window.dispatchEvent(new CustomEvent("officeneed:sticky-bar-toggle", { detail: { open: showStickyBar } }));
   }, [showStickyBar]);
+
+  // Fifth independent source for the launcher (see ChatWidget.tsx): the
+  // Corporate Gifting CTA overlapping the launcher's own corner at short
+  // viewport heights, computed above. A dedicated event, not folded into
+  // officeneed:sticky-bar-toggle, because showStickyBar also drives this
+  // page's OWN sticky bar rendering (line ~1500) -- reusing it here would
+  // incorrectly pop that bar open just because the CTA happens to be near
+  // the launcher.
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent("officeneed:cta-widget-overlap-toggle", { detail: { open: ctaOverlapsWidget } }));
+  }, [ctaOverlapsWidget]);
 
   const addItem = useCartStore((s) => s.addItem);
   const items = useCartStore((s) => s.items);
@@ -924,7 +961,19 @@ function ProductDetail() {
       <main className="w-full overflow-clip">
         <div className="mx-auto w-full max-w-[1600px] px-5 py-8 sm:px-8 sm:py-10 lg:px-12 lg:py-14">
 
-          <div className="product-detail flex flex-col lg:grid lg:grid-cols-[minmax(0,1.15fr)_minmax(min(420px,100%),0.85fr)] gap-8 lg:gap-12 items-start w-full">
+          {/* Column ratio 1.1fr:0.9fr with a 440px floor on the info
+              column (was 1.15fr:0.85fr / 420px floor): at the narrow end
+              of this grid's own range (1024px viewport, the smallest
+              width where it's 2-column at all, since below lg it stacks)
+              the 420px floor resolved to a lopsided 460px gallery / 420px
+              info split and squeezed the "Make It Yours" card's text
+              column hard enough to wrap "Make It Yours" itself onto two
+              lines. 1.1/0.9 + 440px resolves to an even 440/440 split at
+              1024px instead, with only a minor, intentional rebalancing
+              at large widths (e.g. ~977/799 vs ~1021/755 at 1920px) --
+              confirmed live the gallery stays comfortably sized at every
+              tested width. */}
+          <div className="product-detail flex flex-col lg:grid lg:grid-cols-[minmax(0,1.1fr)_minmax(min(440px,100%),0.9fr)] gap-8 lg:gap-12 items-start w-full">
             {/* Gallery Wrapper (Sticky on desktop) */}
             <div className="w-full min-w-0 max-w-full lg:sticky lg:top-[120px]">
               <div className="product-gallery grid grid-cols-1 lg:grid-cols-[80px_minmax(0,1fr)] gap-4 lg:gap-5 w-full items-start">
@@ -1093,18 +1142,38 @@ function ProductDetail() {
                   })()
                 )}
               </p>
-              {/* [text-wrap:wrap] below sm, sm:text-balance at sm+ (was
-                  unconditional text-balance): text-wrap:balance picks the
-                  wrap point that makes ALL lines a similar length, not the
+              {/* text-product-title: one shared, responsive scale for
+                  every PDP regardless of category (see styles.css) -- a
+                  clamp() per band (24-28px below 768px, 26-30px from
+                  768px, 30-34px from 1200px, 32-36px from 1440px) so size
+                  moves fluidly with viewport width inside each band
+                  instead of jumping at the band edge.
+
+                  [overflow-wrap:anywhere] is a safeguard only, for
+                  an exceptionally long word/model-code with no natural
+                  break point -- normal titles still wrap at word
+                  boundaries, nothing is ever clamped or truncated.
+
+                  [text-wrap:wrap] unconditionally (was [text-wrap:wrap]
+                  below sm/md, text-balance above it, at various points in
+                  this file's history): text-wrap:balance picks the wrap
+                  point that makes ALL lines a similar length, not the
                   point that uses the most available width -- confirmed
-                  live (375px, "Premium A5 Notebook Diary & Metal Pen Gift
-                  Set") that it was breaking after "Notebook" with ~100px
-                  of unused width on that line, purely to even out line 2,
-                  while plain greedy wrapping packs "Diary &" onto line 1
-                  too, using the actual available width. No width/max-width
-                  constraint anywhere in this element or its ancestors was
-                  involved. Desktop/tablet keep text-balance unchanged. */}
-              <h1 className="mt-2 text-[20px] sm:text-3xl md:text-4xl lg:text-[40px] font-semibold tracking-tight text-foreground leading-[1.1] [text-wrap:wrap] sm:text-balance">{product.name}</h1>
+                  live at MULTIPLE breakpoints now (375px, "Premium A5
+                  Notebook Diary & Metal Pen Gift Set"; also 820-1440px,
+                  "Premium 2-in-1 Diary & Ball Pen Gift Set -H3106",
+                  breaking after "&" with a wide empty gap on both the
+                  resulting lines) that it sacrifices available width
+                  purely to even out line lengths, which is the opposite
+                  of "use the full available width" -- plain greedy
+                  wrapping packs each line as full as the actual available
+                  width allows instead, which is what every width audit
+                  this component has had confirms the container itself
+                  already provides (h1's own rendered width exactly equals
+                  its parent's at every breakpoint -- no max-width/fixed-
+                  width/reserved-column anywhere in this element or its
+                  ancestors). */}
+              <h1 className="text-product-title mt-2 w-full min-w-0 font-semibold tracking-tight text-foreground [overflow-wrap:anywhere] [text-wrap:wrap]">{product.name}</h1>
               <ProductRatingSummary reviews={reviews} />
               
               <div className="mt-6 flex flex-col space-y-5">
@@ -1268,25 +1337,38 @@ function ProductDetail() {
                 </div>
               </div>
 
-              {/* Corporate Gifting Customizer CTA */}
+              {/* Corporate Gifting Customizer CTA. @container, not sm:/lg:
+                  viewport breakpoints: this card's available width is the
+                  PDP info column's width, which is NOT the viewport width
+                  once the grid above goes 2-column (at 1024px viewport
+                  the info column is only ~440px even though the viewport
+                  itself is well past "sm"/"lg") -- confirmed live this
+                  mismatch was exactly what made the heading itself wrap
+                  to "Make It" / "Yours" at 1024px width under the old
+                  sm:/lg: version, despite that viewport being well above
+                  both breakpoints. Querying the card's own rendered width
+                  instead makes it correct regardless of where it's
+                  embedded. */}
               {product.category === "Corporate Gifting" && (
-                <div className="mt-8 rounded-xl bg-muted/30 border border-border p-5 sm:p-6 flex flex-col items-center text-center sm:items-start sm:text-left sm:flex-row sm:justify-between gap-4 sm:gap-6">
-                  <div>
-                    <h3 className="text-lg font-semibold text-foreground">Make It Yours</h3>
-                    <p className="text-sm text-muted-foreground mt-1 max-w-sm">
-                      Add your company's branding and see how your gift could look before requesting a quote.
-                    </p>
+                <div ref={corporateCtaRef} className="mt-8 @container">
+                  <div className="rounded-xl bg-muted/30 border border-border p-5 @[600px]:p-6 flex flex-col @[400px]:flex-row @[400px]:items-center gap-3 @[400px]:gap-4 @[600px]:gap-5">
+                    <div className="min-w-0 flex-1">
+                      <h3 className="text-lg font-semibold text-foreground">Make It Yours</h3>
+                      <p className="text-sm text-muted-foreground mt-1.5 leading-[1.5]">
+                        Add your company's branding and see how your gift could look before requesting a quote.
+                      </p>
+                    </div>
+                    <Button
+                      size="lg"
+                      className="w-full @[400px]:w-[180px] @[600px]:w-[205px] @[760px]:w-[230px] whitespace-normal text-center leading-tight px-4 py-2.5 min-h-11 shrink-0"
+                      onClick={() => {
+                        setHasOpenedCustomizer(true);
+                        setCustomizerOpen(true);
+                      }}
+                    >
+                      Customize This Product
+                    </Button>
                   </div>
-                  <Button
-                    size="lg"
-                    className="w-full sm:w-auto shrink-0"
-                    onClick={() => {
-                      setHasOpenedCustomizer(true);
-                      setCustomizerOpen(true);
-                    }}
-                  >
-                    Customize This Product
-                  </Button>
                 </div>
               )}
 

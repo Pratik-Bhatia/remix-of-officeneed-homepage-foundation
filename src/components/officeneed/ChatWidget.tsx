@@ -287,6 +287,20 @@ export function ChatWidget() {
     return () => window.removeEventListener("officeneed:customizer-toggle", onCustomizerToggle);
   }, []);
 
+  // Fifth independent source: the PDP's Corporate Gifting CTA (products.
+  // $slug.tsx) can land inside this launcher's own bottom-right corner
+  // at short viewport heights without any scrolling involved -- a case
+  // distinct from stickyBarOpen above (that one only fires once the
+  // purchase section has scrolled fully out of view).
+  const [ctaOverlapOpen, setCtaOverlapOpen] = useState(false);
+  useEffect(() => {
+    const onCtaOverlapToggle = (e: Event) => {
+      setCtaOverlapOpen(Boolean((e as CustomEvent<{ open: boolean }>).detail?.open));
+    };
+    window.addEventListener("officeneed:cta-widget-overlap-toggle", onCtaOverlapToggle);
+    return () => window.removeEventListener("officeneed:cta-widget-overlap-toggle", onCtaOverlapToggle);
+  }, []);
+
   // Fourth independent source: the footer's own content (contact details,
   // payment badges) occupies this same bottom-right corner once the shopper
   // reaches the end of the page, so the launcher fades out while the footer
@@ -871,7 +885,7 @@ export function ChatWidget() {
       {/* Floating Launcher Button -- the single OfficeGPT entry point */}
       <div className={cn(
         "fixed bottom-6 right-6 z-[100] transition-all duration-300",
-        open || navOverlayOpen || stickyBarOpen || customizerOpen || footerVisible ? "opacity-0 pointer-events-none translate-y-4 scale-95" : "opacity-100 translate-y-0 scale-100"
+        open || navOverlayOpen || stickyBarOpen || customizerOpen || footerVisible || ctaOverlapOpen ? "opacity-0 pointer-events-none translate-y-4 scale-95" : "opacity-100 translate-y-0 scale-100"
       )}>
         <button
           onClick={openLauncher}

@@ -269,6 +269,39 @@
   }
 }
 
+/* PDP product title -- one shared scale for every category (Fragrance,
+   Corporate Gifting, etc. all render the same <h1 className="text-product-
+   title"> in src/routes/products.$slug.tsx). Each band is its own clamp()
+   so the size moves fluidly with viewport width WITHIN a band instead of
+   jumping at the band's own edge; the bands themselves (768/1200/1440)
+   match how a shopper would describe their device ("tablet", "standard
+   desktop", "large desktop"), not Tailwind's default sm/md/lg/xl steps. */
+@utility text-product-title {
+  font-size: clamp(1.5rem, 1.32rem + 0.9vw, 1.75rem); /* 24px -> 28px */
+  line-height: 1.2;
+}
+
+@media (min-width: 768px) {
+  .text-product-title {
+    font-size: clamp(1.625rem, 1.18rem + 0.93vw, 1.875rem); /* 26px -> 30px */
+    line-height: 1.15;
+  }
+}
+
+@media (min-width: 1200px) {
+  .text-product-title {
+    font-size: clamp(1.875rem, 0.62rem + 1.67vw, 2.125rem); /* 30px -> 34px */
+    line-height: 1.1;
+  }
+}
+
+@media (min-width: 1440px) {
+  .text-product-title {
+    font-size: clamp(2rem, 1.25rem + 0.83vw, 2.25rem); /* 32px -> 36px */
+    line-height: 1.1;
+  }
+}
+
 /* Buttons */
 @utility btn-primary {
   display: inline-flex;

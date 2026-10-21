@@ -123,3 +123,50 @@ test("timeout on customerCreate is never re-sent; if the account exists, sign-in
   const body = src.slice(src.indexOf("export async function registerCustomer"));
   assert.equal((body.match(/mutation Register/g) || []).length, 1, "customerCreate must be sent exactly once, never retried");
 });
+
+// --- Cross-type registration: registerCustomer is the ONE shared function
+// both the Individual (B2C) and Corporate (B2B) tabs call (confirmed by
+// reading CustomerAuthModal.tsx) -- it has no "entryType"/account-type
+// parameter at all, so Shopify's own email-uniqueness constraint (TAKEN)
+// applies identically no matter which tab the attempt came from. These
+// two tests exist specifically to map that fact onto the "B2B email
+// attempting B2C registration" / "B2C email attempting B2B registration"
+// requirement in plain terms, even though mechanically they exercise the
+// exact same code path as the generic TAKEN test above.
+
+test("registerCustomer: an email already registered as a B2B (Corporate) customer cannot be independently re-registered via the B2C (Individual) form", async () => {
+  // Modeled as: this email already resolved to a real Shopify customer
+  // (who happens to have a Company Contact role elsewhere, a fact
+  // registerCustomer itself never queries or cares about) -- Shopify
+  // rejects the second customerCreate purely on email uniqueness.
+  createCustomerErrors = [{ code: "TAKEN", field: ["email"], message: "Email has already been taken" }];
+  signInErrors = [];
+  globalThis.localStorage.removeItem("officeneed_customer_token");
+
+  await assert.rejects(
+    () => registerCustomer({ email: "existing-b2b-customer@example.com", password: "hunter22" }),
+    (err) => {
+      assert.ok(err instanceof CustomerAuthError);
+      assert.equal(err.code, "TAKEN");
+      assert.match(err.message, /already exists.*sign in/i, "message must be the privacy-conscious one -- never reveal the existing account's type");
+      return true;
+    },
+  );
+  assert.equal(globalThis.localStorage.getItem("officeneed_customer_token"), null, "no session is ever fabricated for a rejected registration");
+});
+
+test("registerCustomer: an email already registered as a B2C (Individual) customer cannot be independently re-registered via the B2B (Corporate) form", async () => {
+  createCustomerErrors = [{ code: "TAKEN", field: ["email"], message: "Email has already been taken" }];
+  signInErrors = [];
+  globalThis.localStorage.removeItem("officeneed_customer_token");
+
+  await assert.rejects(
+    () => registerCustomer({ email: "existing-b2c-customer@example.com", password: "hunter22", phone: "+919876543210" }),
+    (err) => {
+      assert.ok(err instanceof CustomerAuthError);
+      assert.equal(err.code, "TAKEN");
+      return true;
+    },
+  );
+  assert.equal(globalThis.localStorage.getItem("officeneed_customer_token"), null);
+});

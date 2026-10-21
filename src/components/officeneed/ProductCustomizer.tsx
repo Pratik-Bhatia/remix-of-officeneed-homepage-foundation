@@ -149,6 +149,25 @@ const processLogos = (src: string): Promise<{ uvLogo: string; laserLogo: string 
 // canvas.  This ensures the physical-size restriction is applied to the logo
 // artwork itself rather than empty transparent space.
 // ---------------------------------------------------------------------------
+
+// Mirrors MAX_DIMENSION_PX in src/lib/image-validation.server.ts -- this is
+// purely a fast client-side rejection for an obviously-oversized file
+// before it's even read into base64; the server re-validates every upload
+// independently regardless (never trusts this check alone).
+const MAX_LOGO_DIMENSION_PX = 4096;
+
+/** Resolves to null (rather than rejecting) on a load failure so callers
+ * can treat "couldn't read it" as its own user-facing error instead of an
+ * unhandled promise rejection. */
+function getImageDimensions(src: string): Promise<{ w: number; h: number } | null> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
+    img.onerror = () => resolve(null);
+    img.src = src;
+  });
+}
+
 async function measureVisibleBounds(
   src: string,
 ): Promise<{ w: number; h: number }> {
@@ -1156,14 +1175,36 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
         e.target.value = "";
         return;
       }
-      setLogoUploadError(null);
-
-      setLogoFile(file);
       // Release the previous upload's blob before replacing it -- otherwise
       // every re-upload (switching logos, retrying after a validation
       // error) leaked the prior object for the rest of the page's lifetime.
       if (logo?.startsWith("blob:")) URL.revokeObjectURL(logo);
       const url = URL.createObjectURL(file);
+
+      // Fast client-side rejection for an obviously-oversized image before
+      // it's ever read into base64 or sent anywhere -- the server (see
+      // image-validation.server.ts) re-validates independently regardless,
+      // this is purely for quicker feedback.
+      const dims = await getImageDimensions(url);
+      if (!dims) {
+        URL.revokeObjectURL(url);
+        const message = "Could not read this image. The file may be corrupted or is not a valid image.";
+        toast.error(message);
+        setLogoUploadError(message);
+        e.target.value = "";
+        return;
+      }
+      if (dims.w > MAX_LOGO_DIMENSION_PX || dims.h > MAX_LOGO_DIMENSION_PX) {
+        URL.revokeObjectURL(url);
+        const message = `Image dimensions are too large (${dims.w}x${dims.h}px). Please upload a logo no larger than ${MAX_LOGO_DIMENSION_PX}x${MAX_LOGO_DIMENSION_PX} pixels.`;
+        toast.error(message);
+        setLogoUploadError(message);
+        e.target.value = "";
+        return;
+      }
+
+      setLogoUploadError(null);
+      setLogoFile(file);
       setLogo(url);
       setIsSelected(true);
       setLogoPos({ x: 0, y: 0 });
@@ -1899,8 +1940,29 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
           its own internal per-pane scrolling instead (a fixed-height
           horizontal track, same as the desktop column already did at
           md+), so overflow-y-hidden now applies at every width; nothing
-          else in this className changed. */}
-      <DialogContent className="max-w-[1200px] w-screen h-[100dvh] max-h-none border-0 m-0 p-0 overflow-x-hidden overflow-y-hidden flex flex-col rounded-none sm:rounded-2xl md:w-[95vw] md:h-[90vh] md:max-h-[900px] md:border">
+          else in this className changed.
+
+          Full-screen at every breakpoint (was capped at max-w-[1200px]
+          md:w-[95vw] md:h-[90vh] md:max-h-[900px] with a border and
+          rounded corners from sm+): w-screen/h-[100dvh]/max-w-none/
+          max-h-none/border-0/rounded-none now apply unconditionally, so
+          there's no longer a gap around the dialog for DialogOverlay's
+          bg-black/80 backdrop (from the shared ui/dialog.tsx, left
+          untouched since it's used by 10+ other dialogs) to actually
+          show through at ANY width -- content fully covers the viewport,
+          which is the same mechanism the old mobile-only tier already
+          relied on, just no longer bounded to below md. */}
+      <DialogContent
+        className="w-screen h-[100dvh] max-w-none max-h-none border-0 m-0 p-0 overflow-x-hidden overflow-y-hidden flex flex-col rounded-none"
+        onEscapeKeyDown={(e) => {
+          // A quote submission or Buy Now checkout call in flight is a
+          // blocking operation already in progress -- Escape shouldn't be
+          // able to abandon the dialog mid-request (the request itself
+          // keeps running regardless, so closing here would just strand
+          // the shopper with no visible feedback for whichever one lands).
+          if (isSubmitting || isBuyingNow) e.preventDefault();
+        }}
+      >
         {step === "customize" && (() => {
           // The 3 pieces below render byte-identically to before this
           // change -- same elements, classes, refs and handlers, just
@@ -1911,11 +1973,45 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
           // exactly one of the two `return`s below actually renders per
           // render, so previewContainerRef/productImageRef/constraintsRef
           // are never attached to two DOM nodes at the same time).
+          // Shared by both placements below (previewPane on laptop/tablet,
+          // footerControlsContent on mobile) so the text exists in exactly
+          // one JSX literal -- never duplicated in the DOM or announced
+          // twice, since isMobileLayout makes the two placements mutually
+          // exclusive (only one of previewPane/footerControlsContent's
+          // conditional ever actually renders this per the current layout).
+          const disclaimerBlock = (
+            // w-full box-border, not max-w-[300px] mx-auto: that narrow
+            // centered box was the bug being fixed here -- confirmed live
+            // it left a large empty gap on both sides on laptop/tablet,
+            // where this now renders as a full-width sibling of the image
+            // area inside previewPane's own flex-col (not nested inside
+            // the image area itself, so it never competes with or
+            // constrains the image's own sizing). Horizontal px padding
+            // mirrors the image area's own p-4/lg:p-8/min-[1300px]:p-12
+            // tiers for visual consistency; pb- gives it breathing room
+            // from the panel's bottom edge, which it never needed before
+            // since the old 300px box's own margins happened to clear it.
+            <p className="w-full shrink-0 box-border text-[11px] text-center text-muted-foreground mt-3 min-[1300px]:mt-4 pb-4 lg:pb-5 leading-relaxed px-6 lg:px-8 min-[1300px]:px-12">
+              Preview is for visualization purposes. Final branding placement may vary slightly depending on the product and production method.
+            </p>
+          );
+
           const previewPane = (
-            <div
-              className="w-full lg:flex-1 bg-[#F9FAFB] relative flex items-center justify-center p-4 lg:p-12 border-b lg:border-b-0 lg:border-r border-border min-h-[50vh] lg:min-h-full overflow-hidden"
-              onClick={handleCanvasClick}
-            >
+            // flex-col, not the old single centering div: on laptop/tablet
+            // (!isMobileLayout) this now stacks the image area above
+            // disclaimerBlock below, inside previewPane's own
+            // min-h-[50vh]/lg:min-h-full box -- the inner image area is
+            // flex-1 min-h-0 so it shrinks to leave room for the
+            // disclaimer instead of the disclaimer overlapping it. On
+            // mobile, disclaimerBlock is never rendered here (see its
+            // conditional at the bottom of this element) -- the image
+            // area's flex-1 gives it previewPane's full height exactly as
+            // before, so mobile's own layout is unchanged.
+            <div className="w-full lg:flex-1 bg-[#F9FAFB] relative flex flex-col border-b lg:border-b-0 lg:border-r border-border min-h-[50vh] lg:min-h-full overflow-hidden">
+              <div
+                className="flex-1 min-h-0 relative flex items-center justify-center p-4 lg:p-8 min-[1300px]:p-12 overflow-hidden"
+                onClick={handleCanvasClick}
+              >
               {/* absolute inset-0, not "relative w-full h-full": this div's
                   parent (previewPane, just above) gets its height from
                   min-h-[50vh]/lg:min-h-full -- CSS only treats an ancestor's
@@ -2093,7 +2189,9 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
                     <span className="hidden sm:inline">Drag logo to position it</span><span className="sm:hidden">Pinch to resize • Drag to position</span>
                   </div>
                 )}
+                </div>
               </div>
+              {!isMobileLayout && disclaimerBlock}
             </div>
           );
 
@@ -2104,7 +2202,7 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
           // pane omits it now (the dialog's own close "X" and Step 2's
           // "Back to Logo" already cover exit/back-navigation on mobile).
           const desktopHeaderBlock = (
-            <DialogHeader className="mb-8">
+            <DialogHeader className="mb-5 lg:[@media(max-height:800px)]:mb-3 min-[1300px]:mb-8 min-[1300px]:[@media(max-height:800px)]:mb-4">
               <button
                 type="button"
                 onClick={() => onOpenChange(false)}
@@ -2113,7 +2211,7 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
                 <ArrowLeft className="w-4 h-4 mr-2" />
                 Back to Product
               </button>
-              <DialogTitle className="text-2xl font-bold tracking-tight">Customize Product</DialogTitle>
+              <DialogTitle className="text-xl min-[1300px]:text-2xl font-bold tracking-tight">Customize Product</DialogTitle>
               <DialogDescription className="mt-2 text-sm text-muted-foreground leading-relaxed">
                 Add your company branding and see how your corporate gift could look.
               </DialogDescription>
@@ -2122,7 +2220,7 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
 
           const logoControlsContent = (
             <>
-                  <div className="space-y-10">
+                  <div className="space-y-6 lg:[@media(max-height:800px)]:space-y-4 min-[1300px]:space-y-10 min-[1300px]:[@media(max-height:800px)]:space-y-5">
                     {isMultiComponentGiftSet && (
                       <div className="space-y-2">
                         <Label className="text-base font-semibold">
@@ -2139,7 +2237,7 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
                                 type="button"
                                 disabled={!comp.customizable}
                                 onClick={() => selectComponent(idx)}
-                                className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-left transition-colors ${
+                                className={`flex items-center gap-2 rounded-xl border px-2.5 py-1.5 min-[1300px]:px-3 min-[1300px]:py-2 text-left transition-colors ${
                                   active
                                     ? "border-primary bg-primary/5 ring-1 ring-primary/20"
                                     : "border-border hover:bg-muted/50"
@@ -2148,10 +2246,10 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
                                 <img
                                   src={comp.variantImages?.find((v) => v.title === selectedVariant?.title)?.imageUrl ?? comp.imageUrl}
                                   alt={comp.name}
-                                  className="w-9 h-9 rounded-lg object-cover border border-border/50 bg-muted/30 shrink-0"
+                                  className="w-8 h-8 min-[1300px]:w-9 min-[1300px]:h-9 rounded-lg object-cover border border-border/50 bg-muted/30 shrink-0"
                                 />
                                 <div className="min-w-0">
-                                  <div className="text-sm font-medium truncate max-w-[110px]">{comp.name}</div>
+                                  <div className="text-sm font-medium truncate max-w-[90px] min-[1300px]:max-w-[110px]">{comp.name}</div>
                                   <div className="text-[11px] text-muted-foreground flex items-center gap-1">
                                     {!comp.customizable ? (
                                       "Not customizable"
@@ -2364,11 +2462,11 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
 
           const footerControlsContent = (
             <>
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center justify-between mb-3 lg:[@media(max-height:800px)]:mb-2 min-[1300px]:mb-4">
                   <Label className="text-base font-semibold">Quantity</Label>
                   <div className="flex items-center gap-3">
                     <span className="text-xs text-muted-foreground">Min {shopifyMinQty}</span>
-                    <div className="inline-flex h-9 w-24 shrink-0 items-center border border-input rounded-md overflow-hidden bg-background">
+                    <div className="inline-flex h-8 w-20 lg:[@media(max-height:800px)]:h-7 min-[1300px]:h-9 min-[1300px]:w-24 shrink-0 items-center border border-input rounded-md overflow-hidden bg-background">
                       <button
                         type="button"
                         aria-label="Decrease quantity"
@@ -2413,13 +2511,13 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
                   </div>
                 </div>
                 
-                <div className="mb-6 space-y-3">
+                <div className="mb-4 lg:[@media(max-height:800px)]:mb-2 min-[1300px]:mb-6 space-y-2 lg:[@media(max-height:800px)]:space-y-1 min-[1300px]:space-y-3">
                   <Label className="text-sm font-semibold">Printing Method</Label>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-2 gap-2 min-[1300px]:gap-3">
                     <button
                       type="button"
                       onClick={() => setUserSelectedPrintingMethod("Laser Engraving")}
-                      className={`p-3 rounded-lg border flex flex-col items-center justify-center text-sm font-medium transition-all ${
+                      className={`p-2.5 lg:[@media(max-height:800px)]:p-2 min-[1300px]:p-3 rounded-lg border flex flex-col items-center justify-center text-sm font-medium transition-all ${
                         printingMethod === "Laser Engraving"
                           ? "border-primary bg-primary/5 text-primary ring-1 ring-primary/20"
                           : "border-border bg-background hover:bg-muted/50 text-muted-foreground"
@@ -2431,7 +2529,7 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
                       type="button"
                       onClick={() => setUserSelectedPrintingMethod("UV Printing")}
                       disabled={!isUvAvailable}
-                      className={`p-3 rounded-lg border flex flex-col items-center justify-center text-sm font-medium transition-all ${
+                      className={`p-2.5 lg:[@media(max-height:800px)]:p-2 min-[1300px]:p-3 rounded-lg border flex flex-col items-center justify-center text-sm font-medium transition-all ${
                         !isUvAvailable 
                           ? "opacity-50 cursor-not-allowed bg-muted/50 border-border" 
                           : printingMethod === "UV Printing"
@@ -2451,48 +2549,63 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
                     here anymore: the one uploaded logo is automatically the
                     whole set's logo (see propagateLogoToOtherComponents). */}
                 {isMultiComponentGiftSet && (selectedVariant?.title || product.variants?.[0]?.title) && (
-                  <p className="mb-4 text-sm">
+                  <p className="mb-3 lg:[@media(max-height:800px)]:mb-2 min-[1300px]:mb-4 text-sm">
                     <span className="text-muted-foreground">Variant: </span>
                     <span className="font-medium">{selectedVariant?.title || product.variants?.[0]?.title}</span>
                   </p>
                 )}
 
-                <Button
-                  className="w-full text-base h-14 font-semibold shadow-sm"
-                  size="lg"
-                  onClick={handleProceedToQuote}
-                  disabled={isCapturingSnapshot || !isFullyCustomized || isProcessingLaser}
-                >
-                  {isCapturingSnapshot ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Preparing...
-                    </>
-                  ) : (
-                    "Request a Quote"
-                  )}
-                </Button>
+                {/* flex-col below lg (mobile's own existing vertical
+                    arrangement, unaffected since mobile never reaches lg:),
+                    flex-row from lg (laptop/tablet side by side) -- a
+                    single shared markup via a CSS breakpoint rather than
+                    isMobileLayout-driven duplication, since this fragment
+                    is reused as-is by both the desktop footer and the
+                    mobile Step 2 pane. gap-3 supplies the spacing in BOTH
+                    directions, replacing the old mt-2 on the Buy Now
+                    button specifically (that only worked for the stacked
+                    case). lg:flex-1 on each Button makes them equal width
+                    once side by side. */}
+                <div className="flex flex-col lg:flex-row gap-3 lg:[@media(max-height:800px)]:gap-2 min-[1300px]:gap-4">
+                  <Button
+                    className="w-full lg:flex-1 text-base lg:[@media(max-height:800px)]:text-sm h-11 lg:[@media(max-height:800px)]:h-10 min-[1300px]:h-14 font-semibold shadow-sm px-3"
+                    size="lg"
+                    onClick={handleProceedToQuote}
+                    disabled={isCapturingSnapshot || !isFullyCustomized || isProcessingLaser}
+                  >
+                    {isCapturingSnapshot ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin shrink-0" />
+                        Preparing...
+                      </>
+                    ) : (
+                      "Request a Quote"
+                    )}
+                  </Button>
 
-                <Button
-                  variant="outline"
-                  className="w-full text-base h-14 font-semibold mt-3"
-                  size="lg"
-                  onClick={handleBuyNow}
-                  disabled={!canBuyNow || isBuyingNow}
-                >
-                  {isBuyingNow ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Starting checkout...
-                    </>
-                  ) : (
-                    "Buy Now"
-                  )}
-                </Button>
+                  <Button
+                    variant="outline"
+                    className="w-full lg:flex-1 text-base lg:[@media(max-height:800px)]:text-sm h-11 lg:[@media(max-height:800px)]:h-10 min-[1300px]:h-14 font-semibold px-3"
+                    size="lg"
+                    onClick={handleBuyNow}
+                    disabled={!canBuyNow || isBuyingNow}
+                  >
+                    {isBuyingNow ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin shrink-0" />
+                        Starting checkout...
+                      </>
+                    ) : (
+                      "Buy Now"
+                    )}
+                  </Button>
+                </div>
 
-                <p className="text-[11px] text-center text-muted-foreground mt-4 leading-relaxed max-w-[300px] mx-auto">
-                  Preview is for visualization purposes. Final branding placement may vary slightly depending on the product and production method.
-                </p>
+                {/* Mobile only -- laptop/tablet renders disclaimerBlock
+                    beneath the preview on the left instead (see
+                    previewPane above). Exactly one of the two ever
+                    mounts, so the text is never duplicated in the DOM. */}
+                {isMobileLayout && disclaimerBlock}
             </>
           );
 
@@ -2612,16 +2725,64 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
           }
 
           return (
-            <div className="flex flex-col lg:flex-row min-h-full">
+            // flex-1 min-h-0 (was min-h-full): this row is DialogContent's
+            // only flex child, so it needs an actual flex-basis to fill
+            // DialogContent's own bounded height (now a true h-[100dvh]
+            // at every breakpoint) -- min-h-full is only a LOWER bound,
+            // which CSS does not treat as "definite" for a descendant's
+            // own percentage height to resolve against (same rule already
+            // documented on previewContainerRef above). Without this, the
+            // right panel's lg:h-full below computed as auto (content-
+            // sized) instead of a real pixel height, so its own
+            // flex-1 overflow-y-auto scroll region never got a bounded
+            // box to scroll WITHIN -- confirmed live: the panel rendered
+            // at its full natural content height, and the footer's
+            // lg:sticky lg:bottom-0 then stuck to DialogContent's own
+            // edge instead of this row's, overlapping the tail of the
+            // (non-scrolling) content above it. min-h-0 lets this row
+            // actually shrink to that basis instead of growing with
+            // content (flex items default to min-height:auto, i.e. their
+            // own content size, which would silently defeat flex-1 here).
+            //
+            // Panel width is now a single fluid clamp() instead of the
+            // old two discrete px tiers (380px from lg, 450px from a
+            // custom 1300px breakpoint) -- those were calibrated for a
+            // modal capped at max-w-[1200px], so the panel topped out at
+            // 450px no matter how wide the screen actually was. Now that
+            // DialogContent is genuinely full-screen (see above), a fixed
+            // cap would leave a growing, unused gap next to the preview
+            // on large displays instead of the ~65/35 preview/controls
+            // split this full-screen redesign calls for. clamp(23.5rem,
+            // 5.7rem+30vw, 42.5rem) resolves to ~398px (~39%) at 1024px
+            // viewport width -- intentionally roomier than a strict 35%
+            // there, since an absolute ~400px reads as merely "balanced"
+            // on a laptop, not cramped -- down to ~35% (~667px) by
+            // 1920px, matching the spec's large-desktop ratio; the 680px
+            // ceiling keeps it from growing unbounded on ultra-wide
+            // displays. previewPane (lg:flex-1 below) takes whatever
+            // width remains.
+            <div className="flex flex-1 min-h-0 flex-col lg:flex-row">
               {previewPane}
-              <div className="w-full lg:w-[450px] flex flex-col bg-background relative shrink-0 lg:h-full">
-                <div className="flex-1 overflow-y-visible md:overflow-y-auto">
-                  <div className="p-6 lg:p-8 lg:pb-4">
+              <div className="w-full lg:w-[clamp(23.5rem,5.7rem+30vw,42.5rem)] flex flex-col min-h-0 bg-background relative shrink-0 lg:h-full">
+                <div className="flex-1 min-h-0 overflow-y-visible md:overflow-y-auto">
+                  {/* lg:[@media(max-height:800px)]: a height-aware tier,
+                      not just the existing width tiers -- 1024x600 and
+                      1280x720 are both already in the "lg" WIDTH tier
+                      (1024-1299px) but have far less vertical room than
+                      the 768-900px-tall screens that tier was otherwise
+                      calibrated for, which is exactly what left the
+                      configuration area cramped/scroll-heavy on those
+                      screens specifically. Stacking a custom max-height
+                      media variant onto lg: (and onto min-[1300px]: for
+                      the rare wide-but-short case) keeps it from firing on
+                      mobile, where its own unprefixed base classes already
+                      apply independently. */}
+                  <div className="p-6 lg:p-5 lg:pb-3 lg:[@media(max-height:800px)]:p-2 min-[1300px]:p-8 min-[1300px]:pb-4 min-[1300px]:[@media(max-height:800px)]:p-5">
                     {desktopHeaderBlock}
                     {logoControlsContent}
                   </div>
                 </div>
-                <div className="p-6 lg:p-8 border-t border-border bg-background shadow-[0_-4px_20px_-10px_rgba(0,0,0,0.05)] mt-auto lg:sticky lg:bottom-0 lg:z-20">
+                <div className="shrink-0 p-6 lg:p-5 lg:[@media(max-height:800px)]:p-2 min-[1300px]:p-8 min-[1300px]:[@media(max-height:800px)]:p-5 border-t border-border bg-background shadow-[0_-4px_20px_-10px_rgba(0,0,0,0.05)]">
                   {footerControlsContent}
                 </div>
               </div>
@@ -2644,8 +2805,21 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
             </DialogHeader>
 
             <div className="flex-1 overflow-y-auto">
-              <div className="max-w-[1200px] mx-auto flex flex-col lg:flex-row min-h-full">
-                <div className="flex-1 p-6 md:p-10 lg:pr-12">
+              {/* max-w-[1200px] mx-auto (removed) was sized back when
+                  DialogContent itself was a centered, capped modal -- now
+                  that DialogContent is always full-screen (see its own
+                  className above), that same cap just centered a 1200px
+                  island inside a much wider viewport, leaving the large
+                  empty right-hand gap this was reported against. flex-col
+                  lg:grid lg:grid-cols-[minmax(0,1.8fr)_minmax(320px,1fr)]
+                  mirrors the exact pattern the PDP's own gallery/info grid
+                  already uses (products.$slug.tsx): ~65/35 at lg+ (1.8fr
+                  vs 1fr, with a 320px floor on the summary column so it
+                  never gets squeezed on the way down to lg's own 1024px
+                  floor), full-width stacked below it -- unchanged mobile
+                  behavior, since flex-col was already the base case. */}
+              <div className="w-full flex flex-col lg:grid lg:grid-cols-[minmax(0,1.8fr)_minmax(320px,1fr)] min-h-full">
+                <div className="min-w-0 p-6 md:p-10 lg:pr-12">
                   <button 
                     type="button" 
                     onClick={() => setStep("customize")}
@@ -2710,7 +2884,7 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
                   </form>
                 </div>
 
-                <div className="w-full lg:w-[420px] shrink-0 border-t lg:border-t-0 lg:border-l border-border bg-background p-6 md:p-10 flex flex-col">
+                <div className="w-full min-w-0 border-t lg:border-t-0 lg:border-l border-border bg-background p-6 md:p-10 flex flex-col">
                   <div className="flex items-center justify-between mb-6 lg:mb-8">
                     <h3 className="font-semibold text-lg">Your Customization</h3>
                     <Button variant="ghost" size="sm" onClick={() => setStep("customize")} className="sm:hidden text-primary">
@@ -2758,7 +2932,7 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
                       <>
                         <div className="grid grid-cols-2 gap-2 pb-4 border-b border-border">
                           <span className="text-muted-foreground">Logo</span>
-                          <span className="font-medium text-right text-foreground truncate" title={logoFile.name}>{logoFile.name}</span>
+                          <span className="font-medium text-right text-foreground break-words" title={logoFile.name}>{logoFile.name}</span>
                         </div>
                         <div className="grid grid-cols-2 gap-2 pb-4 border-b border-border">
                           <span className="text-muted-foreground">Customization</span>
