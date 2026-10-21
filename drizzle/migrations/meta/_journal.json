@@ -57,6 +57,13 @@
       "when": 1792452489440,
       "tag": "0007_add_enquiry_email_status",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1792577579837,
+      "tag": "0008_add_logo_processing_safeguards",
+      "breakpoints": true
     }
   ]
 }

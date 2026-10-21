@@ -415,6 +415,99 @@ export type Database = {
         }
         Relationships: []
       }
+      logo_processing_cache: {
+        Row: {
+          created_at: string
+          credits_charged: string | null
+          error_message: string | null
+          fingerprint: string
+          laser_logo_url: string | null
+          lease_expires_at: string | null
+          owner_token: string | null
+          response_height: string | null
+          response_type: string | null
+          response_width: string | null
+          status: string
+          updated_at: string
+          uv_logo_url: string | null
+        }
+        Insert: {
+          created_at?: string
+          credits_charged?: string | null
+          error_message?: string | null
+          fingerprint: string
+          laser_logo_url?: string | null
+          lease_expires_at?: string | null
+          owner_token?: string | null
+          response_height?: string | null
+          response_type?: string | null
+          response_width?: string | null
+          status: string
+          updated_at?: string
+          uv_logo_url?: string | null
+        }
+        Update: {
+          created_at?: string
+          credits_charged?: string | null
+          error_message?: string | null
+          fingerprint?: string
+          laser_logo_url?: string | null
+          lease_expires_at?: string | null
+          owner_token?: string | null
+          response_height?: string | null
+          response_type?: string | null
+          response_width?: string | null
+          status?: string
+          updated_at?: string
+          uv_logo_url?: string | null
+        }
+        Relationships: []
+      }
+      logo_processing_usage: {
+        Row: {
+          created_at: string
+          credits_charged: string | null
+          duration_ms: number | null
+          error_message: string | null
+          fingerprint: string | null
+          id: string
+          identity_key: string
+          outcome: string
+          response_height: string | null
+          response_type: string | null
+          response_width: string | null
+          was_outbound_call: boolean
+        }
+        Insert: {
+          created_at?: string
+          credits_charged?: string | null
+          duration_ms?: number | null
+          error_message?: string | null
+          fingerprint?: string | null
+          id?: string
+          identity_key: string
+          outcome: string
+          response_height?: string | null
+          response_type?: string | null
+          response_width?: string | null
+          was_outbound_call?: boolean
+        }
+        Update: {
+          created_at?: string
+          credits_charged?: string | null
+          duration_ms?: number | null
+          error_message?: string | null
+          fingerprint?: string | null
+          id?: string
+          identity_key?: string
+          outcome?: string
+          response_height?: string | null
+          response_type?: string | null
+          response_width?: string | null
+          was_outbound_call?: boolean
+        }
+        Relationships: []
+      }
       paid_order_internal_pdf_log: {
         Row: {
           created_at: string
