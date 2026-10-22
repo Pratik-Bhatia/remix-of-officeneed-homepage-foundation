@@ -114,6 +114,7 @@ function PrivacyPolicyPage() {
               <li><strong>Lovable Cloud</strong> — stores enquiries, quote requests, uploaded files, reviews, saved products and business account details.</li>
               <li><strong>Resend</strong> — sends enquiry and quote confirmation emails and internal notifications.</li>
               <li><strong>Meta (Facebook)</strong> — the Meta Pixel and Conversions API record events such as page views, add to cart, checkout started and enquiries, to measure our advertising. Where available, a scrambled (hashed) version of your email or phone number may be sent to help match these events.</li>
+              <li><strong>Google Analytics</strong> — records website traffic and ecommerce interaction events (page views, item views, bag additions and checkout starts) anonymously to help us understand storefront performance. Sensitive form entries, payment credentials and customer passwords are never collected.</li>
               <li><strong>Remove.bg</strong> — if you upload a logo to preview a branded product, the image is sent to this service to remove its background.</li>
               <li><strong>KwikEngage</strong> — sends WhatsApp messages on our behalf.</li>
             </ul>

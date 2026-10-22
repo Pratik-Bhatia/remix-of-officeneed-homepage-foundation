@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ShoppingBag, Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -6,6 +6,7 @@ import { Navbar } from "@/components/officeneed/Navbar";
 import { Footer } from "@/components/officeneed/Footer";
 import { useCartStore, checkoutFailureMessage } from "@/stores/cartStore";
 import { trackInitiateCheckout } from "@/lib/meta-pixel";
+import { trackGoogleViewCart, trackGoogleBeginCheckout } from "@/lib/google-analytics";
 import { formatMoney } from "@/lib/shopify";
 import { CartLineItem } from "@/components/officeneed/CartLineItem";
 import { CartProfileLinks } from "@/components/officeneed/CartProfileLinks";
@@ -50,6 +51,23 @@ function CartPage() {
   const subtotal = cost.subtotal ? parseFloat(cost.subtotal.amount) : totalPrice;
   const discount = Math.max(0, totalPrice - subtotal);
 
+  const hasTrackedViewCartRef = useRef(false);
+  useEffect(() => {
+    if (!hasTrackedViewCartRef.current && items.length > 0) {
+      hasTrackedViewCartRef.current = true;
+      trackGoogleViewCart({
+        items: items.map((i) => ({
+          variantId: i.variantId,
+          name: i.product.node.title,
+          price: parseFloat(i.price.amount) || 0,
+          currency: i.price.currencyCode,
+          quantity: i.quantity,
+        })),
+        value: subtotal,
+      });
+    }
+  }, [items, subtotal]);
+
   const handleCheckout = async () => {
     // No delivery-address requirement here, for B2B or B2C: Shopify's own
     // hosted checkout collects shipping/billing exactly as it always has.
@@ -70,7 +88,17 @@ function CartPage() {
         toast.error(checkoutFailureMessage(result.reason));
         return;
       }
-      trackInitiateCheckout(useCartStore.getState().items, subtotal);
+      const currentItems = useCartStore.getState().items;
+      trackInitiateCheckout(currentItems, subtotal);
+      trackGoogleBeginCheckout({
+        items: currentItems.map((i) => ({
+          variantId: i.variantId,
+          name: i.product.node.title,
+          quantity: i.quantity,
+          price: i.price,
+        })),
+        value: subtotal,
+      });
       if (win) win.location.href = result.url;
       else window.open(result.url, "_blank");
     } catch (error) {

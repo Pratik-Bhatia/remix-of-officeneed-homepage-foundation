@@ -11,6 +11,7 @@ import exclusiveLogo from "@/assets/officeneed-exclusive-logo.svg.asset.json";
 import { Footer } from "@/components/officeneed/Footer";
 import { ProductCard } from "@/components/officeneed/ProductCard";
 import { ComingSoonBanner } from "@/components/officeneed/ComingSoonBanner";
+import { trackGoogleViewItemList } from "@/lib/google-analytics";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -228,6 +229,25 @@ function ProductsPage() {
       return p.category === taxonomyMatch.node.title;
     });
   }, [catalogue, collection, isAllProducts, missingMapping, taxonomyMatch]);
+
+  const lastTrackedListKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    const listKey = `${collection ?? "all"}::${categoryScoped.length}`;
+    if (categoryScoped.length > 0 && lastTrackedListKeyRef.current !== listKey) {
+      lastTrackedListKeyRef.current = listKey;
+      trackGoogleViewItemList({
+        listName: mainCategoryTitle || collection || "Products Catalogue",
+        items: categoryScoped.slice(0, 24).map((p, idx) => ({
+          id: p.sku || p.slug,
+          name: p.name,
+          price: parseFloat(p.price?.replace(/[^0-9.]/g, "") || "0") || 0,
+          currency: "INR",
+          category: p.category,
+          index: idx + 1,
+        })),
+      });
+    }
+  }, [categoryScoped, mainCategoryTitle, collection]);
 
   // True only once the catalogue has actually finished loading (see
   // useShopifyCatalogue -- it returns the STATIC fallback, which is an

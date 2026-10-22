@@ -1,5 +1,6 @@
 import { haptic } from "@/lib/haptics";
 import { trackLead, trackInitiateCheckout } from "@/lib/meta-pixel";
+import { trackGoogleBeginCheckout } from "@/lib/google-analytics";
 import { toast } from "sonner";
 import { useCartStore, quantityRuleScopeKey } from "@/stores/cartStore";
 import { useB2BStore, getEffectiveCompanyLocationId } from "@/stores/b2bStore";
@@ -1828,6 +1829,16 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
         return;
       }
       trackInitiateCheckout([{ variantId: selectedVariant.id, quantity: qty, price: selectedVariant.price ?? rawProductNode.priceRange?.minVariantPrice }]);
+      trackGoogleBeginCheckout({
+        items: [
+          {
+            variantId: selectedVariant.id,
+            name: rawProductNode.title,
+            quantity: qty,
+            price: selectedVariant.price ?? rawProductNode.priceRange?.minVariantPrice,
+          },
+        ],
+      });
       if (win) win.location.href = checkoutUrl;
       else window.open(checkoutUrl, "_blank");
     } catch {

@@ -1,4 +1,5 @@
 import { trackSearch } from "@/lib/meta-pixel";
+import { trackGoogleSearch } from "@/lib/google-analytics";
 import { lockScroll, unlockScroll } from "@/lib/scroll-lock";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
@@ -53,6 +54,7 @@ export function SearchModal({ open, onOpenChange }: { open: boolean; onOpenChang
       if (q.toLowerCase() === lastTrackedSearch.current) return;
       lastTrackedSearch.current = q.toLowerCase();
       trackSearch(q);
+      trackGoogleSearch(q);
     }, 1200);
     return () => clearTimeout(id);
   }, [query]);

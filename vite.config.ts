@@ -16,20 +16,30 @@ const supabasePublishableKey =
   process.env["SUPABASE_PUBLISHABLE_KEY"] ??
   fallbackSupabasePublishableKey;
 
-const supabaseEnvCompatibilityPlugin = () => ({
-  name: "officeneed-supabase-env-compat",
+const envCompatibilityPlugin = () => ({
+  name: "officeneed-env-compat",
   enforce: "pre" as const,
   transform(code: string, id: string) {
     const normalizedId = id.replaceAll("\\", "/");
     const isSupabaseClient = normalizedId.endsWith("/src/integrations/supabase/client.ts");
-    if (!isSupabaseClient) return null;
+    const isGoogleAnalytics = normalizedId.endsWith("/src/lib/google-analytics.ts");
+    if (!isSupabaseClient && !isGoogleAnalytics) return null;
 
-    const updated = code
-      .replaceAll("import.meta.env['VITE_SUPABASE_URL']", "import.meta.env.VITE_SUPABASE_URL")
-      .replaceAll(
-        "import.meta.env['VITE_SUPABASE_PUBLISHABLE_KEY']",
-        "import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY",
+    let updated = code;
+    if (isSupabaseClient) {
+      updated = updated
+        .replaceAll("import.meta.env['VITE_SUPABASE_URL']", "import.meta.env.VITE_SUPABASE_URL")
+        .replaceAll(
+          "import.meta.env['VITE_SUPABASE_PUBLISHABLE_KEY']",
+          "import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY",
+        );
+    }
+    if (isGoogleAnalytics) {
+      updated = updated.replaceAll(
+        "import.meta.env['VITE_LOVABLE_CONNECTOR_GOOGLE_ANALYTICS_API_KEY']",
+        "import.meta.env.VITE_LOVABLE_CONNECTOR_GOOGLE_ANALYTICS_API_KEY",
       );
+    }
 
     return updated === code ? null : { code: updated, map: null };
   },
@@ -42,13 +52,30 @@ if (supabasePublishableKey) process.env["VITE_SUPABASE_PUBLISHABLE_KEY"] = supab
 const metaPixelId = process.env["VITE_META_PIXEL_ID"] ?? process.env["META_PIXEL_ID"] ?? "1610689520588834";
 process.env["VITE_META_PIXEL_ID"] = metaPixelId;
 
+// Google Analytics 4 Measurement ID is public (appears in browser script tags by design).
+const fallbackGoogleAnalyticsId = "G-34E9F2S835";
+const googleAnalyticsId = (
+  process.env["VITE_GA_MEASUREMENT_ID"] ??
+  process.env["VITE_LOVABLE_CONNECTOR_GOOGLE_ANALYTICS_API_KEY"] ??
+  process.env["LOVABLE_CONNECTOR_GOOGLE_ANALYTICS_API_KEY"] ??
+  process.env["GA_MEASUREMENT_ID"] ??
+  fallbackGoogleAnalyticsId
+).trim();
+
+process.env["VITE_GA_MEASUREMENT_ID"] = googleAnalyticsId;
+process.env["VITE_LOVABLE_CONNECTOR_GOOGLE_ANALYTICS_API_KEY"] = googleAnalyticsId;
+
 export default defineConfig({
   vite: {
-    plugins: [supabaseEnvCompatibilityPlugin()],
+    plugins: [envCompatibilityPlugin()],
     define: {
       "import.meta.env.VITE_SUPABASE_URL": JSON.stringify(supabaseUrl),
       "import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY": JSON.stringify(supabasePublishableKey),
       "import.meta.env.VITE_META_PIXEL_ID": JSON.stringify(metaPixelId),
+      "import.meta.env.VITE_GA_MEASUREMENT_ID": JSON.stringify(googleAnalyticsId),
+      "import.meta.env.VITE_LOVABLE_CONNECTOR_GOOGLE_ANALYTICS_API_KEY": JSON.stringify(googleAnalyticsId),
+      "import.meta.env.VITE_GA4_MEASUREMENT_ID": JSON.stringify(googleAnalyticsId),
+      "import.meta.env.VITE_GOOGLE_ANALYTICS_ID": JSON.stringify(googleAnalyticsId),
     },
   },
   tanstackStart: {

@@ -1,9 +1,11 @@
+import { useEffect, useRef } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { Navbar } from "@/components/officeneed/Navbar";
 import { Footer } from "@/components/officeneed/Footer";
 import { fetchAllProducts, formatMoney } from "@/lib/shopify";
+import { trackGoogleViewItemList } from "@/lib/google-analytics";
 
 export const Route = createFileRoute("/shop/")({
   staticData: { sitemap: true },
@@ -32,6 +34,22 @@ function ShopPage() {
     queryKey: ["shopify-products"],
     queryFn: () => fetchAllProducts(),
   });
+
+  const hasTrackedRef = useRef(false);
+  useEffect(() => {
+    if (!hasTrackedRef.current && products?.length) {
+      hasTrackedRef.current = true;
+      trackGoogleViewItemList({
+        listName: "Shop Officeneed",
+        items: products.map(({ node }) => ({
+          id: node.id,
+          name: node.title,
+          price: parseFloat(node.priceRange.minVariantPrice.amount) || 0,
+          currency: node.priceRange.minVariantPrice.currencyCode,
+        })),
+      });
+    }
+  }, [products]);
 
   return (
     <><Navbar />

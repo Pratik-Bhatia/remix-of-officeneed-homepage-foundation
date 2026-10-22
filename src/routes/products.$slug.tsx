@@ -1,5 +1,6 @@
 import { haptic } from "@/lib/haptics";
 import { trackViewContent, trackInitiateCheckout } from "@/lib/meta-pixel";
+import { trackGoogleViewItem, trackGoogleBeginCheckout } from "@/lib/google-analytics";
 import { useMemo, useState, useRef, useEffect, lazy, Suspense } from "react";
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { Minus, Plus, ChevronLeft, ChevronRight, Loader2, ZoomIn, X, ShieldCheck, Lock, Award, Truck, BadgeCheck, Heart } from "lucide-react";
@@ -828,6 +829,16 @@ function ProductDetail() {
         return;
       }
       trackInitiateCheckout([{ variantId: selectedVariant.id, quantity, price: selectedVariant.price ?? node.priceRange?.minVariantPrice }]);
+      trackGoogleBeginCheckout({
+        items: [
+          {
+            variantId: selectedVariant.id,
+            name: product.name,
+            quantity,
+            price: selectedVariant.price ?? node.priceRange?.minVariantPrice,
+          },
+        ],
+      });
       if (win) win.location.href = checkoutUrl;
       else window.open(checkoutUrl, "_blank");
     } catch {
@@ -877,6 +888,13 @@ function ProductDetail() {
   useEffect(() => {
     if (!selectedVariant) return;
     trackViewContent({
+      variantId: selectedVariant.id,
+      name: product.name,
+      price: parseFloat(selectedVariant.price.amount) || 0,
+      currency: selectedVariant.price.currencyCode,
+      category: product.category,
+    });
+    trackGoogleViewItem({
       variantId: selectedVariant.id,
       name: product.name,
       price: parseFloat(selectedVariant.price.amount) || 0,

@@ -8,6 +8,7 @@ import { useB2BStore, getEffectiveCompanyLocationId } from "@/stores/b2bStore";
 import { appendAttribution, getAttribution } from "@/lib/attribution";
 import { getCustomerCart, saveCustomerCart } from "@/lib/customer-cart.functions";
 import { trackAddToCart } from "@/lib/meta-pixel";
+import { trackGoogleAddToCart, trackGoogleRemoveFromCart } from "@/lib/google-analytics";
 
 export interface CartItem {
   lineId: string | null;
@@ -897,12 +898,20 @@ export const useCartStore = create<CartStore>()(
             // Only fire once Shopify has actually accepted the line.
             const qtyAfter = get().items.find((i) => i.variantId === item.variantId)?.quantity ?? 0;
             if (qtyAfter > qtyBefore) {
+              const addedQty = qtyAfter - qtyBefore;
               trackAddToCart({
                 variantId: item.variantId,
                 name: item.product.node.title,
                 price: parseFloat(item.price.amount),
                 currency: item.price.currencyCode,
-                quantity: qtyAfter - qtyBefore,
+                quantity: addedQty,
+              });
+              trackGoogleAddToCart({
+                variantId: item.variantId,
+                name: item.product.node.title,
+                price: parseFloat(item.price.amount),
+                currency: item.price.currencyCode,
+                quantity: addedQty,
               });
             }
           }
@@ -985,6 +994,13 @@ export const useCartStore = create<CartStore>()(
             if (!cart) return;
             if (extractLines(cart).valid.length === 0) clearCart();
             else applyCart(cart);
+            trackGoogleRemoveFromCart({
+              variantId: item.variantId,
+              name: item.product.node.title,
+              price: parseFloat(item.price.amount),
+              currency: item.price.currencyCode,
+              quantity: item.quantity,
+            });
           } catch (error) {
             console.error("Failed to remove item:", error);
             toast.error("Couldn't remove this item. Please try again.");

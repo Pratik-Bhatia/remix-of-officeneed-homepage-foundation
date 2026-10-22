@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "@tanstack/react-router";
 import { Loader2, ShoppingBag, X } from "lucide-react";
 import { toast } from "sonner";
 import { useCartStore, checkoutFailureMessage } from "@/stores/cartStore";
 import { trackInitiateCheckout } from "@/lib/meta-pixel";
+import { trackGoogleViewCart, trackGoogleBeginCheckout } from "@/lib/google-analytics";
 import { cn } from "@/lib/utils";
 import { formatMoney } from "@/lib/shopify";
 import { lockScroll, unlockScroll } from "@/lib/scroll-lock";
@@ -65,7 +66,17 @@ export function CartDrawer({ triggerClassName }: { triggerClassName?: string }) 
         toast.error(checkoutFailureMessage(result.reason));
         return;
       }
-      trackInitiateCheckout(useCartStore.getState().items, discountedSubtotal);
+      const currentCartItems = useCartStore.getState().items;
+      trackInitiateCheckout(currentCartItems, discountedSubtotal);
+      trackGoogleBeginCheckout({
+        items: currentCartItems.map((i) => ({
+          variantId: i.variantId,
+          name: i.product.node.title,
+          quantity: i.quantity,
+          price: i.price,
+        })),
+        value: discountedSubtotal,
+      });
       if (win) win.location.href = result.url;
       else window.open(result.url, "_blank");
     } catch (error) {
@@ -77,16 +88,34 @@ export function CartDrawer({ triggerClassName }: { triggerClassName?: string }) 
     }
   };
 
+  const wasOpenRef = useRef(false);
   useEffect(() => {
     if (isOpen) {
       syncCart();
       lockScroll();
       window.dispatchEvent(new CustomEvent("close-overlays", { detail: "cart" }));
+      if (!wasOpenRef.current) {
+        wasOpenRef.current = true;
+        const state = useCartStore.getState();
+        if (state.items.length > 0) {
+          trackGoogleViewCart({
+            items: state.items.map((i) => ({
+              variantId: i.variantId,
+              name: i.product.node.title,
+              price: parseFloat(i.price.amount) || 0,
+              currency: i.price.currencyCode,
+              quantity: i.quantity,
+            })),
+            value: discountedSubtotal,
+          });
+        }
+      }
     } else {
+      wasOpenRef.current = false;
       unlockScroll();
     }
     return () => unlockScroll();
-  }, [isOpen, syncCart]);
+  }, [isOpen, syncCart, discountedSubtotal]);
 
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {
