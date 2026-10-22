@@ -9,7 +9,12 @@ export const Route = createFileRoute('/faqs')({
     meta: [
       { title: 'FAQs & Buying Guides — Officeneed' },
       { name: 'description', content: 'Frequently asked questions and guides for Officeneed.' },
+      { property: 'og:title', content: 'FAQs & Buying Guides — Officeneed' },
+      { property: 'og:description', content: 'Answers on bulk corporate gifting, logo customisation, shipping and ordering with Officeneed.' },
+      { property: 'og:type', content: 'website' },
+      { property: 'og:url', content: 'https://officeneed.store/faqs' },
     ],
+    links: [{ rel: 'canonical', href: 'https://officeneed.store/faqs' }],
   }),
 })
 

@@ -9,13 +9,31 @@ export const Route = createFileRoute('/clients')({
     meta: [
       { title: 'Our Clients — Officeneed' },
       { name: 'description', content: 'See the businesses that trust Officeneed.' },
+      { property: 'og:title', content: 'Our Clients — Officeneed' },
+      { property: 'og:description', content: 'Businesses across banking, insurance, education and industry that trust Officeneed for corporate procurement.' },
+      { property: 'og:type', content: 'website' },
+      { property: 'og:url', content: 'https://officeneed.store/clients' },
     ],
+    links: [{ rel: 'canonical', href: 'https://officeneed.store/clients' }],
   }),
 })
 
 // Automatically import all images from the client-logos directory
 const logoModules = import.meta.glob('@/assets/client-logos/*.{png,jpg,jpeg,svg}', { eager: true }) as Record<string, { default: string }>;
-const logos = Object.values(logoModules).map(mod => mod.default);
+const LOGO_NAMES: Record<string, string> = {
+  'BAJAJFINSV': 'Bajaj Finserv', 'Bajaj-Allianz': 'Bajaj Allianz Life Insurance', 'Bank-of-Baroda': 'Bank of Baroda',
+  'DY patil': 'DY Patil International University', 'Godrej': 'Godrej Properties', 'Mega-Fibre': 'Mega Fibre',
+  'Physcis': 'Physics Wallah', 'Roche': 'Roche', 'Symbiosis': 'Symbiosis', 'Thermax': 'Thermax', 'alfa-laval': 'Alfa Laval',
+  'bal-raksha': 'Bal Raksha Bharat', 'ccpl': 'CCPL', 'cenomi': 'Cenomi', 'cocoa melts': 'Cocoa Melts',
+  'deutsche-bank': 'Deutsche Bank', 'hdfc': 'HDFC Bank', 'jw marriot': 'JW Marriott', 'kawasaki': 'Kawasaki',
+  'sidbi': 'SIDBI', 'nippon': 'Nippon India Mutual Fund', 'pune metro': 'Pune Metro', 'sbi': 'State Bank of India',
+  'siemens': 'Siemens', 'tata-aig': 'Tata AIG', 'wendy': "Wendy's",
+}
+const logos = Object.entries(logoModules).map(([path, mod]) => {
+  const file = path.split('/').pop() ?? ''
+  const key = Object.keys(LOGO_NAMES).find(k => file.toLowerCase().includes(k.toLowerCase()))
+  return { src: mod.default, name: key ? LOGO_NAMES[key] : '' }
+});
 
 function ClientsPage() {
   return (
@@ -29,9 +47,9 @@ function ClientsPage() {
         
         <section className="py-16 px-6 max-w-7xl mx-auto">
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-            {logos.map((logoUrl, i) => (
+            {logos.map((logo, i) => (
               <div key={i} className="aspect-[3/2] bg-background border border-border/50 rounded-lg flex items-center justify-center p-6 hover:shadow-sm transition-shadow">
-                <img src={logoUrl} alt="Client Logo" className="max-w-full max-h-full object-contain filter grayscale hover:grayscale-0 transition-all duration-300 opacity-70 hover:opacity-100" />
+                <img src={logo.src} alt={logo.name ? `${logo.name} logo` : ''} className="max-w-full max-h-full object-contain filter grayscale hover:grayscale-0 transition-all duration-300 opacity-70 hover:opacity-100" />
               </div>
             ))}
           </div>

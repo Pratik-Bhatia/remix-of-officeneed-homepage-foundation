@@ -6,11 +6,16 @@ import { ArrowLeft } from 'lucide-react'
 export const Route = createFileRoute('/blog/$slug')({
   staticData: { sitemap: true },
   component: BlogPost,
-  head: () => ({
+  head: ({ params }) => ({
     meta: [
       { title: 'Article — Officeneed' },
       { name: 'description', content: 'Read full article on Officeneed.' },
+      { property: 'og:title', content: 'Article — Officeneed' },
+      { property: 'og:description', content: 'An Officeneed article on workspaces, office supplies and corporate gifting.' },
+      { property: 'og:type', content: 'website' },
+      { property: 'og:url', content: `https://officeneed.store/blog/${params.slug}` },
     ],
+    links: [{ rel: 'canonical', href: `https://officeneed.store/blog/${params.slug}` }],
   }),
 })
 
