@@ -9,6 +9,7 @@ import { useSaves } from "@/lib/saves";
 import type { Product } from "@/lib/products";
 
 export const Route = createFileRoute("/account/saves")({
+  staticData: { sitemap: false },
   component: SavesPage,
 });
 

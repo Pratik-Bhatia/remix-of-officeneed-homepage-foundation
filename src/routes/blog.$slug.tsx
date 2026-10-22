@@ -4,6 +4,7 @@ import { Footer } from '@/components/officeneed/Footer'
 import { ArrowLeft } from 'lucide-react'
 
 export const Route = createFileRoute('/blog/$slug')({
+  staticData: { sitemap: true },
   component: BlogPost,
   head: () => ({
     meta: [

@@ -18,6 +18,7 @@ import { contactConfig } from "@/config/contact";
 import patternSeamless from "@/assets/pattern-seamless.svg";
 
 export const Route = createFileRoute("/terms-and-conditions")({
+  staticData: { sitemap: true },
   component: TermsAndConditionsPage,
   head: () => ({
     meta: [

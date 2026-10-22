@@ -82,6 +82,7 @@ function ErrorComponent({ error, reset }: { error: unknown; reset: () => void })
 }
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
+  staticData: { sitemap: false },
   head: () => ({
     meta: [
       { charSet: "utf-8" },
@@ -90,6 +91,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "description", content: "Corporate procurement made simpler." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
+      // Google Search Console ownership verification for https://officeneed.store/
+      { name: "google-site-verification", content: "wKVyjGtv1eWOXoI9rOa6pxmIEUVphl3C7lNINjOaimM" },
     ],
     links: [
       {

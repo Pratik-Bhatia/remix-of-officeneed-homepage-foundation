@@ -12,6 +12,7 @@ import { RichText } from "@/components/officeneed/RichText";
 import { useProductBrowseAbandon } from "@/hooks/useProductBrowseAbandon";
 
 export const Route = createFileRoute("/shop/$handle")({
+  staticData: { sitemap: false },
   validateSearch: (search: Record<string, unknown>): { variant?: string } =>
     search["variant"] != null && String(search["variant"]) !== "" ? { variant: String(search["variant"]) } : {},
   component: ShopProductPage,

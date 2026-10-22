@@ -13,6 +13,7 @@ import { DiscountCodeInput } from "@/components/officeneed/DiscountCodeInput";
 import { DeliveryAddressSelector } from "@/components/officeneed/DeliveryAddressSelector";
 
 export const Route = createFileRoute("/cart")({
+  staticData: { sitemap: false },
   head: () => ({
     meta: [
       { title: "Your Bag — Officeneed" },

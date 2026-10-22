@@ -56,6 +56,7 @@ const subcategoryImages: Record<string, string> = {
 };
 
 export const Route = createFileRoute("/products/")({
+  staticData: { sitemap: true },
   validateSearch: (search: Record<string, unknown>): ProductsSearch => {
     const rawCollection = typeof search["collection"] === "string" ? search["collection"] : "";
     const rawMissing = typeof search["missingMapping"] === "string" ? search["missingMapping"] : "";

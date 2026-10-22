@@ -25,6 +25,7 @@ import { Route as PrivacyPolicyRouteImport } from './routes/privacy-policy'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as ReturnsRefundsRouteImport } from './routes/returns-refunds'
 import { Route as ShippingDeliveryRouteImport } from './routes/shipping-delivery'
+import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as TermsAndConditionsRouteImport } from './routes/terms-and-conditions'
 import { Route as AccountIndexRouteImport } from './routes/account.index'
 import { Route as AccountOrdersRouteImport } from './routes/account.orders'
@@ -118,6 +119,11 @@ const ShippingDeliveryRoute = ShippingDeliveryRouteImport.update({
   path: '/shipping-delivery',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
+  id: '/sitemap.xml',
+  path: '/sitemap.xml',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TermsAndConditionsRoute = TermsAndConditionsRouteImport.update({
   id: '/terms-and-conditions',
   path: '/terms-and-conditions',
@@ -196,6 +202,7 @@ export interface FileRoutesByFullPath {
   '/reset-password': typeof ResetPasswordRoute
   '/returns-refunds': typeof ReturnsRefundsRoute
   '/shipping-delivery': typeof ShippingDeliveryRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/terms-and-conditions': typeof TermsAndConditionsRoute
   '/account/orders': typeof AccountOrdersRoute
   '/account/profile': typeof AccountProfileRoute
@@ -225,6 +232,7 @@ export interface FileRoutesByTo {
   '/reset-password': typeof ResetPasswordRoute
   '/returns-refunds': typeof ReturnsRefundsRoute
   '/shipping-delivery': typeof ShippingDeliveryRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/terms-and-conditions': typeof TermsAndConditionsRoute
   '/account/orders': typeof AccountOrdersRoute
   '/account/profile': typeof AccountProfileRoute
@@ -256,6 +264,7 @@ export interface FileRoutesById {
   '/reset-password': typeof ResetPasswordRoute
   '/returns-refunds': typeof ReturnsRefundsRoute
   '/shipping-delivery': typeof ShippingDeliveryRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/terms-and-conditions': typeof TermsAndConditionsRoute
   '/account/orders': typeof AccountOrdersRoute
   '/account/profile': typeof AccountProfileRoute
@@ -288,6 +297,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/returns-refunds'
     | '/shipping-delivery'
+    | '/sitemap.xml'
     | '/terms-and-conditions'
     | '/account/orders'
     | '/account/profile'
@@ -317,6 +327,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/returns-refunds'
     | '/shipping-delivery'
+    | '/sitemap.xml'
     | '/terms-and-conditions'
     | '/account/orders'
     | '/account/profile'
@@ -347,6 +358,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/returns-refunds'
     | '/shipping-delivery'
+    | '/sitemap.xml'
     | '/terms-and-conditions'
     | '/account/orders'
     | '/account/profile'
@@ -378,6 +390,7 @@ export interface RootRouteChildren {
   ResetPasswordRoute: typeof ResetPasswordRoute
   ReturnsRefundsRoute: typeof ReturnsRefundsRoute
   ShippingDeliveryRoute: typeof ShippingDeliveryRoute
+  SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   TermsAndConditionsRoute: typeof TermsAndConditionsRoute
   AdminQuotesRoute: typeof AdminQuotesRoute
   AdminReviewsRoute: typeof AdminReviewsRoute
@@ -499,6 +512,13 @@ declare module '@tanstack/react-router' {
       path: '/shipping-delivery'
       fullPath: '/shipping-delivery'
       preLoaderRoute: typeof ShippingDeliveryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sitemap.xml': {
+      id: '/sitemap.xml'
+      path: '/sitemap.xml'
+      fullPath: '/sitemap.xml'
+      preLoaderRoute: typeof SitemapDotxmlRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/terms-and-conditions': {
@@ -632,6 +652,7 @@ const rootRouteChildren: RootRouteChildren = {
   ResetPasswordRoute: ResetPasswordRoute,
   ReturnsRefundsRoute: ReturnsRefundsRoute,
   ShippingDeliveryRoute: ShippingDeliveryRoute,
+  SitemapDotxmlRoute: SitemapDotxmlRoute,
   TermsAndConditionsRoute: TermsAndConditionsRoute,
   AdminQuotesRoute: AdminQuotesRoute,
   AdminReviewsRoute: AdminReviewsRoute,

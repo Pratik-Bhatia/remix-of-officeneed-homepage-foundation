@@ -6,6 +6,7 @@ import { Footer } from "@/components/officeneed/Footer";
 import { fetchAllProducts, formatMoney } from "@/lib/shopify";
 
 export const Route = createFileRoute("/shop/")({
+  staticData: { sitemap: true },
   component: ShopPage,
   head: () => ({
     meta: [

@@ -53,6 +53,7 @@ function requirePhoneOrNull(raw: string): string | null {
 }
 
 export const Route = createFileRoute("/account/profile")({
+  staticData: { sitemap: false },
   component: ProfilePage,
 });
 
