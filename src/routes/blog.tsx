@@ -9,7 +9,12 @@ export const Route = createFileRoute('/blog')({
     meta: [
       { title: 'Blog — Officeneed' },
       { name: 'description', content: 'Read our latest articles, insights, and news.' },
+      { property: 'og:title', content: 'Blog — Officeneed' },
+      { property: 'og:description', content: 'Workspace, office supply and corporate gifting insights from the Officeneed team.' },
+      { property: 'og:type', content: 'website' },
+      { property: 'og:url', content: 'https://officeneed.store/blog' },
     ],
+    links: [{ rel: 'canonical', href: 'https://officeneed.store/blog' }],
   }),
 })
 

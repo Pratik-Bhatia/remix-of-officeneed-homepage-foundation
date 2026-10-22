@@ -87,7 +87,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Officeneed" },
+      { title: "Officeneed — Corporate Procurement, Gifting & Office Supplies" },
       { name: "description", content: "Corporate procurement made simpler." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },

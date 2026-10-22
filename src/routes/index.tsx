@@ -24,7 +24,9 @@ export const Route = createFileRoute("/")({
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
+      { property: "og:url", content: "https://officeneed.store/" },
     ],
+    links: [{ rel: "canonical", href: "https://officeneed.store/" }],
   }),
   component: Index,
 });
