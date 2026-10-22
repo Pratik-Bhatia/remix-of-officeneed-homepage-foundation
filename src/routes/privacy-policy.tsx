@@ -10,6 +10,7 @@ const DESC = "How Officeneed collects, uses and shares information when you brow
 const LAST_UPDATED = "13 October 2026";
 
 export const Route = createFileRoute("/privacy-policy")({
+  staticData: { sitemap: true },
   component: PrivacyPolicyPage,
   head: () => ({
     meta: [

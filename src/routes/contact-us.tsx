@@ -18,6 +18,7 @@ const TITLE = 'Contact Us — Officeneed'
 const DESC = 'Send Officeneed an enquiry about corporate gifting, office stationery, computer peripherals or fragrances, or email care@officeneed.in.'
 
 export const Route = createFileRoute('/contact-us')({
+  staticData: { sitemap: true },
   component: ContactUsPage,
   head: () => ({
     meta: [

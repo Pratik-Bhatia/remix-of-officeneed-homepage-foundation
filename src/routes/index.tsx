@@ -7,6 +7,7 @@ import { CorporateGiftingCarousel } from "@/components/officeneed/CorporateGifti
 import { Footer } from "@/components/officeneed/Footer";
 
 export const Route = createFileRoute("/")({
+  staticData: { sitemap: true },
   head: () => ({
     meta: [
       { title: "Officeneed — One Vendor. Multiple Solutions." },

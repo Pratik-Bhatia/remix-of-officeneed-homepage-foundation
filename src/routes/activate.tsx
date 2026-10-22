@@ -36,6 +36,7 @@ import { refreshSaves } from "@/lib/saves";
  * their inbox never is yet.
  */
 export const Route = createFileRoute("/activate")({
+  staticData: { sitemap: false },
   validateSearch: (search: Record<string, unknown>): { activation_url?: string } =>
     search["activation_url"] != null && String(search["activation_url"]) !== ""
       ? { activation_url: String(search["activation_url"]) }

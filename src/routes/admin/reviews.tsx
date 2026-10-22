@@ -12,6 +12,7 @@ import {
 } from "@/lib/admin-reviews.functions";
 
 export const Route = createFileRoute("/admin/reviews")({
+  staticData: { sitemap: false },
   component: AdminReviewsPage,
 });
 

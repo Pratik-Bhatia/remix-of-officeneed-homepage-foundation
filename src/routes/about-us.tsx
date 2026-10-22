@@ -7,6 +7,7 @@ const TITLE = 'About Us — Officeneed'
 const DESC = 'Officeneed brings corporate gifting, office stationery, computer peripherals and fragrances together under one supplier for businesses across India.'
 
 export const Route = createFileRoute('/about-us')({
+  staticData: { sitemap: true },
   component: AboutUsPage,
   head: () => ({
     meta: [

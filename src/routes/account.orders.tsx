@@ -9,6 +9,7 @@ import { resolveCustomerOrders } from "@/lib/customer-orders.functions";
 import type { CustomerOrder } from "@/lib/customer";
 
 export const Route = createFileRoute("/account/orders")({
+  staticData: { sitemap: false },
   component: OrdersPage,
 });
 

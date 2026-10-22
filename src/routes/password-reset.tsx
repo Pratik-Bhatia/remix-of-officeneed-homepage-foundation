@@ -39,6 +39,7 @@ import { refreshSaves } from "@/lib/saves";
  * link from their inbox isn't signed in yet.
  */
 export const Route = createFileRoute("/password-reset")({
+  staticData: { sitemap: false },
   validateSearch: (search: Record<string, unknown>): { reset_url?: string } =>
     search["reset_url"] != null && String(search["reset_url"]) !== ""
       ? { reset_url: String(search["reset_url"]) }

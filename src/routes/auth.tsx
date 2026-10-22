@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 type AuthSearch = { redirect?: string };
 
 export const Route = createFileRoute("/auth")({
+  staticData: { sitemap: false },
   validateSearch: (search: Record<string, unknown>): AuthSearch => {
     const raw = typeof search["redirect"] === "string" ? (search["redirect"] as string) : "";
     // only allow same-origin relative paths

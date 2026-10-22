@@ -3,6 +3,7 @@ import { Navbar } from '@/components/officeneed/Navbar'
 import { Footer } from '@/components/officeneed/Footer'
 
 export const Route = createFileRoute('/blog')({
+  staticData: { sitemap: true },
   component: BlogPage,
   head: () => ({
     meta: [

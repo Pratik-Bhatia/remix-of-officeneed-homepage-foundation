@@ -70,6 +70,7 @@ const setPrivateCacheHeader = createServerOnlyFn(() => {
 });
 
 export const Route = createFileRoute("/products/$slug")({
+  staticData: { sitemap: true },
   validateSearch: (search: Record<string, unknown>): { variant?: string } =>
     search["variant"] != null && String(search["variant"]) !== "" ? { variant: String(search["variant"]) } : {},
   loader: async ({ params }) => {

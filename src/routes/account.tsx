@@ -23,6 +23,7 @@ import { useB2BStore } from "@/stores/b2bStore";
 import { ShoppingModeSwitcher } from "@/components/officeneed/ShoppingModeSwitcher";
 
 export const Route = createFileRoute("/account")({
+  staticData: { sitemap: "exclude-subtree" },
   head: () => ({
     meta: [
       { title: "Your Account | Officeneed" },
