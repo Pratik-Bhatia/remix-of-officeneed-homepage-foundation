@@ -11,6 +11,9 @@ import { productBelongsToCategory, getCategoryByTitle, resolveLiveTitle } from "
 import { useNormalizedImageScale } from "@/lib/image-content-scale";
 import { useShopifyCollections } from "@/lib/shopify-overlay";
 import { shopifyImageUrl } from "@/lib/shopify-image";
+import { getDiscount } from "@/lib/discount";
+import { formatMoney } from "@/lib/shopify";
+import { DiscountBadge } from "@/components/officeneed/DiscountBadge";
 
 // Grid cards never render wider than a few hundred px -- 600 comfortably
 // covers a ~300px card at 2x pixel density without requesting Shopify's
@@ -69,6 +72,7 @@ export function ProductCard({
   // string, which only ever serves as a lookup key here.
   const { collections } = useShopifyCollections();
   const isSaved = savedHandles.includes(product.slug);
+  const discount = getDiscount(product.priceAmount, product.compareAtAmount);
 
   // Officeneed Exclusive's source photos have inconsistent product-to-frame
   // fill ratios (see image-content-scale.ts) -- normalize perceived size
@@ -194,10 +198,24 @@ export function ProductCard({
                 : "group-hover:scale-105",
             )}
           />
-          {product.badge ? (
-            <span className="absolute left-3 top-3 rounded-full bg-primary px-2.5 py-1 text-[0.62rem] font-semibold uppercase tracking-[0.12em] text-primary-foreground z-10">
-              {product.badge}
-            </span>
+          {/* Top-left stack: the existing product badge (if any) with the
+              dynamic discount badge beneath it, so they never overlap each
+              other. The heart owns top-right. max-w leaves room for it. */}
+          {product.badge || (!pricePending && discount) ? (
+            <div className="absolute left-2 top-2 z-10 flex max-w-[calc(100%-3.5rem)] flex-col items-start gap-1 sm:left-3 sm:top-3 sm:gap-1.5">
+              {product.badge ? (
+                <span className="rounded-full bg-primary px-2.5 py-1 text-[0.62rem] font-semibold uppercase tracking-[0.12em] text-primary-foreground">
+                  {product.badge}
+                </span>
+              ) : null}
+              {!pricePending ? (
+                <DiscountBadge
+                  price={product.priceAmount}
+                  compareAtPrice={product.compareAtAmount}
+                  className="px-1.5 py-0.5 text-[0.58rem] sm:px-2.5 sm:py-1 sm:text-[0.62rem]"
+                />
+              ) : null}
+            </div>
           ) : null}
           {!product.price && (
             <span className="absolute right-3 top-3 rounded-full bg-foreground/90 px-2.5 py-1 text-[0.62rem] font-medium tracking-[0.1em] text-background backdrop-blur z-10">
@@ -219,17 +237,27 @@ export function ProductCard({
           <h3 className="line-clamp-2 text-sm font-semibold leading-snug text-foreground sm:text-base">
             {product.name}
           </h3>
-          <p className="text-base font-normal tabular-nums text-foreground sm:text-lg">
-            {pricePending ? (
-              <span className="inline-block h-[1em] w-16 animate-pulse rounded bg-muted align-middle" aria-hidden />
-            ) : product.price ? (
-              // Still the min/starting variant price Shopify returned
-              // (product.startingPrice/product.price are unchanged) -- only
-              // the "From " prefix text is dropped from this display.
-              product.price
-            ) : (
-              "Price on enquiry"
-            )}
+          {/* Selling price and (when discounted) the crossed-out original
+              share one baseline-aligned row; wraps only if the pair truly
+              can't fit the card width. */}
+          <p className="flex max-w-full flex-wrap items-baseline justify-center gap-x-1.5 sm:gap-x-2">
+            <span className="text-base font-normal tabular-nums text-foreground sm:text-lg">
+              {pricePending ? (
+                <span className="inline-block h-[1em] w-16 animate-pulse rounded bg-muted align-middle" aria-hidden />
+              ) : product.price ? (
+                // Still the min/starting variant price Shopify returned
+                // (product.startingPrice/product.price are unchanged) -- only
+                // the "From " prefix text is dropped from this display.
+                product.price
+              ) : (
+                "Price on enquiry"
+              )}
+            </span>
+            {!pricePending && discount ? (
+              <span className="text-xs tabular-nums text-muted-foreground line-through sm:text-sm">
+                {formatMoney(discount.compareAtAmount, product.currencyCode ?? "INR")}
+              </span>
+            ) : null}
           </p>
         </div>
       </Link>

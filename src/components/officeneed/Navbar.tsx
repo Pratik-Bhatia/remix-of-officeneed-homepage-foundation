@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { lockScroll, unlockScroll } from "@/lib/scroll-lock";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
+import { PromoAnnouncementBar } from "@/components/officeneed/PromoAnnouncementBar";
 import { Menu, MessageSquare, Search, User, X, ChevronDown, ChevronRight, PackageSearch } from "lucide-react";
 import logoUrl from "@/assets/officeneed-logo.svg";
 import { primaryNavCategories as navCategories, navItemTarget, navCategoryTarget, getLiveNavLabel } from "@/lib/navigation";
@@ -224,6 +225,9 @@ export function Navbar() {
 
   return (
     <>
+    {/* Rendered here (not per route) so every page that has a navbar gets
+        exactly one bar; it decides for itself whether the page warrants one. */}
+    <PromoAnnouncementBar />
     <header className="sticky top-0 z-50 w-full border-b border-border bg-background">
       <div className="mx-auto grid h-16 w-full max-w-[1600px] grid-cols-[1fr_auto_1fr] items-center px-3 sm:px-6 lg:h-20 lg:px-12 xl:flex">
         {/* Left zone: hamburger on mobile/tablet, hidden on desktop */}

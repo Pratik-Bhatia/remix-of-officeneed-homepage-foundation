@@ -8,6 +8,7 @@ import { useB2BStore, getEffectiveCompanyLocationId } from "@/stores/b2bStore";
 import { appendAttribution, getAttribution } from "@/lib/attribution";
 import { getCustomerCart, saveCustomerCart } from "@/lib/customer-cart.functions";
 import { trackAddToCart } from "@/lib/meta-pixel";
+import { getPromotionCodeToCarry } from "@/config/promotions";
 import { trackGoogleAddToCart, trackGoogleRemoveFromCart } from "@/lib/google-analytics";
 
 export interface CartItem {
@@ -302,7 +303,7 @@ const CART_LINES_REMOVE_MUTATION = `
 `;
 
 const CART_DISCOUNT_CODES_UPDATE_MUTATION = `
-  mutation cartDiscountCodesUpdate($cartId: ID!, $discountCodes: [String!]) {
+  mutation cartDiscountCodesUpdate($cartId: ID!, $discountCodes: [String!]!) {
     cartDiscountCodesUpdate(cartId: $cartId, discountCodes: $discountCodes) { ${MUTATION_RESULT} }
   }
 `;
@@ -1184,6 +1185,14 @@ export const useCartStore = create<CartStore>()(
               merchandiseId: item.variantId,
               ...(item.lineAttributes?.length ? { attributes: item.lineAttributes } : {}),
             };
+            // Carry this product's own promotion code (if it is applied on the
+            // main cart) into the one-item cart. Shopify validates it: an
+            // inapplicable code just comes back applicable:false and checkout
+            // proceeds at full price -- it never blocks Buy Now.
+            const promoCode = getPromotionCodeToCarry(
+              item.product.node.collections?.edges.map((e) => e.node.handle),
+              get().discountCodes,
+            );
             const { payload: createPayload } = await runWithQuantityRuleRetry(
               item.variantId,
               item.quantity,
@@ -1193,6 +1202,7 @@ export const useCartStore = create<CartStore>()(
                     lines: [{ ...lineInputBase, quantity }],
                     ...(buyerIdentity ? { buyerIdentity } : {}),
                     ...(attributes.length ? { attributes } : {}),
+                    ...(promoCode ? { discountCodes: [promoCode] } : {}),
                   },
                 });
                 return createData?.data?.cartCreate ?? {};

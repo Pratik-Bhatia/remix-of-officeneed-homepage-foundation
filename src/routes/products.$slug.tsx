@@ -7,6 +7,9 @@ import { Minus, Plus, ChevronLeft, ChevronRight, Loader2, ZoomIn, X, ShieldCheck
 import { Navbar } from "@/components/officeneed/Navbar";
 import { Footer } from "@/components/officeneed/Footer";
 import { ProductCard } from "@/components/officeneed/ProductCard";
+import { ProductCouponOffer } from "@/components/officeneed/ProductCouponOffer";
+import { DiscountBadge } from "@/components/officeneed/DiscountBadge";
+import { getDiscount } from "@/lib/discount";
 import { ProductInformation } from "@/components/officeneed/ProductInformation";
 import { ProductReviews, ProductRatingSummary, MOCK_REVIEWS, type Review } from "@/components/officeneed/ProductReviews";
 // Lazy -- the customizer (logo upload, canvas preview, printing-method
@@ -927,7 +930,7 @@ function ProductDetail() {
   const priceSkeleton = (
     <span className="inline-block h-[1em] w-20 animate-pulse rounded bg-muted align-middle" aria-hidden />
   );
-  const showCompareAt = !pricePending && Number.isFinite(compareAmount) && compareAmount > unitAmount;
+  const showCompareAt = !pricePending && getDiscount(unitAmount, compareAmount) !== null;
 
   const availabilityLabel = selectedVariant
     ? selectedVariant.availableForSale
@@ -1212,6 +1215,7 @@ function ProductDetail() {
                           {formatMoney(compareAmount, currency)}
                         </p>
                       ) : null}
+                      {!pricePending ? <DiscountBadge price={unitAmount} compareAtPrice={compareAmount} /> : null}
                     </div>
                     {/* Stock indicator on the price row: compact on mobile,
                         full "Ready to dispatch" text on sm+. */}
@@ -1219,6 +1223,10 @@ function ProductDetail() {
                     <div className="hidden sm:block shrink-0">{renderStockStatus(false)}</div>
                   </div>
                 </div>
+
+                {/* Category coupon offer (Fragrance / Corporate Gifting only);
+                    product-level eligibility, so it does not depend on the variant. */}
+                <ProductCouponOffer collectionHandles={product.collectionHandles} />
 
                 {/* Variant choice */}
                 {hasVariantChoice ? (

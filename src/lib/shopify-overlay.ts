@@ -19,6 +19,7 @@ import { MAIN_CATEGORIES, productBelongsToCategory, resolveSubcategoryFromHandle
 import { deriveFilterAttributes } from "@/lib/filters";
 import { buildProductSpecifications, hasStructuredSchema } from "@/lib/product-details-schema";
 import { getDevFallbackMetafieldValue } from "@/lib/product-details-dev-fallback";
+import { minVariantCompareAt } from "@/lib/discount";
 import { deriveKeyFeatures } from "@/lib/key-features";
 import { resolveFragranceInformation } from "@/lib/fragrance-information";
 
@@ -89,6 +90,7 @@ export function mergeProduct(product: Product, node?: ShopifyProductNode): Produ
     ...(Number.isFinite(amount) && amount > 0
       ? { priceAmount: amount, currencyCode: node.priceRange.minVariantPrice.currencyCode }
       : {}),
+    compareAtAmount: minVariantCompareAt(variants),
     ...(variants[0]?.sku ? { sku: variants[0].sku } : {}),
     ...(variantSkuList.length ? { variantSkus: variantSkuList } : {}),
     ...(description
@@ -469,6 +471,7 @@ export function shopifyNodeToProduct(node: ShopifyProductNode): Product {
     ...(amount > 0
       ? { priceAmount: amount, currencyCode: node.priceRange.minVariantPrice.currencyCode }
       : {}),
+    compareAtAmount: minVariantCompareAt(variants),
     ...(variants[0]?.sku ? { sku: variants[0].sku } : {}),
     ...(variantSkuList.length ? { variantSkus: variantSkuList } : {}),
     category,

@@ -77,6 +77,8 @@ export type Product = {
   descriptionHtml?: string;
   /** Numeric price of the default/selected variant, in major currency units */
   priceAmount?: number;
+  /** compareAtPrice of the same (cheapest) variant priceAmount comes from; only set when it is a valid discount */
+  compareAtAmount?: number | undefined;
   currencyCode?: string;
   vendor?: string;
   tags?: string[];
