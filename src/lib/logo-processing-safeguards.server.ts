@@ -1,5 +1,5 @@
 // Server-side dedup/cache/usage-cap safeguards for the remove.bg
-// integration (processLogoServer, image-processing.functions.ts).
+// integration (processLogoServer, logo-processing-core.server.ts).
 //
 // This module owns the DECISIONS (claim/poll/reclaim state machine, daily
 // and global cap checks, concurrency reservation); the actual Supabase
@@ -35,7 +35,7 @@
 // Fail-closed policy: every check in this module that depends on
 // Supabase returns an explicit "unavailable" outcome when the store can't
 // be reached, and claimProcessingSlot propagates that straight back as
-// ClaimOutcome's "unavailable" kind -- image-processing.functions.ts
+// ClaimOutcome's "unavailable" kind -- logo-processing-core.server.ts
 // turns that into a clear "temporarily unavailable" error WITHOUT ever
 // calling remove.bg.
 

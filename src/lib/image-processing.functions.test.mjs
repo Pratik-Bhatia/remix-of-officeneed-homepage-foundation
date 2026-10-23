@@ -1,4 +1,4 @@
-// Regression tests for processLogoCore (src/lib/image-processing.functions.ts)
+// Regression tests for processLogoCore (src/lib/logo-processing-core.server.ts)
 // -- the full remove.bg orchestration: validation -> dedup/rate-limit
 // safeguards -> the outbound API call -> the PNG recolor step -> the
 // response. processLogoServer itself (the createServerFn wrapper) can't
@@ -172,7 +172,7 @@ mock.module("@/lib/logo-processing-store.server", {
   },
 });
 
-const { processLogoCore } = await import("./image-processing.functions");
+const { processLogoCore } = await import("./logo-processing-core.server");
 
 let ipCounter = 0;
 function freshIp() {

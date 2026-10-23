@@ -1,5 +1,5 @@
 // Thin, directly-mockable wrapper around remove.bg's HTTP API. Kept as its
-// own module rather than inlined in image-processing.functions.ts so tests
+// own module rather than inlined in logo-processing-core.server.ts so tests
 // can `mock.module` this exact import path -- the same convention
 // b2b-company-setup.functions.test.mjs already uses for shopify-admin.server
 // (register the mock once at module scope, swap behavior per-test via a
