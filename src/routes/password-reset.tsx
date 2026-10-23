@@ -1,4 +1,5 @@
 import { FieldError } from "@/components/ui/field-error";
+import { CLARITY_MASK } from "@/lib/clarity";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { Loader2 } from "lucide-react";
@@ -105,7 +106,7 @@ function PasswordResetPage() {
               This password reset link is invalid or incomplete. Please request a new one from the sign-in screen.
             </p>
           ) : (
-            <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+            <form onSubmit={handleSubmit} className="mt-6 space-y-4" {...CLARITY_MASK}>
               <div className="space-y-2">
                 <Label htmlFor="password" className="text-xs font-medium tracking-wide text-muted-foreground">
                   New Password

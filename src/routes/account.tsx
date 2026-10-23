@@ -1,4 +1,5 @@
 import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
+import { CLARITY_MASK } from "@/lib/clarity";
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Package, Heart, Settings, LogOut, Building2 } from "lucide-react";
@@ -180,7 +181,7 @@ function AccountLayout() {
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <Navbar />
-      <main className="flex-1 w-full bg-[#F5F5F7]">
+      <main className="flex-1 w-full bg-[#F5F5F7]" {...CLARITY_MASK}>
         <div
           className={cn(
             "mx-auto px-4 py-10 sm:px-6 sm:py-14 lg:px-8",

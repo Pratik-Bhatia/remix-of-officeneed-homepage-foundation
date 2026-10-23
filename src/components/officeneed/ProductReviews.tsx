@@ -1,4 +1,5 @@
 import { useState, useRef } from "react";
+import { CLARITY_MASK } from "@/lib/clarity";
 import { cn } from "@/lib/utils";
 import { CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
@@ -288,6 +289,7 @@ function ReviewForm({
 
   return (
     <form
+      {...CLARITY_MASK}
       onSubmit={handleSubmit}
       noValidate
       className="mt-8 rounded-2xl border border-gray-200 bg-gray-50/50 p-6 sm:p-8"

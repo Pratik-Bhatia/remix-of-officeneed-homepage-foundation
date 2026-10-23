@@ -1,4 +1,5 @@
 import { Link } from "@tanstack/react-router";
+import { CLARITY_MASK } from "@/lib/clarity";
 import {
   ArrowRight,
   Facebook,
@@ -292,6 +293,7 @@ export function Footer() {
               </p>
 
               <form
+                {...CLARITY_MASK}
                 className="mt-7 flex max-w-lg items-center gap-3 rounded-full bg-background/10 py-2 pl-6 pr-2"
                 onSubmit={async (e) => {
                   e.preventDefault();

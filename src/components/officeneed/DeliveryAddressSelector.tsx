@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { CLARITY_MASK } from "@/lib/clarity";
 import { toast } from "sonner";
 import { Loader2, MapPin, Pencil } from "lucide-react";
 import {
@@ -256,7 +257,7 @@ function DeliveryAddressDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-lg" {...CLARITY_MASK}>
         <DialogHeader>
           <DialogTitle>Delivery address</DialogTitle>
           <DialogDescription>

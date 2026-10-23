@@ -1,4 +1,5 @@
 import { useState, type FormEvent, type ReactNode } from "react";
+import { CLARITY_MASK } from "@/lib/clarity";
 import {
   Dialog,
   DialogContent,
@@ -81,7 +82,7 @@ export function EnquiryDialog({
       }}
     >
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg" {...CLARITY_MASK}>
         <DialogHeader>
           <DialogTitle className="text-left">Enquire about {product.name}</DialogTitle>
           <DialogDescription className="text-left">

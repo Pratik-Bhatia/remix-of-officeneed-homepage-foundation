@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate, useRouter } from "@tanstack/react-router";
+import { CLARITY_MASK } from "@/lib/clarity";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -90,7 +91,7 @@ function AuthPage() {
           Sign in with your Officeneed admin account to moderate reviews and quotes.
         </p>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4" {...CLARITY_MASK}>
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
             <Input

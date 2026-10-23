@@ -1,4 +1,5 @@
 import { FieldError } from "@/components/ui/field-error";
+import { CLARITY_MASK } from "@/lib/clarity";
 import { trackLead } from "@/lib/meta-pixel";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -907,6 +908,7 @@ export function ChatWidget() {
       >
         <div
           role="dialog"
+          {...CLARITY_MASK}
           aria-modal="false"
           aria-label={`Officeneed ${ASSISTANT_NAME}`}
           aria-hidden={!open}

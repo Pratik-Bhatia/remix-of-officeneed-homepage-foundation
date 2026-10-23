@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { CLARITY_MASK } from "@/lib/clarity";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -56,7 +57,7 @@ function ResetPasswordPage() {
         <p className="text-sm text-muted-foreground mb-6">
           Choose a new password for your admin account.
         </p>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4" {...CLARITY_MASK}>
           <div className="space-y-2">
             <Label htmlFor="new-password">New password</Label>
             <Input

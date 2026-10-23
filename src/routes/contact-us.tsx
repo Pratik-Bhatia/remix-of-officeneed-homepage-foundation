@@ -1,3 +1,4 @@
+import { CLARITY_MASK } from "@/lib/clarity";
 import { useState, type FormEvent } from 'react'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { z } from 'zod'
@@ -110,7 +111,7 @@ function ContactForm() {
     ) : null
 
   return (
-    <form onSubmit={onSubmit} noValidate className="space-y-5 text-left">
+    <form onSubmit={onSubmit} noValidate className="space-y-5 text-left" {...CLARITY_MASK}>
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="contact-name">Name *</Label>

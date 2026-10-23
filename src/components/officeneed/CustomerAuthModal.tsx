@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { CLARITY_MASK } from "@/lib/clarity";
 import { cn } from "@/lib/utils";
 import { FieldError, focusField } from "@/components/ui/field-error";
 import { toast } from "sonner";
@@ -61,7 +62,7 @@ function AuthSurface({
       </div>
     );
   }
-  return <DialogContent className={className}>{children}</DialogContent>;
+  return <DialogContent className={className} {...CLARITY_MASK}>{children}</DialogContent>;
 }
 
 export function CustomerAuthModal({

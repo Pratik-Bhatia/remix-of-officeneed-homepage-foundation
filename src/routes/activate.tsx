@@ -1,4 +1,5 @@
 import { FieldError } from "@/components/ui/field-error";
+import { CLARITY_MASK } from "@/lib/clarity";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { Loader2 } from "lucide-react";
@@ -103,7 +104,7 @@ function ActivatePage() {
               contact Officeneed for a new one.
             </p>
           ) : (
-            <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+            <form onSubmit={handleSubmit} className="mt-6 space-y-4" {...CLARITY_MASK}>
               <div className="space-y-2">
                 <Label htmlFor="password" className="text-xs font-medium tracking-wide text-muted-foreground">
                   New Password

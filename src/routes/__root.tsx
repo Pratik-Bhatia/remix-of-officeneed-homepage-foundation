@@ -17,6 +17,7 @@ import { useB2BSync } from "@/hooks/useB2BSync";
 import { ChatWidget } from "@/components/officeneed/ChatWidget";
 import { MetaPixel } from "@/components/officeneed/MetaPixel";
 import { GoogleAnalytics } from "@/components/officeneed/GoogleAnalytics";
+import { Clarity } from "@/components/officeneed/Clarity";
 import { META_PIXEL_ID } from "@/lib/meta-pixel";
 
 
@@ -152,6 +153,7 @@ function RootComponent() {
       <B2BSync />
       <MetaPixel />
       <GoogleAnalytics />
+      <Clarity />
       <Toaster position="top-center" />
     </QueryClientProvider>
   );
