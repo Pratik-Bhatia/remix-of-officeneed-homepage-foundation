@@ -26,7 +26,7 @@ function base64ToUint8Array(base64: string) {
   return bytes;
 }
 
-const buyNowCustomizationSchema = z.object({
+export const buyNowCustomizationSchema = z.object({
   variantId: z.string(),
   productName: z.string().optional(),
   productVariant: z.string().optional(),
@@ -60,6 +60,7 @@ const buyNowCustomizationSchema = z.object({
           position: z.object({ x: z.number(), y: z.number() }).optional(),
           rotation: z.number().optional(),
           flip: z.string().optional(),
+          printingMethod: z.string().optional(), // this component's own method
           previewImage: z.string().optional(), // base64
         }),
       ]),
@@ -151,6 +152,7 @@ export async function saveBuyNowCustomizationRecord(
             position: comp.position,
             rotation: comp.rotation,
             flip: comp.flip,
+            printingMethod: comp.printingMethod,
             previewUrl: componentPreviewUrl,
           });
         }

@@ -146,3 +146,24 @@ test("no logo and no gift set still saves a valid record (e.g. printing method o
   assert.equal(row.printing_method, "Laser Engraving");
   assert.equal(row.customization_data, null);
 });
+
+const { buyNowCustomizationSchema } = await import("@/lib/buy-now-customization.functions");
+
+test("a gift-set Buy Now record stores each component's own printing method", async () => {
+  const input = buyNowCustomizationSchema.parse(baseInput({
+    printingMethod: "A5 Notebook Diary: UV Printing; Ball Pen: Laser Engraving",
+    giftSetCustomizations: [
+      { component: "A5 Notebook Diary", customized: true, widthMm: 30, heightMm: 15, printingMethod: "UV Printing" },
+      { component: "Ball Pen", customized: true, widthMm: 20, heightMm: 8, printingMethod: "Laser Engraving" },
+    ],
+  }));
+  const client = makeFakeClient();
+  const result = await saveBuyNowCustomizationRecord(input, client);
+  assert.equal(result.ok, true);
+  const row = client._insertedRows[0];
+  assert.deepEqual(row.customization_data.map((c) => [c.component, c.printingMethod]), [
+    ["A5 Notebook Diary", "UV Printing"],
+    ["Ball Pen", "Laser Engraving"],
+  ]);
+  assert.equal(row.printing_method, "A5 Notebook Diary: UV Printing; Ball Pen: Laser Engraving");
+});

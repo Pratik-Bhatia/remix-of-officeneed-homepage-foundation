@@ -105,6 +105,7 @@ interface BuyNowCustomizationRecord {
     heightMm?: number;
     rotation?: number;
     flip?: string;
+    printingMethod?: string;
     previewUrl?: string | null;
   }> | null;
 }
@@ -317,6 +318,7 @@ async function processOrderPaid(payload: ShopifyOrderWebhookPayload): Promise<vo
         heightMm: c.heightMm,
         rotation: c.rotation,
         flip: c.flip,
+        ...(c.printingMethod ? { printingMethod: c.printingMethod } : {}),
         ...(previewImageDataUrl ? { previewImageDataUrl } : {}),
       };
     });

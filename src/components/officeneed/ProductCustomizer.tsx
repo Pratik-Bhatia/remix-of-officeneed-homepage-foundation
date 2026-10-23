@@ -21,6 +21,7 @@ import { motion, useMotionValue } from "motion/react";
 import html2canvas from "html2canvas-pro";
 import { submitCorporateQuote } from "@/lib/corporate-quotes.functions";
 import { saveBuyNowCustomization } from "@/lib/buy-now-customization.functions";
+import { isUvAvailableForQuantity, resolvePrintingMethod, summarizeComponentMethods, type PrintingMethodName } from "@/lib/printing-methods";
 import { getBrandingLimits, computeEffectiveMaxScale, computeGeometricMaxScale, computeMinEffectiveScale, scaleToPhysicalMm, widthMmToScale, heightMmToScale, MIN_LOGO_SIZE_MM, GIFT_SET_REFERENCE_WIDTH_MM, CORPORATE_GIFTING_DEFAULT_REFERENCE_WIDTH_MM, type PrintingMethod, type BrandingLimits } from "@/lib/branding-limits";
 import { getPrintableArea } from "@/lib/printable-area";
 import { formatMoney } from "@/lib/shopify";
@@ -336,11 +337,16 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
     flipV: boolean;
     logoPos: { x: number; y: number };
     logoNaturalDims: { w: number; h: number } | null;
+    /** This component's OWN requested printing method (keyed by component id
+     * in componentStates) -- never shared across the set. What is actually
+     * used at the current quantity is resolvePrintingMethod(...). */
+    printingMethod: PrintingMethodName;
   };
   const BLANK_COMPONENT_STATE: ComponentCustomization = {
     logo: null, logoFile: null, logoBase64: null, logoDataUrl: null,
     uvLogo: null, laserLogo: null, logoScale: 50, logoRotation: 0,
     flipH: false, flipV: false, logoPos: { x: 0, y: 0 }, logoNaturalDims: null,
+    printingMethod: "Laser Engraving",
   };
   const giftSetComponentsList: GiftSetComponent[] = product.giftSetComponents ?? [];
   const isMultiComponentGiftSet = giftSetComponentsList.length >= 2;
@@ -383,6 +389,7 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
     // and the motion values are always Framer's current live truth.
     logoPos: { x: logoMotionX.get(), y: logoMotionY.get() },
     logoNaturalDims,
+    printingMethod: userSelectedPrintingMethod,
   });
 
   /** Applies a saved (or blank) component state to the live flat editing buffer. */
@@ -401,6 +408,7 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
     logoMotionX.set(state.logoPos.x);
     logoMotionY.set(state.logoPos.y);
     setLogoNaturalDims(state.logoNaturalDims);
+    setUserSelectedPrintingMethod(state.printingMethod);
     setIsSelected(false);
   };
 
@@ -537,6 +545,9 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
           flipH: false,
           flipV: false,
           logoPos: { x: 0, y: 0 },
+          // An upload seeds the logo only -- never another component's
+          // already-chosen printing method.
+          printingMethod: prev[comp.id]?.printingMethod ?? "Laser Engraving",
         };
       }
       return next;
@@ -870,8 +881,19 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
   const clampToShopifyQuantityRule = (n: number) => Math.min(shopifyMaxQty ?? Infinity, Math.max(shopifyMinQty, n));
 
   const quantityNum = parseInt(formData.quantity, 10) || shopifyMinQty;
-  const isUvAvailable = quantityNum >= 25;
-  const printingMethod = isUvAvailable ? userSelectedPrintingMethod : "Laser Engraving";
+  const isUvAvailable = isUvAvailableForQuantity(quantityNum);
+  const printingMethod = resolvePrintingMethod(userSelectedPrintingMethod, quantityNum);
+  /** The method a given component will actually use at the current quantity. */
+  const getComponentPrintingMethod = (state: ComponentCustomization): PrintingMethodName =>
+    resolvePrintingMethod(state.printingMethod, quantityNum);
+  /** One submitted string: the shared method, or "Name: Method; ..." when components differ. */
+  const summarizeSubmittedMethods = (
+    list: Array<{ component: string; customized: boolean; printingMethod?: string }> | undefined,
+    fallback: string,
+  ) => {
+    const used = (list ?? []).filter((c) => c.customized && c.printingMethod).map((c) => ({ name: c.component, method: c.printingMethod! }));
+    return used.length ? summarizeComponentMethods(used) : fallback;
+  };
   const currentDisplayLogo = printingMethod === "Laser Engraving" ? laserLogo : uvLogo;
   const laserDropShadow = "drop-shadow(0px -1px 0px rgba(0,0,0,0.3)) drop-shadow(0px 1px 1px rgba(255,255,255,0.2))";
   
@@ -1313,7 +1335,11 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
     // so removing it clears every component's customization, not just the
     // currently active one.
     if (isMultiComponentGiftSet) {
-      setComponentStates({});
+      setComponentStates((prev) =>
+        Object.fromEntries(
+          Object.entries(prev).map(([id, st]) => [id, { ...BLANK_COMPONENT_STATE, printingMethod: st.printingMethod }]),
+        ),
+      );
     }
   };
 
@@ -1556,6 +1582,7 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
               position: state.logoPos,
               rotation: state.logoRotation,
               flip: state.flipH && state.flipV ? "both" : state.flipH ? "horizontal" : state.flipV ? "vertical" : "none",
+              printingMethod: getComponentPrintingMethod(state),
               previewImage: componentPreviews[comp.id] || "",
             };
           })
@@ -1609,7 +1636,7 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
           deliveryDate: formData.deliveryDate,
           location: formData.location,
           requirements: formData.requirements,
-          printingMethod: printingMethod,
+          printingMethod: summarizeSubmittedMethods(giftSetCustomizations, printingMethod),
           totalBilling,
           product: {
             id: product.id || product.slug,
@@ -1739,6 +1766,7 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
               position: state.logoPos,
               rotation: state.logoRotation,
               flip: state.flipH && state.flipV ? "both" : state.flipH ? "horizontal" : state.flipV ? "vertical" : "none",
+              printingMethod: getComponentPrintingMethod(state),
               previewImage: giftSetPreviews[comp.id] || "",
             };
           })
@@ -1755,6 +1783,7 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
       const effLogoPos = isMultiComponentGiftSet ? primaryCustomized?.logoPos : logoPos;
 
       const qty = Math.max(shopifyMinQty, parseInt(formData.quantity, 10) || shopifyMinQty);
+      const submittedPrintingMethod = summarizeSubmittedMethods(giftSetCustomizations, printingMethod);
 
       // Saves the full customization to Supabase BEFORE checkout and
       // returns only a compact record id -- see
@@ -1774,7 +1803,7 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
             productName: product.name,
             productVariant: selectedVariant?.title || product.variants?.[0]?.title,
             quantity: qty,
-            printingMethod,
+            printingMethod: submittedPrintingMethod,
             ...(effLogoFile && effLogoBase64
               ? {
                   logo: {
@@ -1806,7 +1835,7 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
       // "Printing Method" is the one customer-visible line property
       // (see cartStore.ts's toCheckoutLineAttributes) -- everything else
       // is internal via the record reference above.
-      if (printingMethod) lineAttributes.push({ key: "Printing Method", value: printingMethod });
+      if (submittedPrintingMethod) lineAttributes.push({ key: "Printing Method", value: submittedPrintingMethod });
       // A standalone Shopify cart, created fresh for exactly this
       // purchase -- never the customer's persistent cart/items state (see
       // createStandaloneCheckout in cartStore.ts). Abandoning this
@@ -2523,7 +2552,9 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
                 </div>
                 
                 <div className="mb-4 lg:[@media(max-height:800px)]:mb-2 min-[1300px]:mb-6 space-y-2 lg:[@media(max-height:800px)]:space-y-1 min-[1300px]:space-y-3">
-                  <Label className="text-sm font-semibold">Printing Method</Label>
+                  <Label className="text-sm font-semibold">
+                    {isMultiComponentGiftSet && activeComponent ? `Printing Method — ${activeComponent.name}` : "Printing Method"}
+                  </Label>
                   <div className="grid grid-cols-2 gap-2 min-[1300px]:gap-3">
                     <button
                       type="button"
@@ -2937,7 +2968,17 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
                     </div>
                     <div className="grid grid-cols-2 gap-2 pb-4 border-b border-border">
                       <span className="text-muted-foreground">Printing Method</span>
-                      <span className="font-medium text-right text-foreground">{printingMethod}</span>
+                      {isMultiComponentGiftSet ? (
+                        <span className="font-medium text-right text-foreground">
+                          {giftSetComponentsList.filter((c) => c.customizable).map((c) => (
+                            <span key={c.id} className="block">
+                              {c.name}: {getComponentPrintingMethod(finalComponentStates[c.id] ?? BLANK_COMPONENT_STATE)}
+                            </span>
+                          ))}
+                        </span>
+                      ) : (
+                        <span className="font-medium text-right text-foreground">{printingMethod}</span>
+                      )}
                     </div>
                     {logoFile ? (
                       <>

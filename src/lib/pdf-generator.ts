@@ -140,6 +140,8 @@ export interface CorporateQuotePDFData {
     heightMm?: number | undefined;
     rotation?: number | undefined;
     flip?: string | undefined;
+    /** This component's own printing method (may differ per component). */
+    printingMethod?: string | undefined;
     /** This component's own captured mockup (PNG data URL) -- the exact
      * rendered composition for that item, never redrawn from x/y/scale. */
     previewImageDataUrl?: string | undefined;
@@ -423,6 +425,15 @@ export async function generateCorporateQuotePDF(data: CorporateQuotePDFData): Pr
         doc.setFont("Roboto", "normal");
         doc.setTextColor(90, 90, 90);
         doc.text(`${comp.widthMm.toFixed(1)} × ${comp.heightMm.toFixed(1)} mm`, marginX, currentY);
+        doc.setTextColor(0, 0, 0);
+        currentY += 7;
+      }
+
+      if (comp.printingMethod) {
+        doc.setFontSize(10);
+        doc.setFont("Roboto", "normal");
+        doc.setTextColor(90, 90, 90);
+        doc.text(`Printing Method: ${sanitizeText(comp.printingMethod)}`, marginX, currentY);
         doc.setTextColor(0, 0, 0);
         currentY += 7;
       }

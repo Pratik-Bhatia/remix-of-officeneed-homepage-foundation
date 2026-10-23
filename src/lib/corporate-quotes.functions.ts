@@ -27,7 +27,7 @@ function base64ToUint8Array(base64: string) {
   return bytes;
 }
 
-const submitQuoteSchema = z.object({
+export const submitQuoteSchema = z.object({
   fullName: z.string().min(1, "Full name is required").max(120),
   company: z.string().min(1, "Company name is required").max(160),
   email: z.string().email("Invalid email format"),
@@ -94,6 +94,7 @@ const submitQuoteSchema = z.object({
         position: z.object({ x: z.number(), y: z.number() }).optional(),
         rotation: z.number().optional(),
         flip: z.string().optional(),
+        printingMethod: z.string().optional(), // this component's own method (never shared across the set)
         previewImage: z.string().optional(), // base64 -- this component's own captured mockup
       }),
     ]),
@@ -232,6 +233,7 @@ export const submitCorporateQuote = createServerFn({ method: "POST" })
                         position: c.position,
                         rotation: c.rotation,
                         flip: c.flip,
+                        printingMethod: c.printingMethod,
                         previewUrl: componentPreviewUrls.get(c.component) ?? null,
                       }
                     : {}),
@@ -328,6 +330,7 @@ export const submitCorporateQuote = createServerFn({ method: "POST" })
                         heightMm: c.heightMm,
                         rotation: c.rotation,
                         flip: c.flip,
+                        printingMethod: c.printingMethod,
                         previewImageDataUrl: c.previewImage,
                       }
                     : {}),
@@ -369,8 +372,9 @@ export const submitCorporateQuote = createServerFn({ method: "POST" })
               }
               const url = componentPreviewUrls.get(c.component);
               const sizeStr = c.widthMm && c.heightMm ? ` (${c.widthMm.toFixed(1)} × ${c.heightMm.toFixed(1)} mm)` : "";
+              const methodStr = c.printingMethod ? ` · ${c.printingMethod}` : "";
               return `
-                <p><strong>${label} → Customized${sizeStr}</strong></p>
+                <p><strong>${label} → Customized${sizeStr}${methodStr}</strong></p>
                 ${url ? `<img src="${url}" alt="${c.component} preview" style="max-width: 400px; width: 100%; border: 1px solid #eee; border-radius: 8px; margin-bottom: 12px;" />` : ""}
               `;
             })

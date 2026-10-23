@@ -26,3 +26,18 @@ test("only the customer email sent -> 'partial'", () => {
 test("neither email sent (e.g. missing RESEND_API_KEY, both calls return false) -> 'provider_error', no longer silently invisible", () => {
   assert.equal(computeQuoteEmailStatus(false, false), "provider_error");
 });
+
+import { submitQuoteSchema } from "./corporate-quotes.functions";
+
+test("a gift-set quote keeps each component's own printing method (not stripped, not shared)", () => {
+  const parsed = submitQuoteSchema.parse({
+    fullName: "A", company: "B", email: "a@b.co", phone: "1", quantity: 30, location: "Pune",
+    printingMethod: "A5 Notebook Diary: UV Printing; Ball Pen: Laser Engraving",
+    product: { id: "x", name: "Gift Set" },
+    giftSetCustomizations: [
+      { component: "A5 Notebook Diary", customized: true, printingMethod: "UV Printing" },
+      { component: "Ball Pen", customized: true, printingMethod: "Laser Engraving" },
+    ],
+  });
+  assert.deepEqual(parsed.giftSetCustomizations.map((c) => c.printingMethod), ["UV Printing", "Laser Engraving"]);
+});
