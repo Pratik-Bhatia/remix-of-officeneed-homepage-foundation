@@ -21,8 +21,27 @@ function getResendClient() {
   return resendClient;
 }
 
+/** The one display name every website-generated email is sent under. */
+export const EMAIL_FROM_NAME = "Officeneed Assistant";
+const DEFAULT_EMAIL_FROM = `${EMAIL_FROM_NAME} <contact@officeneed.in>`;
+
+/**
+ * Builds the `From` header: always the canonical display name, with the
+ * ADDRESS taken from the configured EMAIL_FROM (so the verified sender
+ * address/domain is never changed here). Accepts "Any Name <a@b.co>" or a
+ * bare "a@b.co"; anything unparseable is passed through untouched rather
+ * than risking a broken sender.
+ */
+export function buildEmailFrom(raw: string | undefined): string {
+  const value = raw?.trim();
+  if (!value) return DEFAULT_EMAIL_FROM;
+  const angle = value.match(/<\s*([^<>\s@]+@[^<>\s@]+)\s*>\s*$/);
+  const address = angle?.[1] ?? (/^[^<>\s@]+@[^<>\s@]+$/.test(value) ? value : null);
+  return address ? `${EMAIL_FROM_NAME} <${address}>` : value;
+}
+
 function getEmailFrom() {
-  return process.env["EMAIL_FROM"] || "Officeneed Assistant <contact@officeneed.in>";
+  return buildEmailFrom(process.env["EMAIL_FROM"]);
 }
 
 function getInternalEmail() {
