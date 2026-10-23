@@ -78,3 +78,12 @@ test("cart, account and content pages never show the bar", () => {
 test("each promotion carries its own eligibility wording", () => {
   assert.deepEqual(CATEGORY_PROMOTIONS.map((p) => p.eligibleLabel), ["fragrances", "corporate gifting products"]);
 });
+
+test("Buy Now also carries the code the shopper selected with Apply Code, but only for its own category", () => {
+  assert.equal(getPromotionCodeToCarry(["european-perfume"], [], "OFFICENEED20"), "OFFICENEED20");
+  assert.equal(getPromotionCodeToCarry(["european-perfume"], [], "officeneed20"), "OFFICENEED20");
+  assert.equal(getPromotionCodeToCarry(["european-perfume"], [], "OFFICENEED10"), null);
+  assert.equal(getPromotionCodeToCarry(["office-stationary"], [], "OFFICENEED20"), null);
+  assert.equal(getPromotionCodeToCarry(["european-perfume"], [], null), null);
+  assert.equal(getPromotionCodeToCarry(["european-perfume"], [], undefined), null);
+});

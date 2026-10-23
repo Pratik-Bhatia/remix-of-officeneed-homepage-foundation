@@ -36,17 +36,22 @@ export function getPromotionForProduct(collectionHandles: string[] | undefined):
 
 /**
  * The code a standalone (Buy Now) cart should carry: only this product's own
- * configured promotion, and only when it is currently applied (applicable) on
- * the main cart. Never another category's code. Shopify still validates it.
+ * configured promotion, and only when the shopper has asked for it -- either
+ * it is currently applied (applicable) on the main cart, or it is the code they
+ * selected with "Apply Code". Never another category's code. Shopify still
+ * validates it (and the caller reports it if Shopify declines).
  */
 export function getPromotionCodeToCarry(
   collectionHandles: string[] | undefined,
   appliedCodes: ReadonlyArray<{ code: string; applicable: boolean }>,
+  selectedCode?: string | null,
 ): string | null {
   const promo = getPromotionForProduct(collectionHandles);
   if (!promo) return null;
-  const applied = appliedCodes.find((d) => d.applicable && d.code.toUpperCase() === promo.code.toUpperCase());
-  return applied ? promo.code : null;
+  const want = promo.code.toUpperCase();
+  const applied = appliedCodes.some((d) => d.applicable && d.code.toUpperCase() === want);
+  const selected = !!selectedCode && selectedCode.toUpperCase() === want;
+  return applied || selected ? promo.code : null;
 }
 
 export interface PromoPageContext {

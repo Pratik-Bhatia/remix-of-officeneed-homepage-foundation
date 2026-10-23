@@ -9,6 +9,8 @@ import { appendAttribution, getAttribution } from "@/lib/attribution";
 import { getCustomerCart, saveCustomerCart } from "@/lib/customer-cart.functions";
 import { trackAddToCart } from "@/lib/meta-pixel";
 import { getPromotionCodeToCarry } from "@/config/promotions";
+import { useCouponStore } from "@/stores/couponStore";
+import { interpretPreviewCart, type CouponPreview } from "@/lib/coupon-preview";
 import { trackGoogleAddToCart, trackGoogleRemoveFromCart } from "@/lib/google-analytics";
 
 export interface CartItem {
@@ -438,6 +440,46 @@ function currentBuyerIdentity(): { customerAccessToken: string; countryCode: str
   return companyLocationId
     ? { customerAccessToken: token, countryCode: "IN", companyLocationId }
     : { customerAccessToken: token, countryCode: "IN" };
+}
+
+const COUPON_PREVIEW_MUTATION = `
+  mutation couponPreview($input: CartInput!) {
+    cartCreate(input: $input) {
+      cart {
+        id
+        discountCodes { code applicable }
+        lines(first: 5) {
+          edges { node { quantity cost { subtotalAmount { amount currencyCode } totalAmount { amount currencyCode } } } }
+        }
+      }
+      userErrors { field message code }
+    }
+  }
+`;
+
+/**
+ * Asks Shopify what a discount code does to ONE product line, without touching
+ * the shopper's real cart: a throwaway cart (cartCreate with just this line +
+ * the code, under the shopper's current buyer identity so B2B/B2C pricing
+ * matches) whose line costs Shopify calculates itself. Shopify only reports
+ * "applicable or not" -- see interpretPreviewCart. Throwaway carts are never
+ * reused or checked out and expire on Shopify's side.
+ */
+export async function previewCouponForLine(args: { code: string; variantId: string; quantity: number }): Promise<CouponPreview> {
+  try {
+    const buyerIdentity = currentBuyerIdentity();
+    const data = await storefrontApiRequest(COUPON_PREVIEW_MUTATION, {
+      input: {
+        lines: [{ merchandiseId: args.variantId, quantity: args.quantity }],
+        discountCodes: [args.code],
+        ...(buyerIdentity ? { buyerIdentity } : {}),
+      },
+    });
+    return interpretPreviewCart(data?.data?.cartCreate, args.code);
+  } catch (error) {
+    console.error("Coupon preview failed:", error);
+    return { status: "error", message: "Couldn't check this code right now. Please try again." };
+  }
 }
 
 function formatCheckoutUrl(checkoutUrl: string): string {
@@ -1192,6 +1234,7 @@ export const useCartStore = create<CartStore>()(
             const promoCode = getPromotionCodeToCarry(
               item.product.node.collections?.edges.map((e) => e.node.handle),
               get().discountCodes,
+              useCouponStore.getState().selectedCode,
             );
             const { payload: createPayload } = await runWithQuantityRuleRetry(
               item.variantId,
@@ -1244,6 +1287,14 @@ export const useCartStore = create<CartStore>()(
               // reason to fail the whole purchase.
             }
 
+            if (promoCode) {
+              const carried = (cart.discountCodes as CartDiscountCode[] | undefined)?.find(
+                (d) => d.code.toUpperCase() === promoCode.toUpperCase(),
+              );
+              if (!carried?.applicable) {
+                toast.info(`${promoCode} couldn't be applied to this item, so checkout continues at the regular price.`);
+              }
+            }
             return formatCheckoutUrl(cart.checkoutUrl);
           } catch (error) {
             console.error("Failed to create standalone checkout:", error);

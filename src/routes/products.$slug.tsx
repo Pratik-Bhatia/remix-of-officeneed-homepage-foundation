@@ -8,6 +8,8 @@ import { Navbar } from "@/components/officeneed/Navbar";
 import { Footer } from "@/components/officeneed/Footer";
 import { ProductCard } from "@/components/officeneed/ProductCard";
 import { ProductCouponOffer } from "@/components/officeneed/ProductCouponOffer";
+import { getPromotionForProduct } from "@/config/promotions";
+import { useCouponStore } from "@/stores/couponStore";
 import { DiscountBadge } from "@/components/officeneed/DiscountBadge";
 import { getDiscount } from "@/lib/discount";
 import { ProductInformation } from "@/components/officeneed/ProductInformation";
@@ -794,6 +796,17 @@ function ProductDetail() {
     if (ok) {
       toast.success("Added to cart", { description: product.name });
       haptic("success");
+      // The shopper chose this product's campaign code with "Apply Code": put it on the real
+      // Shopify cart so it follows them through the cart and checkout. Shopify decides whether
+      // it applies (and re-checks it on every later cart change); we only report its answer.
+      const promo = getPromotionForProduct(product.collectionHandles);
+      const chosen = useCouponStore.getState().selectedCode;
+      const bag = useCartStore.getState();
+      if (promo && chosen === promo.code && !bag.discountCodes.some((d) => d.applicable && d.code.toUpperCase() === chosen)) {
+        const r = await bag.applyDiscountCode(chosen);
+        if (r.ok) toast.success(`${chosen} applied to your bag`);
+        else toast.info(`${chosen} wasn't applied to your bag: ${r.message}`);
+      }
     }
   };
 
@@ -1226,7 +1239,7 @@ function ProductDetail() {
 
                 {/* Category coupon offer (Fragrance / Corporate Gifting only);
                     product-level eligibility, so it does not depend on the variant. */}
-                <ProductCouponOffer collectionHandles={product.collectionHandles} />
+                <ProductCouponOffer collectionHandles={product.collectionHandles} variantId={selectedVariant?.id} quantity={quantity} />
 
                 {/* Variant choice */}
                 {hasVariantChoice ? (
