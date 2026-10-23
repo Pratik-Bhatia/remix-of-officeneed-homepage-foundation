@@ -1,4 +1,5 @@
 import { haptic } from "@/lib/haptics";
+import { CLARITY_MASK } from "@/lib/clarity";
 import { trackLead, trackInitiateCheckout } from "@/lib/meta-pixel";
 import { trackGoogleBeginCheckout } from "@/lib/google-analytics";
 import { toast } from "sonner";
@@ -354,6 +355,11 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
     isMultiComponentGiftSet ? 0 : null,
   );
   const [componentStates, setComponentStates] = useState<Record<string, ComponentCustomization>>({});
+  /** The live flat buffer as of the latest render -- read by the snapshot loop
+   * AFTER each capture, because effects (e.g. the per-method scale clamp)
+   * can legitimately adjust it between applying a component's saved state
+   * and capturing its preview, and the submitted data must match the image. */
+  const liveFlatStateRef = useRef<ComponentCustomization | null>(null);
   const isViewingComponent = isMultiComponentGiftSet && activeComponentIndex !== null;
   const activeComponent = isViewingComponent ? giftSetComponentsList[activeComponentIndex!] ?? null : null;
 
@@ -581,6 +587,8 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
   // root cause of logo position drift when switching gift-set components).
   const logoMotionX = useMotionValue(0);
   const logoMotionY = useMotionValue(0);
+  // Kept current every render (after the motion values exist) -- see liveFlatStateRef.
+  liveFlatStateRef.current = currentFlatComponentState();
 
   // ---------------------------------------------------------------------------
   // Product image bounds -> printable area
@@ -1498,7 +1506,20 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
           ?? comp.imageUrl;
         await waitForActiveImageLoad(expectedSrc);
         previews[comp.id] = await captureCustomizationSnapshot();
+        // Take the state as it actually was when the preview was captured
+        // (post any scale clamp) so the submitted size/position match the
+        // submitted image.
+        if (liveFlatStateRef.current) finalStates[comp.id] = liveFlatStateRef.current;
       }
+      // The loop above walks the active component through every customized
+      // one WITHOUT saving the one it leaves (selectComponent isn't used),
+      // so a component the shopper never switched away from has no saved
+      // slot -- it then reads as "not customized" (Buy Now disabled on the
+      // quote step, its logo gone after "Edit Customization", and dropped
+      // from the next capture). finalStates already holds every
+      // component's latest state (saved slots + the live buffer), so
+      // persist it as the slots.
+      setComponentStates(finalStates);
       setComponentPreviews(previews);
       setFinalComponentStates(finalStates);
       return { previewBase64: "", giftSetPreviews: previews, finalStates };
@@ -1601,7 +1622,10 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
       const effRotation = isMultiComponentGiftSet ? primaryCustomized?.logoRotation : logoRotation[0];
       const effFlipH = isMultiComponentGiftSet ? (primaryCustomized?.flipH ?? false) : flipH;
       const effFlipV = isMultiComponentGiftSet ? (primaryCustomized?.flipV ?? false) : flipV;
-      const effLogoPos = isMultiComponentGiftSet ? primaryCustomized?.logoPos : logoPos;
+      // Live motion values, not the `logoPos` state: Framer can re-clamp the logo (e.g. after a printing-method
+      // switch shrinks it) without any drag event, leaving `logoPos` stale -- the submitted position must be the
+      // one the preview shows (gift sets already read live values via currentFlatComponentState).
+      const effLogoPos = isMultiComponentGiftSet ? primaryCustomized?.logoPos : { x: logoMotionX.get(), y: logoMotionY.get() };
       // Same value the on-screen "Your Customization" summary displays
       // (summaryPreviewSrc, computed once above render) -- the submitted
       // preview and the one the shopper confirmed on screen are
@@ -1745,7 +1769,16 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
       // from step 1, before handleProceedToQuote's own capture would
       // otherwise have run, so this can't assume customizationSnapshot/
       // componentPreviews/finalComponentStates are already populated.
-      const { previewBase64, giftSetPreviews, finalStates } = await captureAllCustomizationSnapshots();
+      // From the quote step the preview DOM no longer exists
+      // (previewContainerRef is null), so a fresh capture there would return
+      // empty previews and, with no geometry to measure, let the scale clamp
+      // collapse sizes. Reuse the snapshots/states already captured when the
+      // shopper left the customize step -- the very ones the quote form shows
+      // and submits -- so both actions send identical data.
+      const { previewBase64, giftSetPreviews, finalStates } =
+        step === "quote"
+          ? { previewBase64: customizationSnapshot, giftSetPreviews: componentPreviews, finalStates: finalComponentStates }
+          : await captureAllCustomizationSnapshots();
 
       // Mirrors submitQuote's own giftSetCustomizations builder exactly
       // (position/rotation/flip included, not just size) -- the same
@@ -1780,7 +1813,10 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
       const effRotation = isMultiComponentGiftSet ? primaryCustomized?.logoRotation : logoRotation[0];
       const effFlipH = isMultiComponentGiftSet ? (primaryCustomized?.flipH ?? false) : flipH;
       const effFlipV = isMultiComponentGiftSet ? (primaryCustomized?.flipV ?? false) : flipV;
-      const effLogoPos = isMultiComponentGiftSet ? primaryCustomized?.logoPos : logoPos;
+      // Live motion values, not the `logoPos` state: Framer can re-clamp the logo (e.g. after a printing-method
+      // switch shrinks it) without any drag event, leaving `logoPos` stale -- the submitted position must be the
+      // one the preview shows (gift sets already read live values via currentFlatComponentState).
+      const effLogoPos = isMultiComponentGiftSet ? primaryCustomized?.logoPos : { x: logoMotionX.get(), y: logoMotionY.get() };
 
       const qty = Math.max(shopifyMinQty, parseInt(formData.quantity, 10) || shopifyMinQty);
       const submittedPrintingMethod = summarizeSubmittedMethods(giftSetCustomizations, printingMethod);
@@ -2119,8 +2155,18 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
                   // measurement Framer Motion reads. `undefined` (every
                   // non-Drinkware product) means no clip-path at all --
                   // purely a pass-through wrapper, no visual change.
+                  // flex + items-center + justify-center: the draggable below is
+                  // `absolute` with no insets, so its static position (where
+                  // x/y = 0 puts it) is decided by THIS box's alignment. Without
+                  // it the logo's top-left corner sat at the preview's top-left,
+                  // so "(0, 0)" meant top-left, not centre -- and when the small
+                  // "Processing Logo..." box was replaced by the (larger)
+                  // processed image it grew from that corner. Centring here
+                  // restores the original meaning (x/y are offsets from the
+                  // centre -- what every reset/seed of {0,0} assumes) and keeps
+                  // the logo's visual centre fixed when its size changes.
                   <div
-                    className="absolute inset-0 pointer-events-none"
+                    className="absolute inset-0 pointer-events-none flex items-center justify-center"
                     style={logoClipPath ? { clipPath: logoClipPath } : undefined}
                   >
                   <motion.div
@@ -2846,22 +2892,17 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
               </Button>
             </DialogHeader>
 
-            <div className="flex-1 overflow-y-auto">
-              {/* max-w-[1200px] mx-auto (removed) was sized back when
-                  DialogContent itself was a centered, capped modal -- now
-                  that DialogContent is always full-screen (see its own
-                  className above), that same cap just centered a 1200px
-                  island inside a much wider viewport, leaving the large
-                  empty right-hand gap this was reported against. flex-col
-                  lg:grid lg:grid-cols-[minmax(0,1.8fr)_minmax(320px,1fr)]
-                  mirrors the exact pattern the PDP's own gallery/info grid
-                  already uses (products.$slug.tsx): ~65/35 at lg+ (1.8fr
-                  vs 1fr, with a 320px floor on the summary column so it
-                  never gets squeezed on the way down to lg's own 1024px
-                  floor), full-width stacked below it -- unchanged mobile
-                  behavior, since flex-col was already the base case. */}
-              <div className="w-full flex flex-col lg:grid lg:grid-cols-[minmax(0,1.8fr)_minmax(320px,1fr)] min-h-full">
-                <div className="min-w-0 p-6 md:p-10 lg:pr-12">
+            {/* Height-bounded body (DialogContent is a true 100dvh flex column,
+                header is shrink-0, this is flex-1 min-h-0). lg+: a 2-col grid
+                whose rows are [scrolling content | actions] -- the form column
+                spans both rows and scrolls on its own, the summary column and
+                the pinned actions footer sit in the right column, so each side
+                scrolls independently and the actions never move. Below lg the
+                scroller wrapper below is a single scroll container (form, then
+                summary) and the actions footer stays pinned beneath it. */}
+            <div className="flex-1 min-h-0 flex flex-col lg:grid lg:grid-cols-[minmax(0,1.8fr)_minmax(320px,1fr)] lg:grid-rows-[minmax(0,1fr)_auto]">
+              <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain lg:contents">
+                <div className="min-w-0 p-6 md:p-10 lg:pr-12 lg:col-start-1 lg:row-span-2 lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain">
                   <button 
                     type="button" 
                     onClick={() => setStep("customize")}
@@ -2879,7 +2920,7 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
                     </div>
                   )}
 
-                  <form id="quote-form" onSubmit={submitQuote} className="space-y-6">
+                  <form id="quote-form" onSubmit={submitQuote} className="space-y-6" {...CLARITY_MASK}>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="space-y-2.5">
                         <Label htmlFor="fullName">Full Name *</Label>
@@ -2926,8 +2967,8 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
                   </form>
                 </div>
 
-                <div className="w-full min-w-0 border-t lg:border-t-0 lg:border-l border-border bg-background p-6 md:p-10 flex flex-col">
-                  <div className="flex items-center justify-between mb-6 lg:mb-8">
+                <div className="w-full min-w-0 border-t lg:border-t-0 lg:border-l border-border bg-background p-6 md:p-8 flex flex-col lg:col-start-2 lg:row-start-1 lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain">
+                  <div className="flex items-center justify-between mb-4">
                     <h3 className="font-semibold text-lg">Your Customization</h3>
                     <Button variant="ghost" size="sm" onClick={() => setStep("customize")} className="sm:hidden text-primary">
                       Edit
@@ -2949,7 +2990,7 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
                       to the plain, logo-free product photo only if a
                       snapshot genuinely failed to capture (e.g. a tainted
                       canvas) -- never to a guessed placement. */}
-                  <div className="w-full aspect-[4/5] bg-[#F9FAFB] rounded-xl border border-border mb-8 flex items-center justify-center p-6 relative overflow-hidden shadow-inner">
+                  <div className="w-full h-[clamp(200px,32dvh,340px)] shrink-0 bg-[#F9FAFB] rounded-xl border border-border mb-6 flex items-center justify-center p-4 relative overflow-hidden shadow-inner">
                     <img
                       src={summaryPreviewSrc || previewImage}
                       alt="Your customization"
@@ -2957,19 +2998,19 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
                     />
                   </div>
 
-                  <div className="space-y-5 text-sm flex-1">
-                    <div className="grid grid-cols-2 gap-2 pb-4 border-b border-border">
+                  <div className="space-y-3 text-sm">
+                    <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1 pb-3 border-b border-border">
                       <span className="text-muted-foreground">Product</span>
-                      <span className="font-medium text-right text-foreground">{product.name}</span>
+                      <span className="font-medium text-right text-foreground [overflow-wrap:anywhere]">{product.name}</span>
                     </div>
-                    <div className="grid grid-cols-2 gap-2 pb-4 border-b border-border">
+                    <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1 pb-3 border-b border-border">
                       <span className="text-muted-foreground">Quantity</span>
-                      <span className="font-medium text-right text-foreground">{formData.quantity}</span>
+                      <span className="font-medium text-right text-foreground [overflow-wrap:anywhere]">{formData.quantity}</span>
                     </div>
-                    <div className="grid grid-cols-2 gap-2 pb-4 border-b border-border">
+                    <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1 pb-3 border-b border-border">
                       <span className="text-muted-foreground">Printing Method</span>
                       {isMultiComponentGiftSet ? (
-                        <span className="font-medium text-right text-foreground">
+                        <span className="font-medium text-right text-foreground [overflow-wrap:anywhere]">
                           {giftSetComponentsList.filter((c) => c.customizable).map((c) => (
                             <span key={c.id} className="block">
                               {c.name}: {getComponentPrintingMethod(finalComponentStates[c.id] ?? BLANK_COMPONENT_STATE)}
@@ -2977,67 +3018,70 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
                           ))}
                         </span>
                       ) : (
-                        <span className="font-medium text-right text-foreground">{printingMethod}</span>
+                        <span className="font-medium text-right text-foreground [overflow-wrap:anywhere]">{printingMethod}</span>
                       )}
                     </div>
                     {logoFile ? (
                       <>
-                        <div className="grid grid-cols-2 gap-2 pb-4 border-b border-border">
+                        <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1 pb-3 border-b border-border">
                           <span className="text-muted-foreground">Logo</span>
-                          <span className="font-medium text-right text-foreground break-words" title={logoFile.name}>{logoFile.name}</span>
+                          <span className="font-medium text-right text-foreground [overflow-wrap:anywhere] break-words" title={logoFile.name}>{logoFile.name}</span>
                         </div>
-                        <div className="grid grid-cols-2 gap-2 pb-4 border-b border-border">
+                        <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1 pb-3 border-b border-border">
                           <span className="text-muted-foreground">Customization</span>
-                          <span className="font-medium text-right text-foreground">Direct Placement</span>
+                          <span className="font-medium text-right text-foreground [overflow-wrap:anywhere]">Direct Placement</span>
                         </div>
                       </>
                     ) : (
-                      <div className="grid grid-cols-2 gap-2 pb-4 border-b border-border">
+                      <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1 pb-3 border-b border-border">
                         <span className="text-muted-foreground">Branding</span>
-                        <span className="font-medium text-right text-foreground">Unbranded</span>
+                        <span className="font-medium text-right text-foreground [overflow-wrap:anywhere]">Unbranded</span>
                       </div>
                     )}
                   </div>
-                  
-                  <div className="pt-6 mt-auto">
-                    <Button
-                      type="submit"
-                      form="quote-form"
-                      className="w-full h-14 text-base font-semibold shadow-sm"
-                      size="lg"
-                      disabled={isSubmitting}
-                    >
-                      {isSubmitting ? (
-                        <>
-                          <Loader2 className="w-5 h-5 mr-3 animate-spin" />
-                          Submitting...
-                        </>
-                      ) : (
-                        "Submit Quote Request"
-                      )}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="w-full h-14 text-base font-semibold mt-3"
-                      size="lg"
-                      onClick={handleBuyNow}
-                      disabled={!canBuyNow || isBuyingNow}
-                    >
-                      {isBuyingNow ? (
-                        <>
-                          <Loader2 className="w-5 h-5 mr-3 animate-spin" />
-                          Starting checkout...
-                        </>
-                      ) : (
-                        "Buy Now"
-                      )}
-                    </Button>
-                    <p className="text-[11px] text-center text-muted-foreground mt-4 leading-relaxed">
-                      Final pricing depends on quantity, branding method, customization and delivery requirements.
-                    </p>
-                  </div>
+                  <p className="text-[11px] text-center text-muted-foreground mt-5 leading-relaxed">
+                    Final pricing depends on quantity, branding method, customization and delivery requirements.
+                  </p>
                 </div>
+              </div>
+
+              {/* Pinned actions: a normal-flow row (not position:fixed/sticky),
+                  so it can never overlap the details above it, needs no
+                  z-index, and handles the mobile safe-area inset. */}
+              <div className="shrink-0 border-t border-border bg-background px-6 py-3 md:px-8 pb-[max(0.75rem,env(safe-area-inset-bottom))] lg:col-start-2 lg:row-start-2 lg:border-l lg:py-4 shadow-[0_-4px_12px_rgba(0,0,0,0.04)]">
+                <Button
+                  type="submit"
+                  form="quote-form"
+                  className="w-full h-12 lg:h-14 text-base font-semibold shadow-sm"
+                  size="lg"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="w-5 h-5 mr-3 animate-spin" />
+                      Submitting...
+                    </>
+                  ) : (
+                    "Submit Quote Request"
+                  )}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full h-12 lg:h-14 text-base font-semibold mt-2.5"
+                  size="lg"
+                  onClick={handleBuyNow}
+                  disabled={!canBuyNow || isBuyingNow}
+                >
+                  {isBuyingNow ? (
+                    <>
+                      <Loader2 className="w-5 h-5 mr-3 animate-spin" />
+                      Starting checkout...
+                    </>
+                  ) : (
+                    "Buy Now"
+                  )}
+                </Button>
               </div>
             </div>
           </div>
