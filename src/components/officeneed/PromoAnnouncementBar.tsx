@@ -28,7 +28,7 @@ function CouponChip({ promo }: { promo: CategoryPromotion }) {
       inline
       code={promo.code}
       copiedLabel="Copied!"
-      className="rounded-full px-3 py-1.5 transition-colors hover:bg-[#171717]/[0.07] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#171717]/70"
+      className="rounded-full px-2.5 py-1.5 transition-colors hover:bg-[#171717]/[0.07] sm:px-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#171717]/70"
       idleLabel={
         <>
           <span className="text-[10px] font-medium uppercase tracking-[0.14em] text-[#171717]/70">{promo.label}</span>
@@ -61,12 +61,14 @@ function MobileRotator({ promos }: { promos: readonly CategoryPromotion[] }) {
 
   return (
     <div
-      className="flex items-center justify-center gap-1 sm:hidden"
+      className="relative flex w-full items-center justify-center sm:hidden"
       onPointerDown={touch}
       onFocus={() => { focused.current = true; touch(); }}
       onBlur={() => { focused.current = false; }}
     >
-      <div className="grid">
+      {/* Gutters reserve the dots' column, so the chip is centred and can't collide
+          with them; below 360px only the dots side is reserved to keep the text size. */}
+      <div className={cn("grid", multiple && "px-5 max-[359px]:pl-0")}>
         {promos.map((p, i) => (
           <div
             key={p.code}
@@ -81,7 +83,7 @@ function MobileRotator({ promos }: { promos: readonly CategoryPromotion[] }) {
         ))}
       </div>
       {multiple ? (
-        <div role="group" aria-label="Choose offer" className="flex items-center">
+        <div role="group" aria-label="Choose offer" className="absolute right-0.5 top-1/2 flex -translate-y-1/2 flex-col items-center">
           {promos.map((p, i) => (
             <button
               key={p.code}
@@ -89,7 +91,7 @@ function MobileRotator({ promos }: { promos: readonly CategoryPromotion[] }) {
               aria-label={`Show ${p.label} offer`}
               aria-current={i === index}
               onClick={() => { touch(); setIndex(i); }}
-              className="grid size-6 place-items-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#171717]/70"
+              className="grid h-[18px] w-5 place-items-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#171717]/70"
             >
               <span className={cn("size-1.5 rounded-full bg-[#171717] transition-opacity", i === index ? "opacity-90" : "opacity-30")} />
             </button>
@@ -123,7 +125,7 @@ export function PromoAnnouncementBar() {
   if (promos.length === 0) return null;
 
   return (
-    <div data-promo-bar className="relative z-[60] w-full border-b border-[#171717]/10 bg-[#E8D6A8] text-[#171717]">
+    <div data-promo-bar className="w-full border-b border-[#171717]/10 bg-[#E5D7AB] text-[#171717]">
       <div className="mx-auto flex min-h-[38px] max-w-[1600px] items-center justify-center px-2 sm:px-6 lg:px-12">
         <MobileRotator promos={promos} />
         <div className="hidden items-center justify-center gap-1 sm:flex">

@@ -10,8 +10,8 @@ type Status = "idle" | "copied" | "failed";
  *
  * Default: the label and a "Code copied!" message share one grid cell.
  * `inline`: the label stays visible, the trailing icon swaps to a check, and
- * the message floats just below as a small non-layout pill (used by the
- * announcement bar, where the code must stay readable and the bar is slim). */
+ * the message briefly overlays the button as a same-size pill (used by the
+ * announcement bar, which is slim and must not rise above overlays). */
 export function CopyCodeButton({
   code,
   idleLabel,
@@ -52,15 +52,18 @@ export function CopyCodeButton({
             <Copy className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
           )}
         </button>
+        {/* Confirmation overlays the button itself (same size, no overflow, no
+            z-index), so it never shifts layout and never rises above the
+            site's overlay layer (drawer / dialogs). */}
         <span
           role="status"
           aria-live="polite"
           className={cn(
-            "pointer-events-none absolute left-1/2 top-full z-[70] mt-1 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#171717] px-2.5 py-1 text-[11px] font-medium text-[#F4EBD0] shadow-md transition-opacity duration-150 motion-reduce:transition-none",
+            "pointer-events-none absolute inset-0 flex items-center justify-center whitespace-nowrap rounded-full bg-[#171717] px-2 text-[11px] font-medium text-[#F4EBD0] transition-opacity duration-150 motion-reduce:transition-none",
             status === "idle" ? "opacity-0" : "opacity-100",
           )}
         >
-          {status === "copied" ? copiedLabel : status === "failed" ? `Copy failed — select the code to copy` : ""}
+          {status === "copied" ? copiedLabel : status === "failed" ? `Copy failed — ${code}` : ""}
         </span>
       </span>
     );
