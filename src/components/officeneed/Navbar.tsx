@@ -276,9 +276,12 @@ export function Navbar() {
           <IconButton label="Search store" className="size-[26px] md:size-10 xl:size-11" onClick={() => setSearchOpen(true)}>
             <Search className="size-5 md:size-[22px] xl:size-5" strokeWidth={1.6} />
           </IconButton>
-          <IconButton label="Track order" className="size-[26px] md:size-10 xl:size-11" onClick={() => { window.location.href = SHIPLYSTIC_TRACKING_URL; }}>
-            <PackageSearch className="size-5 md:size-[22px] xl:size-5" strokeWidth={1.6} />
-          </IconButton>
+          {/* Hidden on phones (< md); the mobile menu drawer has its own Track order entry. */}
+          <span className="hidden md:inline-flex">
+            <IconButton label="Track order" className="size-[26px] md:size-10 xl:size-11" onClick={() => { window.location.href = SHIPLYSTIC_TRACKING_URL; }}>
+              <PackageSearch className="size-5 md:size-[22px] xl:size-5" strokeWidth={1.6} />
+            </IconButton>
+          </span>
           <span className="hidden xl:inline-flex">
             <IconButton label="Account" className="size-[26px] md:size-10 xl:size-11" onClick={() => status === "in" ? navigate({ to: "/account" }) : setAuthOpen(true)}>
               <User className="size-5 md:size-[22px] xl:size-5" strokeWidth={1.6} />
