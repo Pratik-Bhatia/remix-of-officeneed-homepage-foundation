@@ -7,6 +7,7 @@
  * images, description, availability) override the static values. Anything not
  * present in Shopify falls back to the existing static data.
  */
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchProducts, fetchAllProducts, fetchCollections, formatMoney, type ShopifyProductNode, type ShopifyCollectionNode, type BuyerContext } from "@/lib/shopify";
 import { useBuyerContext } from "@/hooks/useBuyerContext";
@@ -577,6 +578,8 @@ function buyerCacheConfig(
  * `resolved` is true they're immediately ready -- only a true "b2b" status
  * with locations to price waits on the overlay query too.
  */
+const EMPTY_PRICE_OVERLAY: B2BPriceOverlayMap = {};
+
 export function useB2BPriceOverlayMap(variantIds: string[]): { overlay: B2BPriceOverlayMap; ready: boolean } {
   const resolved = useB2BStore((s) => s.resolved);
   const status = useB2BStore((s) => s.status);
@@ -587,7 +590,7 @@ export function useB2BPriceOverlayMap(variantIds: string[]): { overlay: B2BPrice
   // B2C shopper -- never a stale company price.
   const companyLocationId = useB2BStore((s) => getEffectiveCompanyLocationId(s));
   const token = useB2BStore((s) => s.resolvedForToken);
-  const ids = [...new Set(variantIds)].sort();
+  const ids = useMemo(() => [...new Set(variantIds)].sort(), [variantIds]);
   const enabled = !!companyLocationId && !!token && ids.length > 0;
   const { data, isFetched } = useQuery({
     queryKey: ["shopify", "b2b-price-overlay", companyLocationId ?? "none", ids.join(",")],
@@ -610,7 +613,7 @@ export function useB2BPriceOverlayMap(variantIds: string[]): { overlay: B2BPrice
     // Dev-only (tree-shaken in production builds). Status/booleans only.
     console.debug("[useB2BPriceOverlayMap] status:", status, "| resolved:", resolved, "| ready:", ready);
   }
-  return { overlay: data ?? {}, ready };
+  return { overlay: data ?? EMPTY_PRICE_OVERLAY, ready };
 }
 
 /**
@@ -682,24 +685,38 @@ export function shopifyCatalogueQueryOptions(buyer: BuyerContext, customerId: st
  * on, so it's always "ready" exactly as it already rendered before this
  * flag existed). Callers that render a price must skeleton it while false
  * instead of painting whatever's currently in `products`. */
-export function useShopifyCatalogue(staticProducts: Product[]): { products: Product[]; pricesReady: boolean } {
+export function useShopifyCatalogue(
+  staticProducts: Product[],
+  options: { enabled?: boolean } = {},
+): { products: Product[]; pricesReady: boolean } {
   const buyer = useBuyerContext();
   const customerId = useB2BStore((s) => s.customerId);
-  const { data } = useQuery(shopifyCatalogueQueryOptions(buyer, customerId));
+  // `enabled: false` lets always-mounted surfaces (chat, search) skip downloading the whole
+  // catalogue until the shopper actually opens them.
+  const { data } = useQuery({ ...shopifyCatalogueQueryOptions(buyer, customerId), enabled: options.enabled ?? true });
 
-  const baseNodes = data ?? [];
-  const variantIds = baseNodes.flatMap((n) => n.variants.edges.map((e) => e.node.id));
+  const baseNodes = useMemo(() => data ?? [], [data]);
+  const variantIds = useMemo(() => baseNodes.flatMap((n) => n.variants.edges.map((e) => e.node.id)), [baseNodes]);
   const { overlay: priceOverlay, ready } = useB2BPriceOverlayMap(variantIds);
-  const nodes = applyB2BPriceOverlayToAll(baseNodes, priceOverlay);
-  if (nodes.length === 0) return { products: staticProducts, pricesReady: true };
 
-  const index = buildShopifyIndex(nodes);
-  const live = nodes.map(shopifyNodeToProduct);
-  const liveSlugs = new Set(live.map((p) => p.slug));
-  const fallback = staticProducts.filter(
-    (p) => !liveSlugs.has(p.slug) && !findShopifyMatch(index, p.slug, p.name),
+  // Converting ~330 Shopify nodes into Products is expensive; only redo it when the data, the
+  // price overlay or the static fallback list really change -- not on every re-render.
+  const live = useMemo(() => {
+    const nodes = applyB2BPriceOverlayToAll(baseNodes, priceOverlay);
+    if (nodes.length === 0) return null;
+    const index = buildShopifyIndex(nodes);
+    const products = nodes.map(shopifyNodeToProduct);
+    const liveSlugs = new Set(products.map((p) => p.slug));
+    const fallback = staticProducts.filter(
+      (p) => !liveSlugs.has(p.slug) && !findShopifyMatch(index, p.slug, p.name),
+    );
+    return [...products, ...fallback];
+  }, [baseNodes, priceOverlay, staticProducts]);
+
+  return useMemo(
+    () => (live ? { products: live, pricesReady: ready } : { products: staticProducts, pricesReady: true }),
+    [live, ready, staticProducts],
   );
-  return { products: [...live, ...fallback], pricesReady: ready };
 }
 
 /**
@@ -729,24 +746,31 @@ export function useShopifyBestsellers(staticItems: Product[] = []): { products: 
     retry: 1,
   });
 
-  const baseNodes = data ?? [];
-  const variantIds = baseNodes.flatMap((n) => n.variants.edges.map((e) => e.node.id));
+  const baseNodes = useMemo(() => data ?? [], [data]);
+  const variantIds = useMemo(() => baseNodes.flatMap((n) => n.variants.edges.map((e) => e.node.id)), [baseNodes]);
   const { overlay: priceOverlay, ready } = useB2BPriceOverlayMap(variantIds);
-  const nodes = applyB2BPriceOverlayToAll(baseNodes, priceOverlay);
-  if (nodes.length === 0) return { products: staticItems, pricesReady: true };
 
-  const live = nodes.map((node) => ({ ...shopifyNodeToProduct(node), badge: "Bestseller" as const }));
+  const live = useMemo(() => {
+    const nodes = applyB2BPriceOverlayToAll(baseNodes, priceOverlay);
+    if (nodes.length === 0) return null;
+    const products = nodes.map((node) => ({ ...shopifyNodeToProduct(node), badge: "Bestseller" as const }));
+    // Keep the static/demo bestsellers that have no live Shopify equivalent.
+    const index = buildShopifyIndex(nodes);
+    const liveSlugs = new Set(products.map((p) => p.slug));
+    const fallback = staticItems.filter(
+      (item) => !liveSlugs.has(item.slug) && !findShopifyMatch(index, item.slug, item.name),
+    );
+    return [...products, ...fallback];
+  }, [baseNodes, priceOverlay, staticItems]);
 
-  // Keep the static/demo bestsellers that have no live Shopify equivalent.
-  const index = buildShopifyIndex(nodes);
-  const liveSlugs = new Set(live.map((p) => p.slug));
-  const fallback = staticItems.filter(
-    (item) => !liveSlugs.has(item.slug) && !findShopifyMatch(index, item.slug, item.name),
+  return useMemo(
+    () => (live ? { products: live, pricesReady: ready } : { products: staticItems, pricesReady: true }),
+    [live, ready, staticItems],
   );
-
-  return { products: [...live, ...fallback], pricesReady: ready };
 }
 
+
+const EMPTY_COLLECTIONS: ShopifyCollectionNode[] = [];
 
 export function useShopifyCollections() {
   const { data, isLoading } = useQuery({
@@ -755,8 +779,11 @@ export function useShopifyCollections() {
       const edges = await fetchCollections(250);
       return edges.map((e) => e.node);
     },
-    staleTime: 0,
+    // Collections change rarely, but this hook is read by the navbar, footer, every product card,
+    // etc.; with staleTime 0 each late-mounting reader re-fetched them (3x on the homepage).
+    staleTime: 10 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
     retry: 1,
   });
-  return { collections: data ?? [], isLoading };
+  return { collections: data ?? EMPTY_COLLECTIONS, isLoading };
 }

@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { TAXONOMY } from "@/lib/taxonomy";
 
-const heroPerfumes = { url: "/hero/hero-perfumes.webp" };
-const heroExclusive = { url: "/hero/officeneed-exclusive-set-v2.webp" };
-const heroGifting = { url: "/hero/corporate-gifting.webp" };
-const heroAI = { url: "/hero/ai-assistant.webp" };
+// `url` is the full-size original; `small` is an 800px-wide variant of the same
+// image so phones don't download a 1350-1536px asset for a ~390px-wide slot.
+const heroPerfumes = { url: "/hero/hero-perfumes.webp", small: "/hero/hero-perfumes-800.webp", width: 1350 };
+const heroExclusive = { url: "/hero/officeneed-exclusive-set-v2.webp", small: "/hero/officeneed-exclusive-set-v2-800.webp", width: 1536 };
+const heroGifting = { url: "/hero/corporate-gifting.webp", small: "/hero/corporate-gifting-800.webp", width: 1536 };
+const heroAI = { url: "/hero/ai-assistant.webp", small: "/hero/ai-assistant-800.webp", width: 1400 };
 
 
 // Collection hrefs below are derived from TAXONOMY (the same single source
@@ -22,6 +24,7 @@ export const slides = [
     primary: { label: "Discover Collection", href: `/products/?collection=${TAXONOMY["Fragrance Gifting"].handle}` },
     secondary: { label: "Shop Perfumes", href: `/products/?collection=${TAXONOMY["Fragrance Gifting"].subcategories["European Perfume"]!.handle}` },
     image: heroPerfumes.url,
+    imageSrcSet: `${heroPerfumes.small} 800w, ${heroPerfumes.url} ${heroPerfumes.width}w`,
     alt: "Luxury designer perfume bottles and gift boxes arranged with flowers and botanicals.",
   },
   {
@@ -31,6 +34,7 @@ export const slides = [
     primary: { label: "Explore Exclusives", href: `/products/?collection=${TAXONOMY["Officeneed Exclusive"].handle}` },
     secondary: { label: "Shop Now", href: "/products/" },
     image: heroExclusive.url,
+    imageSrcSet: `${heroExclusive.small} 800w, ${heroExclusive.url} ${heroExclusive.width}w`,
     alt: "Officeneed exclusive desk essentials, gift boxes and premium stationery set.",
   },
   {
@@ -40,6 +44,7 @@ export const slides = [
     primary: { label: "View Gift Catalogue", href: `/products/?collection=${TAXONOMY["Corporate Gifting"].handle}` },
     secondary: { label: "Shop Gift Sets", href: `/products/?collection=${TAXONOMY["Corporate Gifting"].subcategories["Gift Sets"]!.handle}` },
     image: heroGifting.url,
+    imageSrcSet: `${heroGifting.small} 800w, ${heroGifting.url} ${heroGifting.width}w`,
     alt: "Curated Officeneed corporate gift hamper with laptop bag, notebook, flask, mug, pen, candle, plant and thank you card.",
   },
   {
@@ -49,6 +54,7 @@ export const slides = [
     primary: { label: "Try the Assistant", href: "#open-chat" },
     secondary: { label: "Browse All Products", href: "/products/" },
     image: heroAI.url,
+    imageSrcSet: `${heroAI.small} 800w, ${heroAI.url} ${heroAI.width}w`,
     alt: "Sleek smartphone on a textured black pedestal surrounded by desk essentials, white flowers, and orange peel on a dark luxury background.",
   },
 ];
@@ -153,10 +159,15 @@ export function Hero() {
 
               <img
                 src={s.image}
+                srcSet={s.imageSrcSet}
                 alt={s.alt}
                 width={1366}
                 height={768}
-                fetchPriority="high"
+                // Only the first slide is visible on load: it alone is eager + high priority (it is the LCP
+                // element). The others sit at opacity 0, so they load lazily at low priority instead of
+                // competing with the CSS/JS and the visible image for bandwidth.
+                loading={i === 0 ? "eager" : "lazy"}
+                fetchPriority={i === 0 ? "high" : "low"}
                 draggable={false}
                 decoding="async"
                 sizes="(min-width: 1024px) 90vw, 100vw"

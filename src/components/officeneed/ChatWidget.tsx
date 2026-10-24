@@ -77,7 +77,15 @@ const PURPOSE_ICON: Record<string, typeof Gift> = {
 export function ChatWidget() {
   const [open, setOpen] = useState(false);
   const [phase, setPhase] = useState<"qualification" | "refinement" | "enquiry" | "done" | "fragrance">("qualification");
-  const { products: catalogue, pricesReady: cataloguePricesReady } = useShopifyCatalogue(staticProducts);
+  // The chat is mounted on every page but only needs the full catalogue once it has been opened
+  // (recommendations / quiz). Downloading + converting all ~330 products on every page view, for
+  // shoppers who never open it, was the largest avoidable cost on mobile.
+  const [catalogueWanted, setCatalogueWanted] = useState(false);
+  useEffect(() => {
+    if (open) setCatalogueWanted(true);
+  }, [open]);
+  const catalogueEnabled = open || catalogueWanted;
+  const { products: catalogue, pricesReady: cataloguePricesReady } = useShopifyCatalogue(staticProducts, { enabled: catalogueEnabled });
   const { collections } = useShopifyCollections();
   const buyer = useBuyerContext();
   const customerId = useB2BStore((s) => s.customerId);
@@ -86,7 +94,7 @@ export function ChatWidget() {
   // only to know whether the catalogue is still loading or failed, so we
   // never present recommendations against an empty fallback catalogue as if
   // it were a real "no matches" result.
-  const { isLoading: catalogueLoading, isError: catalogueError } = useQuery(shopifyCatalogueQueryOptions(buyer, customerId));
+  const { isLoading: catalogueLoading, isError: catalogueError } = useQuery({ ...shopifyCatalogueQueryOptions(buyer, customerId), enabled: catalogueEnabled });
   /** Set right after qualification/refinement completes; resolved by the
    *  effect below once the catalogue has actually finished loading. */
   const [pendingRecommendation, setPendingRecommendation] = useState<{ answers: ChatAnswers; refinement?: string } | null>(null);
@@ -919,7 +927,7 @@ export function ChatWidget() {
           {/* Header */}
           <div className="flex items-center justify-between gap-3 border-b border-border bg-white/80 backdrop-blur-md px-5 py-4 z-10 shrink-0">
             <div className="flex items-center gap-3">
-              <img src={logoUrl} alt="" width={640} height={122} className="h-4 w-auto object-contain" />
+              <img src={logoUrl} alt="" width={640} height={122} loading="lazy" decoding="async" className="h-4 w-auto object-contain" />
               <div className="leading-tight border-l border-border pl-3">
                 <p className="text-sm font-semibold text-foreground">{ASSISTANT_NAME}</p>
                 <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">AI Shopping Guide</p>

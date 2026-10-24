@@ -22,7 +22,13 @@ export function SearchModal({ open, onOpenChange }: { open: boolean; onOpenChang
   const inputRef = useRef<HTMLInputElement>(null);
   // Search's quick results never show price (just image/name/category), so
   // pricesReady isn't consulted here -- no buyer-dependent content to gate.
-  const { products: catalogue } = useShopifyCatalogue(products);
+  // Mounted in the navbar on every page: only download the full catalogue once search is opened.
+  const [searchWanted, setSearchWanted] = useState(false);
+  useEffect(() => {
+    if (open) setSearchWanted(true);
+  }, [open]);
+  const searchEnabled = open || searchWanted;
+  const { products: catalogue } = useShopifyCatalogue(products, { enabled: searchEnabled });
   const { collections } = useShopifyCollections();
 
   // Built here (not at module scope) so each entry's label can resolve the
@@ -62,7 +68,7 @@ export function SearchModal({ open, onOpenChange }: { open: boolean; onOpenChang
   // Read the query state from the same cache key used by useShopifyCatalogue
   const buyer = useBuyerContext();
   const customerId = useB2BStore((s) => s.customerId);
-  const { isLoading, isError } = useQuery(shopifyCatalogueQueryOptions(buyer, customerId));
+  const { isLoading, isError } = useQuery({ ...shopifyCatalogueQueryOptions(buyer, customerId), enabled: searchEnabled });
 
 
   useEffect(() => {

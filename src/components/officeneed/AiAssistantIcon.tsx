@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import aiAssistantIconUrl from "@/assets/ai-assistant-icon-new.jpg";
+import aiAssistantIconUrl from "@/assets/ai-assistant-icon-new.webp";
 
 export function AiAssistantIcon({ className }: { className?: string }) {
   return (

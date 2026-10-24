@@ -25,3 +25,10 @@ export function shopifyImageUrl(url: string | null | undefined, width: number): 
     return url;
   }
 }
+
+/** `srcset` of the same Shopify image at several widths, so the browser picks the smallest that
+ * still covers its rendered size x pixel density. Undefined for non-Shopify urls (no variants). */
+export function shopifyImageSrcSet(url: string | null | undefined, widths: number[]): string | undefined {
+  if (!url || !url.includes("cdn.shopify.com")) return undefined;
+  return widths.map((w) => `${shopifyImageUrl(url, w)} ${w}w`).join(", ");
+}

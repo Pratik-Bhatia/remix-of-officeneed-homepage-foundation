@@ -29,7 +29,7 @@ import { VariantSelectorDesktop, VariantSelectorMobile } from "@/components/offi
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { getProductBySlug, getRelatedProducts } from "@/lib/products";
-import { shopifyImageUrl } from "@/lib/shopify-image";
+import { shopifyImageUrl, shopifyImageSrcSet } from "@/lib/shopify-image";
 import { fetchProductByHandle, fetchRelatedProducts, formatMoney, type ShopifyProductNode, type ShopifyVariantNode, type BuyerContext } from "@/lib/shopify";
 import { mergeProduct, shopifyNodeToProduct, useShopifyCollections, useB2BPriceOverlayMap, useB2BQuantityRuleOverlayMap } from "@/lib/shopify-overlay";
 import { TAXONOMY, resolveLiveTitle } from "@/lib/taxonomy";
@@ -1054,6 +1054,8 @@ function ProductDetail() {
                       arrows updating activeImage -- unchanged behavior. */}
                   <img
                     src={shopifyImageUrl(activeMedia?.url ?? product.images[0], 1200)}
+                    srcSet={shopifyImageSrcSet(activeMedia?.url ?? product.images[0], [480, 800, 1200, 1600])}
+                    sizes="(min-width: 1024px) 60vw, 100vw"
                     alt={activeMedia?.alt || `${product.name} - image ${activeImage + 1}`}
                     width={1080}
                     height={1080}
@@ -1081,6 +1083,8 @@ function ProductDetail() {
                       <div key={media.url} className="w-full h-full shrink-0 snap-center flex items-center justify-center">
                         <img
                           src={shopifyImageUrl(media.url, 1200)}
+                          srcSet={shopifyImageSrcSet(media.url, [480, 800, 1200, 1600])}
+                          sizes="(min-width: 1024px) 60vw, 100vw"
                           alt={media.alt || `${product.name} - image ${i + 1}`}
                           width={1080}
                           height={1080}

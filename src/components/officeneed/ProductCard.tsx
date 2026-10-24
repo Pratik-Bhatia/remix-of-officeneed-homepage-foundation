@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { Heart } from "lucide-react";
 import { toast } from "sonner";
-import { useEffect, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import type { Product } from "@/lib/products";
 import { getCustomerToken } from "@/lib/customer";
 import { useSaves } from "@/lib/saves";
@@ -30,7 +30,7 @@ function eyebrowLabel(collections: Array<{ handle: string; title: string }>, lab
   return resolveLiveTitle(collections, match.node);
 }
 
-export function ProductCard({
+function ProductCardImpl({
   product,
   className,
   showEyebrow = false,
@@ -106,6 +106,10 @@ export function ProductCard({
   // blank/loading frame. Never fetches image[2], image[3], etc.
   useEffect(() => {
     if (!hoverImage) return;
+    // The hover swap only ever happens for a mouse pointer (see handlePointerEnter), so on touch-only
+    // devices this prefetched a second image for EVERY card on the page (99-330 extra requests on a
+    // collection page) that could never be shown, competing with the visible images for bandwidth.
+    if (typeof window !== "undefined" && typeof window.matchMedia === "function" && !window.matchMedia("(hover: hover)").matches) return;
     const preload = new Image();
     preload.src = shopifyImageUrl(hoverImage, PRODUCT_CARD_IMAGE_WIDTH);
   }, [hoverImage]);
@@ -276,3 +280,5 @@ export function ProductCard({
     </div>
   );
 }
+
+export const ProductCard = memo(ProductCardImpl);
