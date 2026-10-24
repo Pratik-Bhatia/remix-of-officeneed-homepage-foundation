@@ -30,6 +30,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { getProductBySlug, getRelatedProducts } from "@/lib/products";
 import { shopifyImageUrl, shopifyImageSrcSet } from "@/lib/shopify-image";
+import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 import { fetchProductByHandle, fetchRelatedProducts, formatMoney, type ShopifyProductNode, type ShopifyVariantNode, type BuyerContext } from "@/lib/shopify";
 import { mergeProduct, shopifyNodeToProduct, useShopifyCollections, useB2BPriceOverlayMap, useB2BQuantityRuleOverlayMap } from "@/lib/shopify-overlay";
 import { TAXONOMY, resolveLiveTitle } from "@/lib/taxonomy";
@@ -511,6 +512,31 @@ function ProductDetail() {
   useEffect(() => {
     window.dispatchEvent(new CustomEvent("officeneed:cta-widget-overlap-toggle", { detail: { open: ctaOverlapsWidget } }));
   }, [ctaOverlapsWidget]);
+
+  // Image zoom viewer: a full-screen modal, so (1) the page behind it must not scroll, (2) the floating
+  // chat launcher (z-[100], above every z-50 overlay) is hidden while it is open -- a sixth independent
+  // event slice that ChatWidget ORs with the others -- and (3) Escape closes it like the close button.
+  useBodyScrollLock(zoomOpen);
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent("officeneed:image-viewer-toggle", { detail: { open: zoomOpen } }));
+    // Also fires if this page unmounts while the viewer is open, so the launcher can never stay hidden.
+    return () => {
+      if (zoomOpen) window.dispatchEvent(new CustomEvent("officeneed:image-viewer-toggle", { detail: { open: false } }));
+    };
+  }, [zoomOpen]);
+  useEffect(() => {
+    if (!zoomOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setZoomOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [zoomOpen]);
+  // This route component is reused when navigating between products (back/forward, related items), so an
+  // open viewer must not carry over -- and keep the page locked -- on the next product.
+  useEffect(() => {
+    setZoomOpen(false);
+  }, [slug]);
 
   const addItem = useCartStore((s) => s.addItem);
   const items = useCartStore((s) => s.items);
@@ -1432,7 +1458,8 @@ function ProductDetail() {
               {/* Zoom Lightbox */}
               {zoomOpen && (
                 <div 
-                  className="fixed inset-0 z-50 flex items-center justify-center bg-background/95 backdrop-blur-sm"
+                  className="fixed inset-0 z-50 flex items-center justify-center overscroll-contain bg-background/95 backdrop-blur-sm"
+                  style={{ touchAction: "pinch-zoom" }}
                   role="dialog"
                   aria-modal="true"
                 >

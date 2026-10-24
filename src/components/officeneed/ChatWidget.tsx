@@ -310,6 +310,17 @@ export function ChatWidget() {
     return () => window.removeEventListener("officeneed:cta-widget-overlap-toggle", onCtaOverlapToggle);
   }, []);
 
+  // Sixth independent source: the PDP's full-screen image zoom viewer (products.$slug.tsx), which would
+  // otherwise sit under this launcher's z-[100] and collide with its image, arrows and close button.
+  const [imageViewerOpen, setImageViewerOpen] = useState(false);
+  useEffect(() => {
+    const onImageViewerToggle = (e: Event) => {
+      setImageViewerOpen(Boolean((e as CustomEvent<{ open: boolean }>).detail?.open));
+    };
+    window.addEventListener("officeneed:image-viewer-toggle", onImageViewerToggle);
+    return () => window.removeEventListener("officeneed:image-viewer-toggle", onImageViewerToggle);
+  }, []);
+
   // Fourth independent source: the footer's own content (contact details,
   // payment badges) occupies this same bottom-right corner once the shopper
   // reaches the end of the page, so the launcher fades out while the footer
@@ -894,7 +905,7 @@ export function ChatWidget() {
       {/* Floating Launcher Button -- the single OfficeGPT entry point */}
       <div className={cn(
         "fixed bottom-6 right-6 z-[100] transition-all duration-300",
-        open || navOverlayOpen || stickyBarOpen || customizerOpen || footerVisible || ctaOverlapOpen ? "opacity-0 pointer-events-none translate-y-4 scale-95" : "opacity-100 translate-y-0 scale-100"
+        open || navOverlayOpen || stickyBarOpen || customizerOpen || footerVisible || ctaOverlapOpen || imageViewerOpen ? "opacity-0 pointer-events-none translate-y-4 scale-95" : "opacity-100 translate-y-0 scale-100"
       )}>
         <button
           onClick={openLauncher}
