@@ -35,7 +35,7 @@ const benefits = [
   {
     icon: RefreshCcw,
     title: "Quality Assured",
-    description: "All items undergo rigorous quality checks. Sales are final with no returns.",
+    description: "Every item undergoes quality checks before dispatch to help ensure it meets our quality standards. All sales are final, with no returns or refunds.",
   },
   {
     icon: ShieldCheck,
