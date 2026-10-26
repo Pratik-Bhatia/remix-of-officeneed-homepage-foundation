@@ -4,8 +4,7 @@ import { cn } from "@/lib/utils";
 import { FieldError, focusField } from "@/components/ui/field-error";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
-import customerAuthLifestyleImage from "@/assets/customer-auth-lifestyle.webp";
-import companyAuthLifestyleImage from "@/assets/company-auth-lifestyle.webp";
+import customerAuthPromoBanner from "@/assets/customer-auth-promo.svg";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -610,52 +609,28 @@ export function CustomerAuthModal({
               here (the DialogHeader below already carries the copy at this
               size). Same image asset as the desktop panel, never swapped
               when switching Sign In <-> Create Account. */}
-          {/* Vertical object-position tuned so the full bottle (which sits
-              in the lower ~40-95% of the source photo) survives this
-              banner's aggressive width-driven vertical crop -- the default
-              center crop was cutting its base off. Horizontal doesn't need
-              tuning here: at this wide/short aspect ratio cover matches
-              container width exactly, so there's no horizontal crop at all. */}
-          <div className="relative h-40 w-full shrink-0 overflow-hidden sm:h-48 lg:hidden">
+          {/* Promotional banner (SVG): shown whole with object-contain on its #F5F5F5 background. */}
+          <div className="relative aspect-[3/2] max-h-[32dvh] w-full shrink-0 overflow-hidden bg-[#F5F5F5] lg:hidden">
             <img
-              src={customerAuthLifestyleImage}
-              alt=""
-              className="h-full w-full object-cover object-[50%_88%]"
+              src={customerAuthPromoBanner}
+              alt="Officeneed Promotional Offers"
+              width={768}
+              height={768}
+              decoding="async"
+              className="h-full w-full object-contain"
             />
           </div>
 
-          {/* Visual panel -- desktop only (lg:+). Same lifestyle image.
-              object-fit:cover alone left the bottle too small to read its
-              label: at this tall/narrow panel ratio, cover matches the
-              panel's full HEIGHT with zero vertical cropping, so the bottle
-              renders at (effectively) the photo's native proportions
-              scaled down to panel height -- same relative size as in the
-              source photo, where it's a small part of a wide, airy scene.
-              Fix: scale the already-cropped image up further with a
-              transform, anchored (origin-[...]) at the point the bottle
-              ends up at under the base object-left crop (computed: roughly
-              28% across / 62% down the panel), so zooming enlarges the
-              bottle+label specifically instead of zooming toward the
-              panel's geometric center (which would just crop in on empty
-              background). The top gradient/text area ends up showing MORE
-              background after this zoom (scaling from a below-center
-              origin pushes the top of the frame further out), if anything
-              widening its clearance from the bottle, not shrinking it. */}
-          <div className="relative hidden shrink-0 overflow-hidden lg:flex lg:w-1/2">
+          {/* Visual panel -- desktop only (lg:+): the promotional banner alone, edge to edge with object-contain. */}
+          <div className="relative hidden shrink-0 items-center justify-center overflow-hidden bg-[#F5F5F5] lg:flex lg:w-1/2">
             <img
-              src={customerAuthLifestyleImage}
-              alt=""
-              className="h-full w-full scale-[1.6] object-cover object-left origin-[28%_62%]"
+              src={customerAuthPromoBanner}
+              alt="Officeneed Promotional Offers"
+              width={768}
+              height={768}
+              decoding="async"
+              className="h-auto max-h-full w-full object-contain"
             />
-            <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-black/10 to-transparent" aria-hidden />
-            <div className="absolute inset-x-0 top-0 p-8 lg:p-10">
-              <span className="text-[0.7rem] font-semibold uppercase tracking-[0.14em] text-white/80">
-                Your Account
-              </span>
-              <h2 className="mt-3 font-display text-3xl font-medium leading-tight tracking-tight text-white">
-                Everything you need, in one place.
-              </h2>
-            </div>
           </div>
 
           {/* Form column -- same handleSubmit, same field names, same
@@ -730,36 +705,28 @@ export function CustomerAuthModal({
         </AuthSurface>
       ) : showCompanyAuthLayout ? (
         <AuthSurface embedded={embedded} className="flex max-h-[calc(100dvh-1.5rem)] w-[calc(100vw-1.5rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-md lg:max-w-4xl lg:flex-row">
-          {/* Exact 50/50 split, matching the Individual layout's modal
-              width/proportions. At a true half-width panel there's enough
-              room to show the composition close to centered without
-              cropping any of the gift box/journal/pen/bottle cluster
-              tightly -- a plain object-center reads as the natural,
-              unbiased choice here, rather than the left/up bias the
-              narrower 36-44% panels needed. */}
-          <div className="relative h-40 w-full shrink-0 overflow-hidden sm:h-48 lg:hidden">
+          {/* Compact image banner -- mobile/tablet only (below lg:). */}
+          <div className="relative aspect-[3/2] max-h-[32dvh] w-full shrink-0 overflow-hidden bg-[#F5F5F5] lg:hidden">
             <img
-              src={companyAuthLifestyleImage}
-              alt=""
-              className="h-full w-full object-cover object-[45%_75%]"
+              src={customerAuthPromoBanner}
+              alt="Officeneed Promotional Offers"
+              width={768}
+              height={768}
+              decoding="async"
+              className="h-full w-full object-contain"
             />
           </div>
 
-          <div className="relative hidden shrink-0 overflow-hidden lg:flex lg:w-1/2">
+          {/* Visual panel -- desktop only (lg:+): the promotional banner alone, edge to edge with object-contain. */}
+          <div className="relative hidden shrink-0 items-center justify-center overflow-hidden bg-[#F5F5F5] lg:flex lg:w-1/2">
             <img
-              src={companyAuthLifestyleImage}
-              alt=""
-              className="h-full w-full object-cover object-center"
+              src={customerAuthPromoBanner}
+              alt="Officeneed Promotional Offers"
+              width={768}
+              height={768}
+              decoding="async"
+              className="h-auto max-h-full w-full object-contain"
             />
-            <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-black/10 to-transparent" aria-hidden />
-            <div className="absolute inset-x-0 top-0 p-8 lg:p-10">
-              <span className="text-[0.7rem] font-semibold uppercase tracking-[0.14em] text-white/80">
-                Your Business
-              </span>
-              <h2 className="mt-3 font-display text-3xl font-medium leading-tight tracking-tight text-white">
-                Corporate pricing, built for your business.
-              </h2>
-            </div>
           </div>
 
           {/* Form column -- same handleSubmit/field names/validation the
