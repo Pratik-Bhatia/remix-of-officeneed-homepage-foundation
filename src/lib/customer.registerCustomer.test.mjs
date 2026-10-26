@@ -24,11 +24,14 @@ if (typeof globalThis.window === "undefined") {
 let createCustomerErrors = [];
 let signInErrors = [];
 let signInToken = { accessToken: "real-token-abc", expiresAt: new Date(Date.now() + 3600_000).toISOString() };
+// The exact variables the last customerCreate was sent with.
+let lastRegisterVariables = null;
 
 mock.module("@/lib/shopify", {
   namedExports: {
-    storefrontApiRequest: async (query) => {
+    storefrontApiRequest: async (query, variables) => {
       if (query.includes("mutation Register")) {
+        lastRegisterVariables = variables;
         return { data: { customerCreate: { customerUserErrors: createCustomerErrors } } };
       }
       if (query.includes("mutation Login")) {
@@ -169,4 +172,66 @@ test("registerCustomer: an email already registered as a B2C (Individual) custom
     },
   );
   assert.equal(globalThis.localStorage.getItem("officeneed_customer_token"), null);
+});
+
+// ---- Email marketing consent (CustomerCreateInput.acceptsMarketing) ----
+
+test("registerCustomer: a checked consent box sends acceptsMarketing: true to customerCreate", async () => {
+  createCustomerErrors = [];
+  signInErrors = [];
+  lastRegisterVariables = null;
+
+  await registerCustomer({ email: "optin@example.com", password: "hunter22", acceptsMarketing: true });
+
+  assert.equal(lastRegisterVariables.input.acceptsMarketing, true);
+});
+
+test("registerCustomer: an unchecked consent box sends acceptsMarketing: false and registration still succeeds", async () => {
+  createCustomerErrors = [];
+  signInErrors = [];
+  lastRegisterVariables = null;
+  globalThis.localStorage.removeItem("officeneed_customer_token");
+
+  await registerCustomer({ email: "optout@example.com", password: "hunter22", acceptsMarketing: false });
+
+  assert.equal(lastRegisterVariables.input.acceptsMarketing, false, "an unchecked box must never subscribe the customer");
+  assert.ok(globalThis.localStorage.getItem("officeneed_customer_token"), "opting out must not block registration");
+});
+
+test("registerCustomer: B2B-shaped input (phone) carries the consent choice alongside it, unchanged", async () => {
+  createCustomerErrors = [];
+  signInErrors = [];
+  lastRegisterVariables = null;
+
+  await registerCustomer({ email: "b2b-optin@example.com", password: "hunter22", firstName: "A", phone: "+919876543210", acceptsMarketing: true });
+
+  assert.deepEqual(lastRegisterVariables.input, {
+    email: "b2b-optin@example.com",
+    password: "hunter22",
+    firstName: "A",
+    phone: "+919876543210",
+    acceptsMarketing: true,
+  });
+});
+
+test("registerCustomer: callers that omit the field never send acceptsMarketing (no inferred consent)", async () => {
+  createCustomerErrors = [];
+  signInErrors = [];
+  lastRegisterVariables = null;
+
+  await registerCustomer({ email: "nofield@example.com", password: "hunter22" });
+
+  assert.equal("acceptsMarketing" in lastRegisterVariables.input, false);
+});
+
+test("CustomerAuthModal: consent checkbox is optional, unchecked by default, and only on register forms", () => {
+  const src = readFileSync("src/components/officeneed/CustomerAuthModal.tsx", "utf8");
+  const field = src.slice(src.indexOf("const marketingConsentField"), src.indexOf("const authContent"));
+  assert.match(field, /<Checkbox id="acceptsMarketing" name="acceptsMarketing"/);
+  assert.match(field, /<Label htmlFor="acceptsMarketing"/, "the label must be clickable via htmlFor");
+  assert.match(field, /Email me product updates, exclusive offers and promotions\./);
+  assert.ok(!/\b(defaultChecked|checked|required)\b/.test(field), "must not be preselected or mandatory");
+  assert.match(src, /const acceptsMarketing = form\.get\("acceptsMarketing"\) === "on";/);
+  // Both registerCustomer call sites (B2C and B2B) pass the explicit choice.
+  assert.equal((src.match(/^\s+acceptsMarketing,\r?\n\s+\}\);/gm) || []).length, 2);
 });

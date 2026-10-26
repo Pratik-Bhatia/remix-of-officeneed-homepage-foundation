@@ -331,6 +331,14 @@ export async function registerCustomer(input: {
    * input. Optional and unused by existing B2C registration, which never
    * passes it -- that path's behavior is unchanged. */
   phone?: string;
+  /** Native Shopify field (CustomerCreateInput.acceptsMarketing, confirmed
+   * live on this store's 2026-10 Storefront schema) -- true records the
+   * customer as subscribed to email marketing, false as not subscribed.
+   * Only ever the shopper's own explicit checkbox choice, never inferred
+   * from creating the account. Applies to this customerCreate only: a
+   * TAKEN (existing) email never reaches Shopify's create, so an existing
+   * customer's marketing status is never touched from here. */
+  acceptsMarketing?: boolean;
 }): Promise<void> {
   try {
     let resp;

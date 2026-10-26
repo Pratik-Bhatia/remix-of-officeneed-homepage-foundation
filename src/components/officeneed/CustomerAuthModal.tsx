@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { signInCustomer, registerCustomer, requestPasswordRecovery, getCustomerToken, CustomerAuthError } from "@/lib/customer";
 import { saveBusinessRegistration } from "@/lib/business-registration.functions";
@@ -233,6 +234,9 @@ export function CustomerAuthModal({
     }
 
     const password = String(form.get("password") ?? "");
+    // Radix's Checkbox submits a hidden native input only when checked, so
+    // an unchecked (or absent -- sign-in, upgrade) box is always false.
+    const acceptsMarketing = form.get("acceptsMarketing") === "on";
     setGstError(null);
     setPhoneError(null);
 
@@ -343,6 +347,7 @@ export function CustomerAuthModal({
               ...(firstName ? { firstName } : {}),
               ...(lastName ? { lastName } : {}),
               ...(phone ? { phone } : {}),
+              acceptsMarketing,
             });
           } catch (registerErr) {
             // registerCustomer() itself already anticipates that Shopify
@@ -438,6 +443,7 @@ export function CustomerAuthModal({
           password,
           ...(firstName ? { firstName } : {}),
           ...(lastName ? { lastName } : {}),
+          acceptsMarketing,
         });
         toast.success("Account created successfully");
       }
@@ -600,6 +606,20 @@ export function CustomerAuthModal({
     </div>
   );
 
+  // Optional email-marketing opt-in, rendered only on forms that create a
+  // new Shopify customer (never sign-in, forgot, or the signed-in upgrade).
+  // Unchecked by default and independent of every required field; the
+  // form remounts on tab/mode change (formKey), so it always starts
+  // unchecked. Radix renders a <button>, which the <Label htmlFor> labels.
+  const marketingConsentField = (
+    <div className="flex items-start gap-3">
+      <Checkbox id="acceptsMarketing" name="acceptsMarketing" className="mt-0.5" />
+      <Label htmlFor="acceptsMarketing" className="cursor-pointer text-sm font-normal leading-snug text-muted-foreground">
+        Email me product updates, exclusive offers and promotions.
+      </Label>
+    </div>
+  );
+
   const authContent = (
     <>
       {showCustomerAuthLayout ? (
@@ -682,6 +702,7 @@ export function CustomerAuthModal({
                   <Input id="email" name="email" type="email" required autoComplete="email" defaultValue="" placeholder="you@example.com" {...noAutofill} />
                 </div>
                 {passwordField}
+                {mode === "register" ? marketingConsentField : null}
               </div>
 
               <div className="shrink-0 px-5 pb-5 pt-3 sm:px-8">
@@ -835,6 +856,7 @@ export function CustomerAuthModal({
                         <PasswordInput id="confirmPassword" name="confirmPassword" required minLength={5} defaultValue="" autoComplete="new-password" {...noAutofill} />
                       </div>
                     </div>
+                    {marketingConsentField}
                   </>
                 )}
               </div>
@@ -1011,6 +1033,7 @@ export function CustomerAuthModal({
                       <PasswordInput id="confirmPassword" name="confirmPassword" required minLength={5} defaultValue="" autoComplete="new-password" {...noAutofill} />
                     </div>
                   </div>
+                  {marketingConsentField}
                   </>)}
                 </>
               ) : (
@@ -1032,6 +1055,7 @@ export function CustomerAuthModal({
                     <Input id="email" name="email" type="email" required autoComplete={mode === "signin" ? "username" : "email"} defaultValue="" placeholder="you@example.com" {...noAutofill} />
                   </div>
                   {passwordField}
+                  {mode === "register" ? marketingConsentField : null}
                 </>
               )}
             </div>
