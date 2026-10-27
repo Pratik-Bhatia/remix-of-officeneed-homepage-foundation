@@ -3,7 +3,7 @@ import { CLARITY_MASK } from "@/lib/clarity";
 import { cn } from "@/lib/utils";
 import { FieldError, focusField } from "@/components/ui/field-error";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { Gift, Loader2 } from "lucide-react";
 import customerAuthPromoBanner from "@/assets/customer-auth-promo.svg";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -610,13 +610,39 @@ export function CustomerAuthModal({
   // new Shopify customer (never sign-in, forgot, or the signed-in upgrade).
   // Unchecked by default and independent of every required field; the
   // form remounts on tab/mode change (formKey), so it always starts
-  // unchecked. Radix renders a <button>, which the <Label htmlFor> labels.
+  // unchecked. Radix renders a <button>, which the <Label htmlFor> labels;
+  // the description/helper are attached via aria-describedby so the
+  // accessible name stays the short label.
   const marketingConsentField = (
-    <div className="flex items-start gap-3">
-      <Checkbox id="acceptsMarketing" name="acceptsMarketing" className="mt-0.5" />
-      <Label htmlFor="acceptsMarketing" className="cursor-pointer text-sm font-normal leading-snug text-muted-foreground">
-        Email me product updates, exclusive offers and promotions.
-      </Label>
+    <div className="rounded-xl border border-border bg-muted/40 p-4">
+      <div className="flex items-start gap-3">
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-full border border-border bg-background">
+          <Gift className="size-4 text-foreground" strokeWidth={1.75} aria-hidden="true" />
+        </span>
+        <div className="space-y-0.5">
+          <p className="text-sm font-semibold leading-snug text-foreground">Get more from Officeneed</p>
+          <p className="text-xs leading-snug text-muted-foreground">Exclusive offers for your business and everyday needs.</p>
+        </div>
+      </div>
+      <div className="mt-3 flex items-start gap-3 border-t border-border pt-3">
+        <Checkbox
+          id="acceptsMarketing"
+          name="acceptsMarketing"
+          className="mt-0.5"
+          aria-describedby="acceptsMarketing-description acceptsMarketing-helper"
+        />
+        <div className="space-y-1">
+          <Label htmlFor="acceptsMarketing" className="cursor-pointer text-sm font-medium leading-snug text-foreground">
+            Send me exclusive offers &amp; updates
+          </Label>
+          <p id="acceptsMarketing-description" className="text-xs leading-relaxed text-muted-foreground">
+            Be the first to hear about gifting deals, special promotions, new arrivals and exclusive savings from Officeneed.
+          </p>
+          <p id="acceptsMarketing-helper" className="text-[0.7rem] text-muted-foreground/80">
+            Optional. Unsubscribe anytime.
+          </p>
+        </div>
+      </div>
     </div>
   );
 

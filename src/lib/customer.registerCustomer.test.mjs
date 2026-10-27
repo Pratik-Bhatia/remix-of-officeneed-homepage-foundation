@@ -227,9 +227,10 @@ test("registerCustomer: callers that omit the field never send acceptsMarketing 
 test("CustomerAuthModal: consent checkbox is optional, unchecked by default, and only on register forms", () => {
   const src = readFileSync("src/components/officeneed/CustomerAuthModal.tsx", "utf8");
   const field = src.slice(src.indexOf("const marketingConsentField"), src.indexOf("const authContent"));
-  assert.match(field, /<Checkbox id="acceptsMarketing" name="acceptsMarketing"/);
+  assert.match(field, /<Checkbox\s+id="acceptsMarketing"\s+name="acceptsMarketing"/);
   assert.match(field, /<Label htmlFor="acceptsMarketing"/, "the label must be clickable via htmlFor");
-  assert.match(field, /Email me product updates, exclusive offers and promotions\./);
+  assert.match(field, /Send me exclusive offers &amp; updates/);
+  assert.match(field, /Optional\. Unsubscribe anytime\./);
   assert.ok(!/\b(defaultChecked|checked|required)\b/.test(field), "must not be preselected or mandatory");
   assert.match(src, /const acceptsMarketing = form\.get\("acceptsMarketing"\) === "on";/);
   // Both registerCustomer call sites (B2C and B2B) pass the explicit choice.
