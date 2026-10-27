@@ -8,6 +8,7 @@ import { Navbar } from "@/components/officeneed/Navbar";
 import { Footer } from "@/components/officeneed/Footer";
 import { ProductCard } from "@/components/officeneed/ProductCard";
 import { ProductCouponOffer } from "@/components/officeneed/ProductCouponOffer";
+import { PriceTaxNote } from "@/components/officeneed/PriceTaxNote";
 import { getPromotionForProduct } from "@/config/promotions";
 import { useCouponStore } from "@/stores/couponStore";
 import { DiscountBadge } from "@/components/officeneed/DiscountBadge";
@@ -1265,6 +1266,8 @@ function ProductDetail() {
                     <div className="sm:hidden shrink-0">{renderStockStatus(true)}</div>
                     <div className="hidden sm:block shrink-0">{renderStockStatus(false)}</div>
                   </div>
+                  {/* Hidden only for "Price on enquiry" -- there's no price to qualify. */}
+                  {pricePending || displayPrice ? <PriceTaxNote className="mt-1" /> : null}
                 </div>
 
                 {/* Category coupon offer (Fragrance / Corporate Gifting only);

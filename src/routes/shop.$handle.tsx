@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/officeneed/Navbar";
 import { Footer } from "@/components/officeneed/Footer";
 import { fetchProductByHandle, formatMoney } from "@/lib/shopify";
+import { PriceTaxNote } from "@/components/officeneed/PriceTaxNote";
 import { useCartStore } from "@/stores/cartStore";
 import { RichText } from "@/components/officeneed/RichText";
 import { useProductBrowseAbandon } from "@/hooks/useProductBrowseAbandon";
@@ -199,6 +200,7 @@ function ShopProductPage() {
           <p className="mt-4 text-2xl font-semibold tabular-nums">
             {selected ? formatMoney(selected.price.amount, selected.price.currencyCode) : null}
           </p>
+          {selected ? <PriceTaxNote className="mt-1" /> : null}
           <p className="mt-2 text-xs text-muted-foreground">
             {selected?.availableForSale ? "In stock" : "Sold out"}
             {selected?.sku ? ` · SKU ${selected.sku}` : ""}
