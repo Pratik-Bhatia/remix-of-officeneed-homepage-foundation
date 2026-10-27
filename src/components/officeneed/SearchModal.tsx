@@ -1,7 +1,7 @@
 import { trackSearch } from "@/lib/meta-pixel";
 import { trackGoogleSearch } from "@/lib/google-analytics";
 import { lockScroll, unlockScroll } from "@/lib/scroll-lock";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Search, X, ArrowRight } from "lucide-react";
 import { products } from "@/lib/products";
@@ -12,14 +12,41 @@ import { primaryNavCategories, navCategoryTarget, getLiveNavLabel } from "@/lib/
 import { useShopifyCatalogue, useShopifyCollections, shopifyCatalogueQueryOptions } from "@/lib/shopify-overlay";
 import { useBuyerContext } from "@/hooks/useBuyerContext";
 import { useB2BStore } from "@/stores/b2bStore";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { useQuery } from "@tanstack/react-query";
 import { searchProducts, getSearchSuggestion } from "@/lib/search";
 
-export function SearchModal({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+export function SearchModal({
+  open,
+  onOpenChange,
+  anchorRef,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  /** The sticky site header. The panel opens flush with its real bottom
+   * edge -- which moves with the promo bar above it (shown at the top of
+   * the page, scrolled away later), so it can't be a fixed offset. */
+  anchorRef?: RefObject<HTMLElement | null>;
+}) {
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+  const resultsRef = useRef<HTMLDivElement>(null);
+  const [anchorTop, setAnchorTop] = useState(0);
+  // Browsers clip (not ellipsize) a placeholder, so phones get a shorter one.
+  const isMobile = useIsMobile();
+
+  // Measured before paint so the panel never flashes at the wrong offset.
+  // lockScroll() blocks scrolling without moving layout, so this stays
+  // valid while open; only a resize (or rotation) can change it.
+  useLayoutEffect(() => {
+    if (!open) return;
+    const measure = () => setAnchorTop(Math.max(0, Math.round(anchorRef?.current?.getBoundingClientRect().bottom ?? 0)));
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [open, anchorRef]);
   // Search's quick results never show price (just image/name/category), so
   // pricesReady isn't consulted here -- no buyer-dependent content to gate.
   // Mounted in the navbar on every page: only download the full catalogue once search is opened.
@@ -98,6 +125,19 @@ export function SearchModal({ open, onOpenChange }: { open: boolean; onOpenChang
     }
   };
 
+  // ArrowDown/ArrowUp move between the input and the visible result links
+  // (Tab order is unchanged). The input itself keeps Up/Down otherwise.
+  const handlePanelArrows = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+    const items = Array.from(resultsRef.current?.querySelectorAll<HTMLElement>("a[href], button") ?? []);
+    if (items.length === 0) return;
+    const at = items.indexOf(document.activeElement as HTMLElement);
+    e.preventDefault();
+    if (e.key === "ArrowDown") items[at < 0 ? 0 : Math.min(at + 1, items.length - 1)]?.focus();
+    else if (at <= 0) inputRef.current?.focus();
+    else items[at - 1]?.focus();
+  };
+
   const normalizedQuery = query.trim().toLowerCase();
   const normalizedDebouncedQuery = debouncedQuery.trim().toLowerCase();
 
@@ -129,44 +169,57 @@ export function SearchModal({ open, onOpenChange }: { open: boolean; onOpenChang
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-40 flex flex-col">
-      {/* Blurred Backdrop */}
-      <div 
-        className="absolute inset-0 bg-background/50 backdrop-blur-xl transition-opacity duration-300 animate-in fade-in"
+    <div className="fixed inset-0 z-40">
+      {/* Soft frosted dim behind the panel -- the page stays recognizable.
+          Sits under the z-50 header, so the header stays crisp and
+          clickable. Without backdrop-filter support: a plain light dim. */}
+      <div
+        className="absolute inset-0 bg-foreground/15 supports-[backdrop-filter]:bg-foreground/10 supports-[backdrop-filter]:backdrop-blur-[5px] animate-in fade-in duration-200"
         onClick={() => onOpenChange(false)}
       />
 
-      {/* Main Content Dropdown */}
-      <div 
-        className="relative mt-[64px] lg:mt-[80px] w-full bg-background/95 backdrop-blur-md border-b border-border shadow-[0_10px_40px_-10px_rgba(0,0,0,0.1)] animate-in slide-in-from-top-4 fade-in duration-300 overflow-hidden"
+      {/* Panel: flush with the header's real bottom edge, frosted glass
+          (near-opaque white fallback without backdrop-filter), sized to
+          its content and never taller than the space left. The input
+          inside keeps its own opaque background, so it is never blurred. */}
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Search"
+        className="absolute inset-x-0 flex flex-col border-b border-black/[0.08] bg-background/95 shadow-[0_12px_32px_rgba(0,0,0,0.08)] supports-[backdrop-filter]:bg-background/[0.78] supports-[backdrop-filter]:backdrop-blur-[18px] supports-[backdrop-filter]:backdrop-saturate-150 animate-in slide-in-from-top-2 fade-in duration-200"
+        style={{ top: anchorTop, maxHeight: `calc(100dvh - ${anchorTop}px)` }}
+        onKeyDown={handlePanelArrows}
       >
-        <div className="mx-auto max-w-[700px] px-4 sm:px-6 py-6 md:py-10">
-          {/* Input Area */}
-          <div className="relative flex items-center">
-            <Search className="absolute left-2 size-5 md:size-[22px] text-muted-foreground/70" strokeWidth={1.5} />
+        <div className="mx-auto flex min-h-0 w-full max-w-[720px] flex-col px-4 py-4 sm:px-6 md:py-5">
+          {/* Input */}
+          <div className="flex h-12 shrink-0 items-center gap-2 rounded-xl border border-border bg-background pl-4 pr-1.5 transition-colors focus-within:border-foreground/50 md:h-14">
+            <Search className="size-5 shrink-0 text-muted-foreground" strokeWidth={1.75} aria-hidden="true" />
             <input
               ref={inputRef}
               type="text"
-              placeholder="Search Officeneed"
-              className="w-full bg-transparent pl-10 md:pl-11 pr-10 md:pr-11 text-xl md:text-[26px] font-medium tracking-tight outline-none placeholder:text-muted-foreground/40 text-foreground"
+              aria-label="Search products"
+              enterKeyHint="search"
+              placeholder={isMobile ? "Search products & brands..." : "Search products, brands and categories..."}
+              className="h-full min-w-0 flex-1 bg-transparent text-base text-foreground outline-none placeholder:text-muted-foreground md:text-lg"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={handleKeyDown}
             />
-            <button 
+            <button
+              type="button"
               onClick={() => onOpenChange(false)}
-              className="absolute right-2 rounded-full p-2 text-muted-foreground/70 hover:bg-muted hover:text-foreground transition-colors"
+              className="grid size-9 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground"
               aria-label="Close search"
             >
-              <X className="size-5" strokeWidth={1.5} />
+              <X className="size-5" strokeWidth={1.75} />
             </button>
           </div>
 
           {/* Results / Quick Links */}
-          <div className="mt-6 md:mt-8 min-h-[300px] max-h-[65vh] overflow-y-auto pr-2" data-scrollable="true">
+          <div ref={resultsRef} className="mt-4 min-h-0 overflow-y-auto overscroll-contain" data-scrollable="true">
             {!normalizedQuery ? (
-              <div className="animate-in fade-in duration-500">
-                <h3 className="text-[11px] font-medium text-muted-foreground mb-3 px-2">Quick Links</h3>
+              <div className="animate-in fade-in duration-300">
+                <h3 className="text-eyebrow mb-2 px-2 text-muted-foreground">Quick Links</h3>
                 <ul className="space-y-0.5">
                   {quickLinks.map((link, i) => (
                     <li key={i}>
@@ -197,7 +250,7 @@ export function SearchModal({ open, onOpenChange }: { open: boolean; onOpenChang
               <div className="animate-in fade-in duration-300">
                 {matchingCategories.length > 0 && (
                   <div className="mb-6">
-                    <h3 className="text-[11px] font-medium text-muted-foreground mb-3 px-2">Categories</h3>
+                    <h3 className="text-eyebrow mb-2 px-2 text-muted-foreground">Categories</h3>
                     <ul className="space-y-0.5">
                       {matchingCategories.map(cat => (
                         <li key={cat.id}>
@@ -218,7 +271,7 @@ export function SearchModal({ open, onOpenChange }: { open: boolean; onOpenChang
                 
                 {searchResults.length > 0 && (
                   <div>
-                    <h3 className="text-[11px] font-medium text-muted-foreground mb-3 px-2">Products</h3>
+                    <h3 className="text-eyebrow mb-2 px-2 text-muted-foreground">Products</h3>
                     <ul className="space-y-0.5">
                       {searchResults.map(product => (
                         <li key={product.slug}>

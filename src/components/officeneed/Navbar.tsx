@@ -89,6 +89,8 @@ export function Navbar() {
   // open. Reset to null whenever the drawer closes, below.
   const [expanded, setExpanded] = useState<string | null>(null);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // SearchModal anchors its panel to this header's real bottom edge.
+  const headerRef = useRef<HTMLElement>(null);
 
   const [searchOpen, setSearchOpen] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
@@ -228,7 +230,7 @@ export function Navbar() {
     {/* Rendered here (not per route) so every page that has a navbar gets
         exactly one bar; it decides for itself whether the page warrants one. */}
     <PromoAnnouncementBar />
-    <header className="sticky top-0 z-50 w-full border-b border-border bg-background">
+    <header ref={headerRef} className="sticky top-0 z-50 w-full border-b border-border bg-background">
       <div className="mx-auto grid h-16 w-full max-w-[1600px] grid-cols-[1fr_auto_1fr] items-center px-3 sm:px-6 lg:h-20 lg:px-12 xl:flex">
         {/* Left zone: hamburger on mobile/tablet, hidden on desktop */}
         <div className="flex justify-start xl:hidden">
@@ -467,7 +469,7 @@ export function Navbar() {
         </nav>
       </div>
 
-      <SearchModal open={searchOpen} onOpenChange={setSearchOpen} />
+      <SearchModal open={searchOpen} onOpenChange={setSearchOpen} anchorRef={headerRef} />
       <CustomerAuthModal open={authOpen} onOpenChange={setAuthOpen} initialEntryType={authEntryType} />
     </>
   );
