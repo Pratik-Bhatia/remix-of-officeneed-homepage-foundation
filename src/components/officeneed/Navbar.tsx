@@ -17,6 +17,27 @@ import { useCustomer } from "@/lib/customer";
 // fresh incognito window) should see it again. No existing OfficeNeed
 // preference system covers this, so this is its own narrowly-scoped key.
 const AUTH_POPUP_SHOWN_KEY = "officeneed_auth_popup_shown";
+// When this tab session first reached the storefront. Navbar is rendered
+// per route (it remounts on every navigation), so the 20s countdown is
+// measured from this persisted timestamp -- navigating never restarts it.
+const AUTH_POPUP_ENTERED_AT_KEY = "officeneed_auth_popup_entered_at";
+const AUTH_POPUP_DELAY_MS = 20_000;
+// While the popup is due but blocked (another dialog open, excluded route),
+// re-check this often instead of covering whatever the visitor is doing.
+const AUTH_POPUP_RETRY_MS = 1_500;
+// The AUTOMATIC popup never covers these (prefix match): the cart (the
+// step right before Shopify's own checkout), /account (which already
+// renders the sign-in form inline when signed out), and the auth flows.
+// Manual entry points are unaffected.
+const AUTO_POPUP_EXCLUDED_PREFIXES = ["/cart", "/account", "/auth", "/activate", "/password-reset", "/reset-password"];
+
+function markAuthPopupShown() {
+  try {
+    sessionStorage.setItem(AUTH_POPUP_SHOWN_KEY, "true");
+  } catch {
+    // storage unavailable -- nothing to persist
+  }
+}
 
 // Shiplystic's own branded tracking portal -- replaces the earlier
 // custom /track-order page. Navigates in the SAME tab (window.location.href,
@@ -124,40 +145,66 @@ export function Navbar() {
     };
   }, [pathname]);
 
-  // Automatic first-visit auth popup. Reuses the exact same modal/state as
-  // every other entry point above (setAuthOpen) -- no second modal, no
-  // separate auth-state tracking. Gated on `status` (the same
-  // useCustomer() value the manual Account icon above already checks), so
-  // this can only ever fire once that's genuinely resolved to "out"
-  // (anonymous) -- "checking" is skipped entirely, never treated as "not
-  // signed in", which is what prevents the open-then-flash-closed glitch
-  // for an already-authenticated visitor on a slow connection. The ref
-  // guard makes this a true one-shot per mount: it won't re-fire if
-  // `status` later flips from "out" to "in" (e.g. the visitor signs in
-  // through this very popup).
-  const autoPopupChecked = useRef(false);
+  // Automatic auth popup, 20s after this tab session entered the
+  // storefront. Reuses the exact same modal/state as every other entry
+  // point above (setAuthOpen) -- no second modal. Gated on `status` (the
+  // same useCustomer() value the Account icon checks): "checking" is never
+  // treated as signed out, and a signed-in visitor never gets it.
+  //
+  // At most once per tab session: AUTH_POPUP_SHOWN_KEY is set the moment
+  // it auto-opens (so closing it never brings it back this session), and
+  // also when the visitor opens the modal manually first (which cancels
+  // the automatic one). Re-runs only reschedule from the persisted entry
+  // time, and each run's cleanup clears its timer -- one timer at a time,
+  // cancelled on unmount.
+  // The countdown starts when the session's first storefront page began
+  // loading (performance.timeOrigin = that navigation's start), so neither
+  // page hydration nor the customer status check adds to the 20s.
   useEffect(() => {
-    if (status === "checking") return;
-    // Never consume the one-shot while on a suppressed route -- if the
-    // visitor navigates elsewhere in the same session (e.g. abandons the
-    // password-reset page without completing it), the popup should still
-    // get its normal first-visit chance there, not be silently skipped
-    // for the rest of the session just because the reset link happened
-    // to be the first page they landed on.
-    if (AUTH_POPUP_SUPPRESSED_ROUTES.includes(pathname)) return;
-    if (autoPopupChecked.current) return;
-    autoPopupChecked.current = true;
-    if (status !== "out") return; // signed in (Individual or Corporate) -- never auto-open
+    try {
+      if (!sessionStorage.getItem(AUTH_POPUP_ENTERED_AT_KEY)) {
+        const navigationStart = Math.round(performance.timeOrigin) || Date.now();
+        sessionStorage.setItem(AUTH_POPUP_ENTERED_AT_KEY, String(navigationStart));
+      }
+    } catch {
+      // storage unavailable -- the effect below then never auto-opens
+    }
+  }, []);
+  useEffect(() => {
+    if (status !== "out") return;
+    let enteredAt: number;
     try {
       if (sessionStorage.getItem(AUTH_POPUP_SHOWN_KEY)) return;
-      sessionStorage.setItem(AUTH_POPUP_SHOWN_KEY, "true");
+      if (authOpen) {
+        markAuthPopupShown(); // opened manually first -- cancel the automatic one
+        return;
+      }
+      enteredAt = Number(sessionStorage.getItem(AUTH_POPUP_ENTERED_AT_KEY)) || Date.now();
     } catch {
-      // Private-mode/storage-disabled edge case -- fail safe to not
-      // auto-opening on every navigation rather than crashing.
+      // Private-mode/storage-disabled: fail safe to never auto-opening
+      // rather than re-opening on every navigation.
       return;
     }
-    setAuthOpen(true);
-  }, [status, pathname]);
+
+    let timer: ReturnType<typeof setTimeout>;
+    const tryOpen = () => {
+      const blocked =
+        AUTO_POPUP_EXCLUDED_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`)) ||
+        searchOpen ||
+        mobileOpen ||
+        // Any other visible dialog (cart drawer, enquiry, chat, ...).
+        document.querySelector('[role="dialog"]:not([aria-hidden="true"])') !== null;
+      if (blocked) {
+        timer = setTimeout(tryOpen, AUTH_POPUP_RETRY_MS);
+        return;
+      }
+      markAuthPopupShown();
+      setAuthEntryType(undefined);
+      setAuthOpen(true);
+    };
+    timer = setTimeout(tryOpen, Math.max(0, enteredAt + AUTH_POPUP_DELAY_MS - Date.now()));
+    return () => clearTimeout(timer);
+  }, [status, pathname, authOpen, searchOpen, mobileOpen]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
