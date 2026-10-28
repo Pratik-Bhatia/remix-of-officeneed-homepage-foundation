@@ -16,6 +16,9 @@ import { formatMoney } from "@/lib/shopify";
 import { DiscountBadge } from "@/components/officeneed/DiscountBadge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ImageUnavailable } from "@/components/officeneed/skeletons";
+import { RatingStar } from "@/components/officeneed/RatingStar";
+import { useProductRating } from "@/hooks/useProductRating";
+import { formatAverage } from "@/lib/review-ratings";
 
 // Grid cards never render wider than a few hundred px -- 600 comfortably
 // covers a ~300px card at 2x pixel density without requesting Shopify's
@@ -75,6 +78,8 @@ function ProductCardImpl({
   const { collections } = useShopifyCollections();
   const isSaved = savedHandles.includes(product.slug);
   const discount = getDiscount(product.priceAmount, product.compareAtAmount);
+  // Approved-review summary from the one shared, cached request (never per card).
+  const rating = useProductRating(product.slug);
 
   // Officeneed Exclusive's source photos have inconsistent product-to-frame
   // fill ratios (see image-content-scale.ts) -- normalize perceived size
@@ -287,6 +292,21 @@ function ProductCardImpl({
             {!pricePending && discount ? (
               <span className="text-xs tabular-nums text-muted-foreground line-through sm:text-sm">
                 {formatMoney(discount.compareAtAmount, product.currencyCode ?? "INR")}
+              </span>
+            ) : null}
+            {/* Compact rating, secondary to the price: only for products with
+                approved reviews (nothing while loading, on failure, or with
+                no reviews). One unbreakable unit -- if a narrow card can't
+                fit it, the row's existing wrap moves it whole, never split. */}
+            {rating ? (
+              <span
+                role="img"
+                className="ml-0.5 inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-[13px] tabular-nums text-foreground/70 sm:text-sm"
+                aria-label={`Rated ${formatAverage(rating.average)} out of 5 from ${rating.count} ${rating.count === 1 ? "review" : "reviews"}`}
+              >
+                <RatingStar className="size-3 self-center sm:size-3.5" />
+                <span aria-hidden="true" className="font-medium text-foreground">{formatAverage(rating.average)}</span>
+                <span aria-hidden="true">({rating.count})</span>
               </span>
             ) : null}
           </p>
