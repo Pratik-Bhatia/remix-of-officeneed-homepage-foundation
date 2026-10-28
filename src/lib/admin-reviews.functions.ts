@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import type { ReviewPhotoClient } from "@/lib/review-photo-schema";
 
 async function assertAdmin(context: { supabase: any; userId: string }) {
   const { data, error } = await context.supabase
@@ -31,7 +32,7 @@ export const listPendingReviews = createServerFn({ method: "POST" })
     // moderator sees exactly what approving would publish.
     const ids = reviews.map((r) => r.id);
     if (ids.length) {
-      const { data: images } = await supabaseAdmin
+      const { data: images } = await (supabaseAdmin as unknown as ReviewPhotoClient)
         .from("product_review_images")
         .select("review_id, position, thumb_path, full_path")
         .in("review_id", ids)
@@ -80,7 +81,7 @@ export const rejectReview = createServerFn({ method: "POST" })
     // review (ON DELETE CASCADE). A storage failure never blocks rejection.
     try {
       const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-      const { data: images } = await supabaseAdmin
+      const { data: images } = await (supabaseAdmin as unknown as ReviewPhotoClient)
         .from("product_review_images")
         .select("thumb_path, full_path")
         .eq("review_id", data.id);
