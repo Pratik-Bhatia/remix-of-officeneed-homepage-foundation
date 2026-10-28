@@ -25,7 +25,31 @@ export const listPendingReviews = createServerFn({ method: "POST" })
       .eq("status", "pending")
       .order("created_at", { ascending: false });
     if (error) throw new Error(error.message);
-    return (data ?? []) as any[];
+    const reviews = (data ?? []) as any[];
+
+    // Attach each pending review's photos (short-lived signed URLs) so the
+    // moderator sees exactly what approving would publish.
+    const ids = reviews.map((r) => r.id);
+    if (ids.length) {
+      const { data: images } = await supabaseAdmin
+        .from("product_review_images")
+        .select("review_id, position, thumb_path, full_path")
+        .in("review_id", ids)
+        .order("position", { ascending: true });
+      if (images?.length) {
+        const { data: signed } = await supabaseAdmin.storage
+          .from("review-images")
+          .createSignedUrls(images.flatMap((i) => [i.thumb_path, i.full_path]), 60 * 60);
+        const url = new Map((signed ?? []).filter((s) => s.signedUrl).map((s) => [s.path, s.signedUrl]));
+        for (const r of reviews) {
+          r.photos = images
+            .filter((i) => i.review_id === r.id)
+            .map((i) => ({ thumbUrl: url.get(i.thumb_path), fullUrl: url.get(i.full_path) }))
+            .filter((p) => p.thumbUrl && p.fullUrl);
+        }
+      }
+    }
+    return reviews;
   });
 
 export const approveReview = createServerFn({ method: "POST" })
@@ -52,6 +76,19 @@ export const rejectReview = createServerFn({ method: "POST" })
   })
   .handler(async ({ data, context }) => {
     await assertAdmin(context as any);
+    // Remove the review's stored photo files first; their rows go with the
+    // review (ON DELETE CASCADE). A storage failure never blocks rejection.
+    try {
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const { data: images } = await supabaseAdmin
+        .from("product_review_images")
+        .select("thumb_path, full_path")
+        .eq("review_id", data.id);
+      const paths = (images ?? []).flatMap((i) => [i.thumb_path, i.full_path]);
+      if (paths.length) await supabaseAdmin.storage.from("review-images").remove(paths);
+    } catch (err) {
+      console.error("[admin-reviews] could not remove review photos", err);
+    }
     const { error } = await (context as any).supabase
       .from("product_reviews")
       .delete()

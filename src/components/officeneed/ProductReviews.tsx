@@ -1,7 +1,10 @@
 import { useEffect, useState, useRef } from "react";
 import { CLARITY_MASK } from "@/lib/clarity";
 import { cn } from "@/lib/utils";
-import { CheckCircle2, ChevronLeft, ChevronRight } from "lucide-react";
+import { CheckCircle2, ChevronLeft, ChevronRight, ImagePlus, Plus, X } from "lucide-react";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { MAX_REVIEW_PHOTOS, photoStrip } from "@/lib/review-photos";
+import { prepareReviewPhoto, type PreparedReviewPhoto, type ReviewPhoto } from "@/lib/review-photo-media";
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem } from "@/components/ui/pagination";
 import { buttonVariants } from "@/components/ui/button";
 import { clampPage, pageItems, pageSlice } from "@/lib/pagination";
@@ -19,6 +22,8 @@ export interface Review {
   author: string;
   date: string; // ISO or human-readable
   verified: boolean;
+  /** Approved customer photos, in upload order. Absent/empty = text-only. */
+  photos?: ReviewPhoto[];
 }
 
 /* ─────────────────────────────────────────────────────────
@@ -162,6 +167,125 @@ function StarSelector({
 }
 
 /* ─────────────────────────────────────────────────────────
+   REVIEW PHOTOS  (thumbnail strip + lightbox)
+───────────────────────────────────────────────────────── */
+function ReviewPhotoLightbox({
+  photos,
+  author,
+  index,
+  onIndexChange,
+  onClose,
+}: {
+  photos: ReviewPhoto[];
+  author: string;
+  index: number | null;
+  onIndexChange: (index: number) => void;
+  onClose: () => void;
+}) {
+  const open = index !== null;
+  const i = index ?? 0;
+  const photo = photos[i];
+  const many = photos.length > 1;
+  const go = (delta: number) => onIndexChange((i + delta + photos.length) % photos.length);
+  const nav =
+    "absolute top-1/2 grid size-10 -translate-y-1/2 place-items-center rounded-full border border-gray-200 bg-white/90 text-foreground transition-colors hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground";
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent
+        aria-describedby={undefined}
+        // The dialog's built-in close button (its last child) gets the same
+        // white circular style as the arrows, so it stays visible on any photo.
+        className="w-[calc(100vw-2rem)] max-w-3xl gap-0 overflow-hidden border-gray-200 bg-white p-0 sm:rounded-xl [&>button:last-child]:right-3 [&>button:last-child]:top-3 [&>button:last-child]:grid [&>button:last-child]:size-9 [&>button:last-child]:place-items-center [&>button:last-child]:rounded-full [&>button:last-child]:border [&>button:last-child]:border-gray-200 [&>button:last-child]:!bg-white/90 [&>button:last-child]:!text-foreground [&>button:last-child]:opacity-100"
+        onKeyDown={(e) => {
+          if (!many) return;
+          if (e.key === "ArrowRight") { e.preventDefault(); go(1); }
+          if (e.key === "ArrowLeft") { e.preventDefault(); go(-1); }
+        }}
+      >
+        <DialogTitle className="sr-only">{`Photo ${i + 1} of ${photos.length} from ${author}'s review`}</DialogTitle>
+        {photo ? (
+          <div className="relative flex min-h-[240px] items-center justify-center bg-gray-50">
+            <img
+              key={photo.fullUrl}
+              src={photo.fullUrl}
+              alt={`Photo ${i + 1} of ${photos.length} from ${author}'s review`}
+              width={photo.width ?? undefined}
+              height={photo.height ?? undefined}
+              decoding="async"
+              className="h-auto max-h-[75vh] w-auto max-w-full object-contain"
+            />
+            {many ? (
+              <>
+                <button type="button" onClick={() => go(-1)} aria-label="Previous photo" className={cn(nav, "left-3")}>
+                  <ChevronLeft className="size-5" />
+                </button>
+                <button type="button" onClick={() => go(1)} aria-label="Next photo" className={cn(nav, "right-3")}>
+                  <ChevronRight className="size-5" />
+                </button>
+              </>
+            ) : null}
+          </div>
+        ) : null}
+        <div className="flex items-center justify-between gap-4 border-t border-gray-200 px-4 py-3 text-[13px]">
+          <span className="truncate font-medium text-foreground">{author}</span>
+          {many ? <span className="shrink-0 tabular-nums text-muted-foreground">{i + 1} / {photos.length}</span> : null}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ReviewPhotoStrip({ photos, author }: { photos: ReviewPhoto[]; author: string }) {
+  const [openIndex, setOpenIndex] = useState<number | null>(null);
+  const { visible, overflow } = photoStrip(photos.length);
+  return (
+    <>
+      <ul className="mt-3 flex flex-wrap gap-2" aria-label={`Photos from ${author}'s review`}>
+        {photos.slice(0, visible).map((photo, i) => {
+          const showMore = overflow > 0 && i === visible - 1;
+          return (
+            <li key={photo.thumbUrl}>
+              <button
+                type="button"
+                onClick={() => setOpenIndex(i)}
+                aria-label={
+                  showMore
+                    ? `View photo ${i + 1} of ${photos.length} from ${author}'s review (${overflow} more)`
+                    : `View photo ${i + 1} of ${photos.length} from ${author}'s review`
+                }
+                className="relative block size-16 overflow-hidden rounded-md border border-gray-200 bg-gray-50 transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 sm:size-[72px]"
+              >
+                <img
+                  src={photo.thumbUrl}
+                  alt=""
+                  width={72}
+                  height={72}
+                  loading="lazy"
+                  decoding="async"
+                  className="size-full object-cover"
+                />
+                {showMore ? (
+                  <span aria-hidden="true" className="absolute inset-0 grid place-items-center bg-black/45 text-[13px] font-semibold text-white">
+                    +{overflow}
+                  </span>
+                ) : null}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      <ReviewPhotoLightbox
+        photos={photos}
+        author={author}
+        index={openIndex}
+        onIndexChange={setOpenIndex}
+        onClose={() => setOpenIndex(null)}
+      />
+    </>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────
    REVIEW CARD
 ───────────────────────────────────────────────────────── */
 function ReviewCard({ review }: { review: Review }) {
@@ -184,6 +308,7 @@ function ReviewCard({ review }: { review: Review }) {
           <p className="mt-1.5 text-sm text-muted-foreground leading-relaxed">
             {review.body}
           </p>
+          {review.photos?.length ? <ReviewPhotoStrip photos={review.photos} author={review.author} /> : null}
           <p className="mt-3 text-[12px] text-muted-foreground">
             <span className="font-medium text-foreground">{review.author}</span>
             {" · "}
@@ -308,6 +433,8 @@ export type ReviewSubmitPayload = {
   body: string;
   author_name: string;
   author_email: string;
+  /** Optional photos (already downscaled in the browser). */
+  photos?: PreparedReviewPhoto[];
 };
 
 function ReviewForm({
@@ -326,6 +453,43 @@ function ReviewForm({
   });
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
   const [submitting, setSubmitting] = useState(false);
+  const [photos, setPhotos] = useState<PreparedReviewPhoto[]>([]);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const [preparingPhotos, setPreparingPhotos] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Free the preview object URLs when the form goes away.
+  const photosRef = useRef(photos);
+  photosRef.current = photos;
+  useEffect(() => () => photosRef.current.forEach((p) => URL.revokeObjectURL(p.previewUrl)), []);
+
+  const handlePhotoFiles = async (fileList: FileList | null) => {
+    const files = Array.from(fileList ?? []);
+    if (fileInputRef.current) fileInputRef.current.value = ""; // allow re-picking the same file
+    if (!files.length) return;
+    const room = MAX_REVIEW_PHOTOS - photos.length;
+    const problems: string[] = [];
+    if (files.length > room) problems.push(`You can add up to ${MAX_REVIEW_PHOTOS} photos.`);
+    setPreparingPhotos(true);
+    const added: PreparedReviewPhoto[] = [];
+    for (const file of files.slice(0, room)) {
+      const result = await prepareReviewPhoto(file);
+      if ("error" in result) problems.push(result.error);
+      else added.push(result);
+    }
+    setPreparingPhotos(false);
+    setPhotos((prev) => [...prev, ...added].slice(0, MAX_REVIEW_PHOTOS));
+    setPhotoError(problems.length ? problems.join(" ") : null);
+  };
+
+  const removePhoto = (key: string) => {
+    setPhotos((prev) => {
+      const gone = prev.find((p) => p.key === key);
+      if (gone) URL.revokeObjectURL(gone.previewUrl);
+      return prev.filter((p) => p.key !== key);
+    });
+    setPhotoError(null);
+  };
 
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) =>
     setForm((f) => ({ ...f, [k]: v }));
@@ -344,7 +508,7 @@ function ReviewForm({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!validate()) return;
+    if (!validate() || preparingPhotos) return;
     setSubmitting(true);
     await onSubmit({
       rating: form.rating,
@@ -352,6 +516,7 @@ function ReviewForm({
       body: form.body.trim(),
       author_name: form.name.trim(),
       author_email: form.email.trim(),
+      ...(photos.length ? { photos } : {}),
     });
     setSubmitting(false);
   };
@@ -416,6 +581,59 @@ function ReviewForm({
           />
           {errors.body && (
             <p className="mt-1.5 text-[12px] text-destructive">{errors.body}</p>
+          )}
+        </div>
+
+        {/* Photos (optional) -- a compact row, secondary to the fields above. */}
+        <div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            multiple
+            tabIndex={-1}
+            aria-hidden="true"
+            className="sr-only"
+            onChange={(e) => void handlePhotoFiles(e.target.files)}
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={photos.length >= MAX_REVIEW_PHOTOS || preparingPhotos || submitting}
+            aria-describedby="review-photos-hint"
+            className="flex w-full items-center gap-2.5 rounded-lg border border-gray-200 bg-white px-3.5 py-2.5 text-left text-[13px] transition-colors hover:border-foreground/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <ImagePlus className="size-4 shrink-0 text-muted-foreground" strokeWidth={1.75} aria-hidden="true" />
+            <span className="font-medium text-foreground">Add photos</span>
+            <span className="text-muted-foreground">(optional)</span>
+            <span className="ml-auto inline-flex items-center gap-1.5 text-[12px] tabular-nums text-muted-foreground">
+              {preparingPhotos ? "Preparing…" : photos.length ? `${photos.length}/${MAX_REVIEW_PHOTOS}` : null}
+              <Plus className="size-4" strokeWidth={1.75} aria-hidden="true" />
+            </span>
+          </button>
+          <p id="review-photos-hint" className="mt-1.5 text-[12px] text-muted-foreground">
+            JPG, PNG or WebP · up to {MAX_REVIEW_PHOTOS} photos, 10 MB each
+          </p>
+          {photos.length ? (
+            <ul className="mt-3 flex flex-wrap gap-2" aria-label="Selected photos">
+              {photos.map((photo, i) => (
+                <li key={photo.key} className="relative size-14 overflow-hidden rounded-md border border-gray-200 bg-gray-50">
+                  <img src={photo.previewUrl} alt={`Selected photo ${i + 1}`} className="size-full object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => removePhoto(photo.key)}
+                    disabled={submitting}
+                    aria-label={`Remove photo ${i + 1}`}
+                    className="absolute right-0.5 top-0.5 grid size-5 place-items-center rounded-full bg-black/60 text-white transition-colors hover:bg-black/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                  >
+                    <X className="size-3" strokeWidth={2.5} aria-hidden="true" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {photoError && (
+            <p role="alert" className="mt-1.5 text-[12px] text-destructive">{photoError}</p>
           )}
         </div>
 
@@ -557,6 +775,40 @@ export function ProductReviews({
   const handleSubmit = async (data: ReviewSubmitPayload) => {
     if (!productHandle) {
       toast.error("Missing product information.");
+      return;
+    }
+
+    // With photos: the server stores them and the review together (it
+    // needs the review id to link them). Text-only reviews keep the
+    // original direct insert below, unchanged.
+    if (data.photos?.length) {
+      const { submitReviewWithPhotos } = await import("@/lib/review-photos.functions");
+      let result: { ok: true } | { ok: false; error: string };
+      try {
+        result = await submitReviewWithPhotos({
+          data: {
+            productHandle,
+            rating: data.rating,
+            title: data.title,
+            body: data.body,
+            authorName: data.author_name,
+            authorEmail: data.author_email,
+            photos: data.photos.map(({ full, thumb }) => ({ full, thumb })),
+          },
+        });
+      } catch (err) {
+        console.error(err);
+        result = { ok: false, error: "Failed to submit review. Please try again." };
+      }
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success("Thank you! Your review has been submitted for moderation.");
+      setShowForm(false);
+      setTimeout(() => {
+        document.getElementById(sectionId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 50);
       return;
     }
 

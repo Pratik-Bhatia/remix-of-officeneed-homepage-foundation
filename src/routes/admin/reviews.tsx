@@ -203,6 +203,22 @@ function AdminReviewsPage() {
                   <td className="px-6 py-4 max-w-sm">
                     <div className="font-medium">{review.title}</div>
                     <p className="mt-1 text-muted-foreground line-clamp-3">{review.body}</p>
+                    {review.photos?.length ? (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {review.photos.map((photo: { thumbUrl: string; fullUrl: string }, i: number) => (
+                          <a
+                            key={photo.thumbUrl}
+                            href={photo.fullUrl}
+                            target="_blank"
+                            rel="noreferrer noopener"
+                            className="block size-12 overflow-hidden rounded-md border border-border"
+                            aria-label={`Open photo ${i + 1} full size`}
+                          >
+                            <img src={photo.thumbUrl} alt="" className="size-full object-cover" />
+                          </a>
+                        ))}
+                      </div>
+                    ) : null}
                   </td>
                   <td className="px-6 py-4 text-muted-foreground whitespace-nowrap">
                     {new Date(review.created_at).toLocaleDateString()}

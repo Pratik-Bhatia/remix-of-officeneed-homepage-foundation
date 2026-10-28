@@ -418,6 +418,7 @@ function ProductDetail() {
   useProductBrowseAbandon({ handle: slug, title: product.name });
 
   useEffect(() => {
+    let active = true;
     async function fetchReviews() {
       const { data, error } = await supabase
         .from('product_reviews_public')
@@ -442,9 +443,17 @@ function ProductDetail() {
           verified: r.is_verified_buyer,
         }));
         setReviews(formatted);
+        // Approved photos load after the text (never delaying it); failures
+        // just mean the reviews show without photos.
+        if (formatted.length) {
+          const { loadApprovedReviewPhotos } = await import("@/lib/review-photo-media");
+          const photos = await loadApprovedReviewPhotos(slug).catch(() => new Map());
+          if (active && photos.size) setReviews(formatted.map((r) => (photos.has(r.id) ? { ...r, photos: photos.get(r.id) } : r)));
+        }
       }
     }
     fetchReviews();
+    return () => { active = false; };
   }, [slug]);
 
   useEffect(() => {
