@@ -675,6 +675,57 @@ export type Database = {
           },
         ]
       }
+      product_review_images: {
+        Row: {
+          created_at: string
+          full_path: string
+          height: number | null
+          id: string
+          position: number
+          product_handle: string
+          review_id: string
+          thumb_path: string
+          width: number | null
+        }
+        Insert: {
+          created_at?: string
+          full_path: string
+          height?: number | null
+          id?: string
+          position: number
+          product_handle: string
+          review_id: string
+          thumb_path: string
+          width?: number | null
+        }
+        Update: {
+          created_at?: string
+          full_path?: string
+          height?: number | null
+          id?: string
+          position?: number
+          product_handle?: string
+          review_id?: string
+          thumb_path?: string
+          width?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_review_images_review_id_fkey"
+            columns: ["review_id"]
+            isOneToOne: false
+            referencedRelation: "product_reviews"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_review_images_review_id_fkey"
+            columns: ["review_id"]
+            isOneToOne: false
+            referencedRelation: "product_reviews_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       product_reviews: {
         Row: {
           author_email: string
