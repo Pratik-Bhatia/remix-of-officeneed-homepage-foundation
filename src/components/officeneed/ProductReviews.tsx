@@ -1,7 +1,10 @@
-import { useState, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import { CLARITY_MASK } from "@/lib/clarity";
 import { cn } from "@/lib/utils";
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, ChevronLeft, ChevronRight } from "lucide-react";
+import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem } from "@/components/ui/pagination";
+import { buttonVariants } from "@/components/ui/button";
+import { clampPage, pageItems, pageSlice } from "@/lib/pagination";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -189,6 +192,75 @@ function ReviewCard({ review }: { review: Review }) {
         </div>
       </div>
     </article>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────
+   REVIEW PAGINATION  (client-side, over the already-loaded list)
+───────────────────────────────────────────────────────── */
+export const REVIEWS_PER_PAGE = 4;
+
+function ReviewPagination({
+  page,
+  totalPages,
+  onChange,
+}: {
+  page: number;
+  totalPages: number;
+  onChange: (page: number) => void;
+}) {
+  const step = cn(
+    buttonVariants({ variant: "ghost", size: "default" }),
+    // Light hover (the theme's ghost/accent hover is solid black, which
+    // would read as the active page).
+    "h-10 gap-1 rounded-full px-3 text-[13px] font-medium hover:bg-gray-100 hover:text-foreground disabled:pointer-events-none disabled:opacity-40",
+  );
+  return (
+    <Pagination aria-label="Review pages" className="mt-8">
+      <PaginationContent className="gap-1">
+        <PaginationItem>
+          <button type="button" className={step} disabled={page <= 1} onClick={() => onChange(page - 1)} aria-label="Previous page of reviews">
+            <ChevronLeft className="size-4" />
+            <span>Previous</span>
+          </button>
+        </PaginationItem>
+        {/* Numbered pages on sm+; a compact "2 / 5" on phones so the row always fits. */}
+        <PaginationItem className="px-2 text-[13px] tabular-nums text-muted-foreground sm:hidden" aria-hidden="true">
+          {page} / {totalPages}
+        </PaginationItem>
+        {pageItems(page, totalPages).map((item, i) =>
+          item === "ellipsis" ? (
+            <PaginationItem key={`e${i}`} className="hidden sm:block">
+              <PaginationEllipsis />
+            </PaginationItem>
+          ) : (
+            <PaginationItem key={item} className="hidden sm:block">
+              <button
+                type="button"
+                onClick={() => onChange(item)}
+                aria-label={`Page ${item}`}
+                aria-current={item === page ? "page" : undefined}
+                className={cn(
+                  buttonVariants({ variant: "ghost", size: "icon" }),
+                  "size-9 rounded-full text-[13px] tabular-nums",
+                  item === page
+                    ? "bg-foreground text-background hover:bg-foreground hover:text-background"
+                    : "hover:bg-gray-100 hover:text-foreground",
+                )}
+              >
+                {item}
+              </button>
+            </PaginationItem>
+          ),
+        )}
+        <PaginationItem>
+          <button type="button" className={step} disabled={page >= totalPages} onClick={() => onChange(page + 1)} aria-label="Next page of reviews">
+            <span>Next</span>
+            <ChevronRight className="size-4" />
+          </button>
+        </PaginationItem>
+      </PaginationContent>
+    </Pagination>
   );
 }
 
@@ -457,6 +529,22 @@ export function ProductReviews({
 }) {
   const [showForm, setShowForm] = useState(false);
   const formRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const [requestedPage, setRequestedPage] = useState(1);
+
+  // This component stays mounted across PDP-to-PDP navigation, so start
+  // each product on page 1. Clamping below also covers the list changing.
+  useEffect(() => setRequestedPage(1), [productHandle]);
+  const { page, totalPages } = clampPage(requestedPage, reviews.length, REVIEWS_PER_PAGE);
+  const visibleReviews = pageSlice(reviews, page, REVIEWS_PER_PAGE);
+
+  const goToPage = (next: number) => {
+    setRequestedPage(next);
+    // Only scroll if the list's top has scrolled out of view (e.g. paging
+    // from the controls under a long page of reviews).
+    const top = listRef.current?.getBoundingClientRect().top ?? 0;
+    if (top < 0) listRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 
   const handleWriteReview = () => {
     setShowForm(true);
@@ -577,11 +665,12 @@ export function ProductReviews({
               </div>
             </div>
 
-            {/* ── Right: Review list ── */}
-            <div>
-              {reviews.map((review) => (
+            {/* ── Right: Review list (REVIEWS_PER_PAGE at a time) ── */}
+            <div ref={listRef} className="scroll-mt-28">
+              {visibleReviews.map((review) => (
                 <ReviewCard key={review.id} review={review} />
               ))}
+              {totalPages > 1 && <ReviewPagination page={page} totalPages={totalPages} onChange={goToPage} />}
             </div>
           </div>
         </>
