@@ -10,6 +10,7 @@ import { Navbar } from "@/components/officeneed/Navbar";
 import exclusiveLogo from "@/assets/officeneed-exclusive-logo.svg.asset.json";
 import { Footer } from "@/components/officeneed/Footer";
 import { ProductCard } from "@/components/officeneed/ProductCard";
+import { LoadError, ProductGridSkeleton, hideBrokenImage } from "@/components/officeneed/skeletons";
 import { ComingSoonBanner } from "@/components/officeneed/ComingSoonBanner";
 import { trackGoogleViewItemList } from "@/lib/google-analytics";
 import { Input } from "@/components/ui/input";
@@ -195,7 +196,7 @@ function ProductsPage() {
   // no subcategory icon is incorrectly highlighted there.
   const activeSubcategoryHandle = taxonomyMatch?.parentTitle ? collection : undefined;
 
-  const { products: catalogue, pricesReady } = useShopifyCatalogue(products);
+  const { products: catalogue, pricesReady, status: catalogueStatus, retry: retryCatalogue } = useShopifyCatalogue(products);
   const { collections, isLoading: collectionsLoading } = useShopifyCollections();
 
   /** Returns the Shopify-hosted image URL for a collection, or null if not yet loaded / unavailable. */
@@ -469,6 +470,7 @@ function ProductsPage() {
                             ) : getCollectionImage(node.handle || "") ? (
                               <img
                                 src={getCollectionImage(node.handle || "")!}
+                                onError={hideBrokenImage}
                                 alt={liveTitle}
                                 className={cn(
                                   "w-full h-full object-contain mix-blend-multiply dark:mix-blend-normal",
@@ -525,7 +527,7 @@ function ProductsPage() {
                             {collectionsLoading ? (
                               <div className="w-full h-full rounded-xl bg-muted animate-pulse" aria-hidden />
                             ) : getCollectionImage(sub.handle || "") ? (
-                              <img src={getCollectionImage(sub.handle || "")!} alt={liveTitle} className="w-full h-full object-contain mix-blend-multiply dark:mix-blend-normal" />
+                              <img src={getCollectionImage(sub.handle || "")!} alt={liveTitle} onError={hideBrokenImage} className="w-full h-full object-contain mix-blend-multiply dark:mix-blend-normal" />
                             ) : (
                               <div className="w-full h-full rounded-xl bg-muted/50" aria-hidden />
                             )}
@@ -593,7 +595,12 @@ function ProductsPage() {
 
                 <div className="flex items-center justify-between gap-3 sm:justify-end">
                   <p className="text-xs text-muted-foreground" aria-live="polite">
-                    {visible.length} {visible.length === 1 ? "product" : "products"}
+                    {/* The count is only meaningful once the catalogue has loaded -- never a false "0 products". */}
+                    {catalogueStatus === "success" ? (
+                      <>{visible.length} {visible.length === 1 ? "product" : "products"}</>
+                    ) : (
+                      <span className="inline-block h-[1em] w-16 animate-pulse rounded bg-muted align-middle" aria-hidden />
+                    )}
                   </p>
                   <div className="flex items-center gap-2">
                     {filterGroups.length > 0 && (
@@ -668,17 +675,12 @@ function ProductsPage() {
                         </Button>
                       </div>
                     </div>
-                  ) : catalogue.length === 0 ? (
-                    <div className="grid grid-cols-2 gap-x-5 gap-y-10 sm:gap-x-6 md:grid-cols-3 lg:grid-cols-4">
-                      {/* Skeletons while loading */}
-                      {[1, 2, 3, 4].map((i) => (
-                        <div key={i} className="animate-pulse flex flex-col gap-4">
-                          <div className="aspect-square bg-secondary rounded-2xl"></div>
-                          <div className="h-4 bg-secondary rounded w-3/4"></div>
-                          <div className="h-4 bg-secondary rounded w-1/2"></div>
-                        </div>
-                      ))}
-                    </div>
+                  ) : catalogueStatus === "loading" || catalogueStatus === "idle" ? (
+                    // Same grid as the real results, so nothing shifts when products arrive.
+                    <ProductGridSkeleton />
+                  ) : catalogueStatus === "error" ? (
+                    // A failed load is never shown as "no products".
+                    <LoadError message="We couldn't load products right now." onRetry={retryCatalogue} className="py-10" />
                   ) : visible.length === 0 && query ? (
                     <div>
                       <p className="text-sm text-muted-foreground">

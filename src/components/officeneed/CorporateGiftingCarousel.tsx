@@ -3,7 +3,10 @@ import { ArrowLeft, ArrowRight } from "lucide-react";
 import { bestsellerProducts, inBestsellerCategory } from "@/lib/bestsellers";
 import { useShopifyBestsellers } from "@/lib/shopify-overlay";
 import { ProductCard } from "@/components/officeneed/ProductCard";
+import { LoadingRegion, ProductCardSkeleton } from "@/components/officeneed/skeletons";
 import type { Product } from "@/lib/products";
+
+const GIFT_CARD_WIDTH = "w-[74vw] shrink-0 snap-start sm:w-[46vw] md:w-[34vw] lg:w-[calc((100%-4.5rem)/4)]";
 
 /**
  * The exact Shopify gift sets chosen for this row (one 3-, 4-, 5- and 6-in-1),
@@ -57,7 +60,7 @@ export function CorporateGiftingCarousel() {
   const trackRef = useRef<HTMLDivElement>(null);
   const [canPrev, setCanPrev] = useState(false);
   const [canNext, setCanNext] = useState(true);
-  const { products: catalogue, pricesReady } = useShopifyBestsellers(bestsellerProducts);
+  const { products: catalogue, pricesReady, status } = useShopifyBestsellers(bestsellerProducts);
   const products = useMemo(
     () => selectCorporateGifts(catalogue).map(({ badge: _badge, ...p }) => p),
     [catalogue],
@@ -84,7 +87,12 @@ export function CorporateGiftingCarousel() {
     el.scrollBy({ left: dir * step * (el.clientWidth > 1024 ? 2 : 1), behavior: "smooth" });
   };
 
-  if (products.length === 0) return null;
+  // Loading renders the section with skeleton cards (no pop-in shift).
+  // Truly empty -> no section. Failed -> no section either: this reads the
+  // same bestsellers request as <Bestsellers>, which already shows the error
+  // and retry, so a second identical error here would just be noise.
+  const loading = status === "loading" || status === "idle";
+  if (!loading && products.length === 0) return null;
 
   return (
     <section aria-labelledby="corporate-gifts-heading" className="w-full bg-[#F5F5F5] py-14 sm:py-16 lg:py-20">
@@ -133,14 +141,17 @@ export function CorporateGiftingCarousel() {
           onScroll={sync}
           className="mt-8 flex snap-x snap-mandatory gap-6 overflow-x-auto scroll-smooth pb-2 [scrollbar-width:none] sm:mt-10 [&::-webkit-scrollbar]:hidden"
         >
-          {products.map((p) => (
-            <ProductCard
-              key={p.slug}
-              product={p}
-              pricePending={!pricesReady}
-              className="w-[74vw] shrink-0 snap-start sm:w-[46vw] md:w-[34vw] lg:w-[calc((100%-4.5rem)/4)]"
-            />
-          ))}
+          {loading ? (
+            <LoadingRegion label="Loading corporate gift sets" className="contents">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <ProductCardSkeleton key={i} className={GIFT_CARD_WIDTH} />
+              ))}
+            </LoadingRegion>
+          ) : (
+            products.map((p) => (
+              <ProductCard key={p.slug} product={p} pricePending={!pricesReady} className={GIFT_CARD_WIDTH} />
+            ))
+          )}
           <div aria-hidden className="w-1 shrink-0 sm:w-2" />
         </div>
       </div>

@@ -3,6 +3,7 @@ import { ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { primaryNavCategories, navCategoryTarget, getLiveNavLabel } from "@/lib/navigation";
 import { useShopifyCollections } from "@/lib/shopify-overlay";
+import { hideBrokenImage } from "@/components/officeneed/skeletons";
 import exclusiveLogo from "@/assets/officeneed-exclusive-logo.svg.asset.json";
 
 /**
@@ -63,6 +64,7 @@ export function ShopByCategory() {
                       alt={label}
                       loading="lazy"
                       decoding="async"
+                      onError={hideBrokenImage}
                       className={cn(
                         "object-contain object-center transition-transform duration-500 ease-out group-hover:scale-[1.04]",
                         // contain (never cover): the logo's aspect ratio must

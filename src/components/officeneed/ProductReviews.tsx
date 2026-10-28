@@ -8,6 +8,8 @@ import { photoFingerprint, prepareReviewPhoto, type PreparedReviewPhoto, type Re
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem } from "@/components/ui/pagination";
 import { buttonVariants } from "@/components/ui/button";
 import { clampPage, pageItems, pageSlice } from "@/lib/pagination";
+import type { LoadStatus } from "@/lib/load-status";
+import { LoadError, LoadingRegion, RatingLineSkeleton, ReviewCardSkeleton, ReviewSummarySkeleton } from "@/components/officeneed/skeletons";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -724,12 +726,17 @@ function ReviewForm({
 ───────────────────────────────────────────────────────── */
 export function ProductRatingSummary({
   reviews,
+  status = "success",
   sectionId = "product-reviews",
 }: {
   reviews: Review[];
+  status?: LoadStatus;
   sectionId?: string;
 }) {
-  if (reviews.length === 0) return null;
+  // A same-height placeholder while loading; nothing for zero reviews or a
+  // failed request (the reviews section itself explains a failure).
+  if (status === "loading") return <RatingLineSkeleton />;
+  if (status !== "success" || reviews.length === 0) return null;
   const avg = reviews.reduce((s, r) => s + r.rating, 0) / reviews.length;
 
   return (
@@ -751,10 +758,16 @@ export function ProductRatingSummary({
 ───────────────────────────────────────────────────────── */
 export function ProductReviews({
   reviews = [],
+  status = "success",
+  onRetry,
   productHandle,
   sectionId = "product-reviews",
 }: {
   reviews?: Review[];
+  /** State of the reviews request -- see LoadStatus. Defaults to "success"
+   * for callers that pass already-resolved reviews. */
+  status?: LoadStatus;
+  onRetry?: () => void;
   productHandle?: string;
   sectionId?: string;
 }) {
@@ -860,7 +873,27 @@ export function ProductReviews({
     ? reviews.reduce((s, r) => s + r.rating, 0) / reviews.length
     : 0;
 
-  const isEmpty = reviews.length === 0;
+  // The empty state is shown ONLY after a successful response with zero
+  // reviews -- never while loading, and never for a failed request.
+  const loaded = status === "success";
+  const isEmpty = loaded && reviews.length === 0;
+  const hasReviews = loaded && reviews.length > 0;
+
+  const reviewsHeader = (
+    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-10">
+      <h2 id="reviews-heading" className="text-[14px] sm:text-[15px] font-semibold tracking-[0.1em] text-foreground uppercase">
+        Customer Reviews
+      </h2>
+      {!showForm && (
+        <button
+          onClick={handleWriteReview}
+          className="self-start sm:self-auto inline-flex items-center justify-center rounded-full border border-gray-200 bg-white px-5 py-2 text-[13px] font-medium text-foreground hover:bg-gray-50 transition-colors"
+        >
+          Write a Review
+        </button>
+      )}
+    </div>
+  );
 
   return (
     <section
@@ -868,6 +901,30 @@ export function ProductReviews({
       aria-labelledby="reviews-heading"
       className="mt-16 sm:mt-24 border-t border-gray-200 pt-16 sm:pt-20 scroll-mt-24"
     >
+      {/* ── LOADING STATE: same header (Write a Review stays usable) + the
+          populated layout's shape, so nothing shifts when reviews arrive ── */}
+      {!loaded && status !== "error" && (
+        <>
+          {reviewsHeader}
+          <LoadingRegion label="Loading customer reviews" className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-10 lg:gap-16">
+            <ReviewSummarySkeleton />
+            <div>
+              {Array.from({ length: REVIEWS_PER_PAGE }).map((_, i) => (
+                <ReviewCardSkeleton key={i} />
+              ))}
+            </div>
+          </LoadingRegion>
+        </>
+      )}
+
+      {/* ── ERROR STATE: never presented as "no reviews" ── */}
+      {status === "error" && (
+        <>
+          {reviewsHeader}
+          <LoadError message="We couldn't load reviews right now." onRetry={onRetry} />
+        </>
+      )}
+
       {/* ── EMPTY STATE ── */}
       {isEmpty && !showForm && (
         <div className="flex flex-col items-center text-center py-10">
@@ -887,21 +944,9 @@ export function ProductReviews({
       )}
 
       {/* ── POPULATED STATE ── */}
-      {!isEmpty && (
+      {hasReviews && (
         <>
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-10">
-            <h2 id="reviews-heading" className="text-[14px] sm:text-[15px] font-semibold tracking-[0.1em] text-foreground uppercase">
-              Customer Reviews
-            </h2>
-            {!showForm && (
-              <button
-                onClick={handleWriteReview}
-                className="self-start sm:self-auto inline-flex items-center justify-center rounded-full border border-gray-200 bg-white px-5 py-2 text-[13px] font-medium text-foreground hover:bg-gray-50 transition-colors"
-              >
-                Write a Review
-              </button>
-            )}
-          </div>
+          {reviewsHeader}
 
           <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-10 lg:gap-16">
             {/* ── Left: Aggregate stats ── */}

@@ -34,6 +34,10 @@ import { shopifyImageUrl, shopifyImageSrcSet } from "@/lib/shopify-image";
 import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 import { fetchProductByHandle, fetchRelatedProducts, formatMoney, type ShopifyProductNode, type ShopifyVariantNode, type BuyerContext } from "@/lib/shopify";
 import { mergeProduct, shopifyNodeToProduct, useShopifyCollections, useB2BPriceOverlayMap, useB2BQuantityRuleOverlayMap } from "@/lib/shopify-overlay";
+import type { LoadStatus } from "@/lib/load-status";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ImageUnavailable, hideBrokenImage } from "@/components/officeneed/skeletons";
+import { useImageLoadState } from "@/hooks/useImageLoadState";
 import { TAXONOMY, resolveLiveTitle } from "@/lib/taxonomy";
 import { useCartStore, quantityRuleScopeKey } from "@/stores/cartStore";
 import { useB2BStore, getEffectiveCompanyLocationId } from "@/stores/b2bStore";
@@ -417,44 +421,53 @@ function ProductDetail() {
   // WhatsApp browse-abandon trigger (KwikEngage) when the shopper leaves this page.
   useProductBrowseAbandon({ handle: slug, title: product.name });
 
+  // Reviews are loaded client-side, so the section needs an explicit state:
+  // "Be the first to review" may only appear after a SUCCESSFUL empty
+  // response, and a failed request must show an error/retry instead.
+  // `reviewsAttempt` lets the section retry without a page reload.
+  const [reviewsStatus, setReviewsStatus] = useState<LoadStatus>("loading");
+  const [reviewsAttempt, setReviewsAttempt] = useState(0);
   useEffect(() => {
-    let active = true;
+    let active = true; // ignore a response that arrives after the product changed
+    setReviewsStatus("loading");
     async function fetchReviews() {
+      // Text and approved photos are requested in parallel and shown
+      // together, so thumbnails never pop in after the reviews render.
+      const photosPromise = import("@/lib/review-photo-media")
+        .then(({ loadApprovedReviewPhotos }) => loadApprovedReviewPhotos(slug))
+        .catch(() => new Map<string, NonNullable<Review["photos"]>>());
       const { data, error } = await supabase
         .from('product_reviews_public')
         .select('*')
         .eq('product_handle', slug)
         .eq('status', 'approved')
         .order('created_at', { ascending: false });
+      if (!active) return;
 
-      if (error) {
+      if (error || !data) {
         console.error("Error fetching reviews:", error);
+        setReviewsStatus("error");
         return;
       }
 
-      if (data) {
-        const formatted: Review[] = data.map((r: any) => ({
-          id: r.id,
-          title: r.title,
-          body: r.body,
-          rating: r.rating,
-          author: r.author_name,
-          date: new Date(r.created_at).toLocaleDateString("en-IN", { month: "long", year: "numeric" }),
-          verified: r.is_verified_buyer,
-        }));
-        setReviews(formatted);
-        // Approved photos load after the text (never delaying it); failures
-        // just mean the reviews show without photos.
-        if (formatted.length) {
-          const { loadApprovedReviewPhotos } = await import("@/lib/review-photo-media");
-          const photos = await loadApprovedReviewPhotos(slug).catch(() => new Map());
-          if (active && photos.size) setReviews(formatted.map((r) => (photos.has(r.id) ? { ...r, photos: photos.get(r.id) } : r)));
-        }
-      }
+      const formatted: Review[] = data.map((r: any) => ({
+        id: r.id,
+        title: r.title,
+        body: r.body,
+        rating: r.rating,
+        author: r.author_name,
+        date: new Date(r.created_at).toLocaleDateString("en-IN", { month: "long", year: "numeric" }),
+        verified: r.is_verified_buyer,
+      }));
+      // No reviews: nothing to attach photos to, so skip waiting on that call.
+      const photos = formatted.length ? await photosPromise : new Map();
+      if (!active) return;
+      setReviews(photos.size ? formatted.map((r) => (photos.has(r.id) ? { ...r, photos: photos.get(r.id) } : r)) : formatted);
+      setReviewsStatus("success");
     }
-    fetchReviews();
+    void fetchReviews();
     return () => { active = false; };
-  }, [slug]);
+  }, [slug, reviewsAttempt]);
 
   useEffect(() => {
     // Same bottom-right corner the floating chat launcher (ChatWidget.tsx,
@@ -648,6 +661,12 @@ function ProductDetail() {
     const i = indexForUrl(initialVariant?.image?.url);
     return i >= 0 ? i : 0;
   });
+  // Gallery placeholders/fallbacks, tracked per image URL (the images sit
+  // ABOVE their placeholder, so a loaded image is never hidden, even before
+  // hydration): a skeleton only
+  // until that image has loaded once (never again on variant/thumbnail
+  // switches back to it), and a clean fallback if it fails.
+  const galleryImages = useImageLoadState();
 
   /* ------------- Mobile swipeable gallery <-> activeImage sync ------------ */
   // activeImage stays the single shared source of truth for both the
@@ -1076,6 +1095,7 @@ function ProductDetail() {
                         <img
                           src={shopifyImageUrl(media.url, 150)}
                           alt=""
+                          onError={hideBrokenImage}
                           loading="lazy"
                           className="h-full w-full object-contain p-1"
                         />
@@ -1088,16 +1108,30 @@ function ProductDetail() {
                 <div className="product-main-image order-1 lg:order-2 w-full max-w-[1080px] aspect-square lg:aspect-auto lg:h-[calc(100vh-200px)] lg:max-h-[1080px] relative overflow-hidden rounded-2xl bg-secondary/30 border border-border/50 group flex items-center justify-center p-4 sm:p-8">
                   {/* Desktop: single fixed image, swapped via thumbnails/
                       arrows updating activeImage -- unchanged behavior. */}
-                  <img
-                    src={shopifyImageUrl(activeMedia?.url ?? product.images[0], 1200)}
-                    srcSet={shopifyImageSrcSet(activeMedia?.url ?? product.images[0], [480, 800, 1200, 1600])}
-                    sizes="(min-width: 1024px) 60vw, 100vw"
-                    alt={activeMedia?.alt || `${product.name} - image ${activeImage + 1}`}
-                    width={1080}
-                    height={1080}
-                    fetchPriority="high"
-                    className="hidden lg:block w-full h-full object-contain mix-blend-multiply" style={{ maxHeight: "1080px" }}
-                  />
+                  {(() => {
+                    const url = activeMedia?.url ?? product.images[0] ?? "";
+                    const failed = galleryImages.isFailed(url);
+                    return (
+                      <>
+                        {!failed && !galleryImages.isLoaded(url) ? (
+                          <Skeleton className="absolute inset-0 hidden rounded-2xl lg:block" />
+                        ) : null}
+                        {failed ? <ImageUnavailable large className="hidden lg:grid" /> : null}
+                        <img
+                          {...galleryImages.imageProps(url)}
+                          src={shopifyImageUrl(url, 1200)}
+                          srcSet={shopifyImageSrcSet(url, [480, 800, 1200, 1600])}
+                          sizes="(min-width: 1024px) 60vw, 100vw"
+                          alt={activeMedia?.alt || `${product.name} - image ${activeImage + 1}`}
+                          width={1080}
+                          height={1080}
+                          fetchPriority="high"
+                          className={cn("relative hidden lg:block w-full h-full object-contain mix-blend-multiply", failed && "invisible")}
+                          style={{ maxHeight: "1080px" }}
+                        />
+                      </>
+                    );
+                  })()}
 
                   {/* Mobile: native horizontally-scrollable, scroll-snap
                       strip of every gallery image -- swiping is handled
@@ -1115,22 +1149,28 @@ function ProductDetail() {
                     onScroll={handleGalleryScroll}
                     className="flex lg:hidden w-full h-full overflow-x-auto snap-x snap-mandatory [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                   >
-                    {gallery.map((media, i) => (
-                      <div key={media.url} className="w-full h-full shrink-0 snap-center flex items-center justify-center">
-                        <img
-                          src={shopifyImageUrl(media.url, 1200)}
-                          srcSet={shopifyImageSrcSet(media.url, [480, 800, 1200, 1600])}
-                          sizes="(min-width: 1024px) 60vw, 100vw"
-                          alt={media.alt || `${product.name} - image ${i + 1}`}
-                          width={1080}
-                          height={1080}
-                          loading={i === 0 ? undefined : "lazy"}
-                          fetchPriority={i === 0 ? "high" : undefined}
-                          className="w-full h-full object-contain mix-blend-multiply"
-                          style={{ maxHeight: "1080px" }}
-                        />
-                      </div>
-                    ))}
+                    {gallery.map((media, i) => {
+                      const failed = galleryImages.isFailed(media.url);
+                      return (
+                        <div key={media.url} className="relative w-full h-full shrink-0 snap-center flex items-center justify-center">
+                          {!failed && !galleryImages.isLoaded(media.url) ? <Skeleton className="absolute inset-0 rounded-xl" /> : null}
+                          {failed ? <ImageUnavailable large /> : null}
+                          <img
+                            {...galleryImages.imageProps(media.url)}
+                            src={shopifyImageUrl(media.url, 1200)}
+                            srcSet={shopifyImageSrcSet(media.url, [480, 800, 1200, 1600])}
+                            sizes="(min-width: 1024px) 60vw, 100vw"
+                            alt={media.alt || `${product.name} - image ${i + 1}`}
+                            width={1080}
+                            height={1080}
+                            loading={i === 0 ? undefined : "lazy"}
+                            fetchPriority={i === 0 ? "high" : undefined}
+                            className={cn("relative w-full h-full object-contain mix-blend-multiply", failed && "invisible")}
+                            style={{ maxHeight: "1080px" }}
+                          />
+                        </div>
+                      );
+                    })}
                   </div>
 
                   {/* Pagination dots -- mobile only, hidden for a single
@@ -1249,7 +1289,7 @@ function ProductDetail() {
                   width/reserved-column anywhere in this element or its
                   ancestors). */}
               <h1 className="text-product-title mt-2 w-full min-w-0 font-semibold tracking-tight text-foreground [overflow-wrap:anywhere] [text-wrap:wrap]">{product.name}</h1>
-              <ProductRatingSummary reviews={reviews} />
+              <ProductRatingSummary reviews={reviews} status={reviewsStatus} />
               
               <div className="mt-6 flex flex-col space-y-5">
                 {/* Price and SKU row */}
@@ -1329,6 +1369,7 @@ function ProductDetail() {
                               <img
                                 src={shopifyImageUrl(thumb, 48)}
                                 alt=""
+                                onError={hideBrokenImage}
                                 loading="lazy"
                                 className="size-5 sm:size-6 shrink-0 rounded-[4px] bg-transparent object-cover"
                               />
@@ -1525,7 +1566,7 @@ function ProductDetail() {
                               : "border-border opacity-50 hover:opacity-100",
                           )}
                         >
-                          <img src={shopifyImageUrl(media.url, 100)} alt="" loading="lazy" className="h-full w-full object-contain p-1" />
+                          <img src={shopifyImageUrl(media.url, 100)} alt="" loading="lazy" onError={hideBrokenImage} className="h-full w-full object-contain p-1" />
                         </button>
                       ))}
                     </div>
@@ -1568,6 +1609,8 @@ function ProductDetail() {
           {/* Customer Reviews */}
           <ProductReviews
             reviews={reviews}
+            status={reviewsStatus}
+            onRetry={() => setReviewsAttempt((n) => n + 1)}
             productHandle={slug}
           />
               </div>
@@ -1619,7 +1662,7 @@ function ProductDetail() {
           {/* Desktop layout */}
           <div className="hidden lg:flex w-full items-center justify-between gap-6">
             <div className="flex items-center gap-4 flex-1 min-w-0">
-              <img src={shopifyImageUrl(activeMedia?.url ?? product.images[0], 100)} loading="lazy" className="size-12 shrink-0 rounded-md object-contain bg-secondary/30 border border-border p-0.5" alt="" />
+              <img src={shopifyImageUrl(activeMedia?.url ?? product.images[0], 100)} loading="lazy" onError={hideBrokenImage} className="size-12 shrink-0 rounded-md object-contain bg-secondary/30 border border-border p-0.5" alt="" />
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium truncate text-foreground">{product.name}</p>
                 <p className="text-sm font-medium text-muted-foreground">{pricePending ? priceSkeleton : displayPrice}</p>
@@ -1678,6 +1721,7 @@ function ProductDetail() {
                 loading="lazy"
                 className="size-11 shrink-0 rounded-lg object-contain bg-secondary/30 border border-border p-1"
                 alt=""
+                onError={hideBrokenImage}
               />
               <div className="min-w-0 flex-1 pt-0.5">
                 <p className="text-[13px] font-medium leading-snug text-foreground line-clamp-2">{product.name}</p>

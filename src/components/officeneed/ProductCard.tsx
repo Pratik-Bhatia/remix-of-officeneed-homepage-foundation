@@ -14,6 +14,8 @@ import { shopifyImageUrl } from "@/lib/shopify-image";
 import { getDiscount } from "@/lib/discount";
 import { formatMoney } from "@/lib/shopify";
 import { DiscountBadge } from "@/components/officeneed/DiscountBadge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ImageUnavailable } from "@/components/officeneed/skeletons";
 
 // Grid cards never render wider than a few hundred px -- 600 comfortably
 // covers a ~300px card at 2x pixel density without requesting Shopify's
@@ -101,6 +103,20 @@ function ProductCardImpl({
   const displayedSrc = showingHoverImage ? hoverImage! : product.images[0];
   const displayedScale = showingHoverImage ? hoverContentScale : contentScale;
 
+  // Image well state: a subtle placeholder until the FIRST image has loaded
+  // (sticky -- hover swaps never bring it back), and a quiet fallback if the
+  // main image fails, instead of a blank square or a broken-image icon.
+  const [imageReady, setImageReady] = useState(false);
+  const [imageFailed, setImageFailed] = useState(false);
+  // An image already loaded (e.g. from cache) before hydration never fires
+  // onLoad -- read its state directly when the element mounts.
+  const imageRef = (img: HTMLImageElement | null) => {
+    if (img?.complete && !imageReady) {
+      if (img.naturalWidth > 0) setImageReady(true);
+      else if (img.currentSrc) setImageFailed(true);
+    }
+  };
+
   // Warm the browser cache for the hover image as soon as we know the card
   // has one, so the swap on pointer-enter is instant rather than flashing a
   // blank/loading frame. Never fetches image[2], image[3], etc.
@@ -175,13 +191,20 @@ function ProductCardImpl({
           onPointerEnter={handlePointerEnter}
           onPointerLeave={handlePointerLeave}
         >
+          {!imageReady && !imageFailed ? (
+            <Skeleton className="absolute inset-0 rounded-none" />
+          ) : null}
+          {imageFailed && !showingHoverImage ? <ImageUnavailable /> : null}
           <img
+            ref={imageRef}
             src={shopifyImageUrl(displayedSrc, PRODUCT_CARD_IMAGE_WIDTH)}
             alt={product.name}
             loading="lazy"
             decoding="async"
+            onLoad={() => setImageReady(true)}
             onError={() => {
               if (showingHoverImage) setHoverImageFailed(true);
+              else if (!imageReady) setImageFailed(true);
             }}
             style={isOfficeneedExclusive ? ({ "--content-scale": displayedScale } as React.CSSProperties) : undefined}
             className={cn(
@@ -196,10 +219,14 @@ function ProductCardImpl({
               // the aspect-square container are untouched, so nothing crops,
               // stretches or shifts for any aspect ratio, the product just
               // fills noticeably more of the same frame.
-              "h-full w-full object-contain object-center p-1.5 sm:p-8 transition duration-200 ease-out",
+              // relative (no z-index): paints above the loading placeholder as soon as it
+              // decodes -- even before hydration -- while the later badges stay on top.
+              "relative h-full w-full object-contain object-center p-1.5 sm:p-8 transition duration-200 ease-out",
               isOfficeneedExclusive
                 ? "scale-[var(--content-scale)] group-hover:scale-[calc(var(--content-scale)*1.05)]"
                 : "group-hover:scale-105",
+              // A failed image never shows the browser's broken icon/alt text.
+              imageFailed && !showingHoverImage && "invisible",
             )}
           />
           {/* Top-left stack: the existing product badge (if any) with the

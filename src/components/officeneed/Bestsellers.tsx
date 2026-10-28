@@ -4,8 +4,11 @@ import { cn } from "@/lib/utils";
 import { bestsellerFilters, bestsellerProducts, selectBestsellers } from "@/lib/bestsellers";
 import { useShopifyBestsellers, useShopifyCollections } from "@/lib/shopify-overlay";
 import { ProductCard } from "@/components/officeneed/ProductCard";
+import { LoadError, LoadingRegion, ProductCardSkeleton } from "@/components/officeneed/skeletons";
 import { getLiveNavLabel } from "@/lib/navigation";
 import type { Product } from "@/lib/products";
+
+const BESTSELLER_CARD_WIDTH = "w-[74vw] shrink-0 snap-start sm:w-[46vw] md:w-[34vw] lg:w-[calc((100%-4.5rem)/4)]";
 
 export function Bestsellers() {
   const [active, setActive] = useState<(typeof bestsellerFilters)[number]>("All");
@@ -13,7 +16,7 @@ export function Bestsellers() {
   const [canPrev, setCanPrev] = useState(false);
   const [canNext, setCanNext] = useState(true);
 
-  const { products: catalogue, pricesReady } = useShopifyBestsellers(bestsellerProducts);
+  const { products: catalogue, pricesReady, status, retry } = useShopifyBestsellers(bestsellerProducts);
   const { collections } = useShopifyCollections();
 
   const products = useMemo(
@@ -114,22 +117,35 @@ export function Bestsellers() {
         </div>
 
         <div className="pl-[30px] pr-5 sm:pl-[42px] sm:pr-8 lg:pl-[58px] lg:pr-12">
-          <div
-            ref={trackRef}
-            onScroll={sync}
-            className="mt-8 flex snap-x snap-mandatory gap-6 overflow-x-auto scroll-smooth pb-2 [scrollbar-width:none] sm:mt-10 [&::-webkit-scrollbar]:hidden"
-          >
-            {products.map((p) => (
-              <ProductCard
-                key={p.slug}
-                product={p}
-                pricePending={!pricesReady}
-                imageWellClassName="bg-[#F5F5F5]"
-                className="w-[74vw] shrink-0 snap-start sm:w-[46vw] md:w-[34vw] lg:w-[calc((100%-4.5rem)/4)]"
-              />
-            ))}
-            <div aria-hidden className="w-1 shrink-0 sm:w-2" />
-          </div>
+          {status === "error" ? (
+            <LoadError message="We couldn't load our best products right now." onRetry={retry} className="mt-8 sm:mt-10" />
+          ) : (
+            <div
+              ref={trackRef}
+              onScroll={sync}
+              className="mt-8 flex snap-x snap-mandatory gap-6 overflow-x-auto scroll-smooth pb-2 [scrollbar-width:none] sm:mt-10 [&::-webkit-scrollbar]:hidden"
+            >
+              {status === "success" ? (
+                products.map((p) => (
+                  <ProductCard
+                    key={p.slug}
+                    product={p}
+                    pricePending={!pricesReady}
+                    imageWellClassName="bg-[#F5F5F5]"
+                    className={BESTSELLER_CARD_WIDTH}
+                  />
+                ))
+              ) : (
+                // Same card widths as the real track, so nothing shifts on arrival.
+                <LoadingRegion label="Loading best products" className="contents">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <ProductCardSkeleton key={i} className={BESTSELLER_CARD_WIDTH} />
+                  ))}
+                </LoadingRegion>
+              )}
+              <div aria-hidden className="w-1 shrink-0 sm:w-2" />
+            </div>
+          )}
         </div>
       </div>
     </section>

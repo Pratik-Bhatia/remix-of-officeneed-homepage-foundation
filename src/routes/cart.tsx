@@ -12,6 +12,9 @@ import { CartLineItem } from "@/components/officeneed/CartLineItem";
 import { CartProfileLinks } from "@/components/officeneed/CartProfileLinks";
 import { DiscountCodeInput } from "@/components/officeneed/DiscountCodeInput";
 import { DeliveryAddressSelector } from "@/components/officeneed/DeliveryAddressSelector";
+import { CartLineSkeleton, LoadingRegion } from "@/components/officeneed/skeletons";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useCartRestored } from "@/hooks/useCartRestored";
 
 export const Route = createFileRoute("/cart")({
   staticData: { sitemap: false },
@@ -33,6 +36,7 @@ export const Route = createFileRoute("/cart")({
  * identical in both places.
  */
 function CartPage() {
+  const cartRestored = useCartRestored();
   const items = useCartStore((s) => s.items);
   const isLoading = useCartStore((s) => s.isLoading);
   const isSyncing = useCartStore((s) => s.isSyncing);
@@ -117,11 +121,19 @@ function CartPage() {
         <div className="mx-auto w-full max-w-4xl px-5 py-10 sm:px-8 sm:py-14 lg:px-8">
           <header className="mb-8 sm:mb-10">
             <h1 className="text-3xl sm:text-4xl font-display font-medium tracking-tight text-foreground">
-              {items.length === 0 ? "Your Bag is Empty" : "Your Bag"}
+              {cartRestored && items.length === 0 ? "Your Bag is Empty" : "Your Bag"}
             </h1>
           </header>
 
-          {items.length === 0 ? (
+          {!cartRestored ? (
+            // The saved cart isn't readable yet (server render / first frame):
+            // placeholders, never a false "empty".
+            <LoadingRegion label="Loading your bag">
+              <CartLineSkeleton />
+              <CartLineSkeleton />
+              <Skeleton className="mt-8 h-12 w-full rounded-full sm:ml-auto sm:w-64" />
+            </LoadingRegion>
+          ) : items.length === 0 ? (
             <div className="flex flex-col items-start">
               <p className="text-sm text-muted-foreground">
                 Items you add will appear here.

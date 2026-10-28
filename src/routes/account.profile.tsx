@@ -28,6 +28,7 @@ import { getB2BLocationDetails, updateB2BLocationDetails, type B2BLocationDetail
 import { getAddressLabels, setAddressLabel, deleteAddressLabel, ADDRESS_LABELS, type AddressLabel } from "@/lib/address-labels.functions";
 import { normalizeIndianPhone } from "@/lib/contact-phone";
 import { toIndiaZoneCode } from "@/lib/india-zones";
+import { DetailListSkeleton, LoadingRegion } from "@/components/officeneed/skeletons";
 
 const PIN_CODE_PATTERN = /^\d{6}$/;
 const DEFAULT_ADDRESS_LABEL: AddressLabel = "Other";
@@ -400,7 +401,9 @@ function BusinessAccountSection() {
       </div>
 
       {loading && !details ? (
-        <p className="mt-4 text-sm text-muted-foreground">Loading your business account…</p>
+        <LoadingRegion label="Loading your business account" className="mt-5">
+          <DetailListSkeleton items={6} />
+        </LoadingRegion>
       ) : !details ? (
         <p className="mt-4 text-sm text-muted-foreground">Could not load your business account details.</p>
       ) : (

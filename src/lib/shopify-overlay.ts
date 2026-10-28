@@ -12,6 +12,7 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchProducts, fetchAllProducts, fetchCollections, formatMoney, type ShopifyProductNode, type ShopifyCollectionNode, type BuyerContext } from "@/lib/shopify";
 import { useBuyerContext } from "@/hooks/useBuyerContext";
 import { useB2BStore, getEffectiveCompanyLocationId } from "@/stores/b2bStore";
+import { queryLoadStatus, type LoadStatus } from "@/lib/load-status";
 import { getB2BPriceOverlay, type B2BPriceOverlayMap } from "@/lib/b2b-pricing.functions";
 import { getB2BQuantityRuleOverlay, type QuantityRuleOverlayMap } from "@/lib/b2b-quantity-rules.functions";
 import { applyB2BPriceOverlayToAll } from "@/lib/b2b-pricing";
@@ -688,12 +689,18 @@ export function shopifyCatalogueQueryOptions(buyer: BuyerContext, customerId: st
 export function useShopifyCatalogue(
   staticProducts: Product[],
   options: { enabled?: boolean } = {},
-): { products: Product[]; pricesReady: boolean } {
+): { products: Product[]; pricesReady: boolean; status: LoadStatus; retry: () => void } {
   const buyer = useBuyerContext();
   const customerId = useB2BStore((s) => s.customerId);
   // `enabled: false` lets always-mounted surfaces (chat, search) skip downloading the whole
   // catalogue until the shopper actually opens them.
-  const { data } = useQuery({ ...shopifyCatalogueQueryOptions(buyer, customerId), enabled: options.enabled ?? true });
+  const enabled = options.enabled ?? true;
+  const query = useQuery({ ...shopifyCatalogueQueryOptions(buyer, customerId), enabled });
+  const { data } = query;
+  // `products` alone can't tell "still loading" from "failed" or "empty"
+  // (the static fallback is empty) -- callers render from `status`.
+  const status = queryLoadStatus(query, enabled);
+  const retry = query.refetch;
 
   const baseNodes = useMemo(() => data ?? [], [data]);
   const variantIds = useMemo(() => baseNodes.flatMap((n) => n.variants.edges.map((e) => e.node.id)), [baseNodes]);
@@ -714,8 +721,12 @@ export function useShopifyCatalogue(
   }, [baseNodes, priceOverlay, staticProducts]);
 
   return useMemo(
-    () => (live ? { products: live, pricesReady: ready } : { products: staticProducts, pricesReady: true }),
-    [live, ready, staticProducts],
+    () => ({
+      ...(live ? { products: live, pricesReady: ready } : { products: staticProducts, pricesReady: true }),
+      status,
+      retry: () => void retry(),
+    }),
+    [live, ready, staticProducts, status, retry],
   );
 }
 
@@ -729,11 +740,11 @@ export function useShopifyCatalogue(
  * full images[] array this used to trim down to just images[0]) stays
  * identical between the two.
  */
-export function useShopifyBestsellers(staticItems: Product[] = []): { products: Product[]; pricesReady: boolean } {
+export function useShopifyBestsellers(staticItems: Product[] = []): { products: Product[]; pricesReady: boolean; status: LoadStatus; retry: () => void } {
   const buyer = useBuyerContext();
   const customerId = useB2BStore((s) => s.customerId);
   const { queryKeySuffix, staleTime, gcTime } = buyerCacheConfig(buyer, customerId);
-  const { data } = useQuery({
+  const query = useQuery({
     queryKey: ["shopify", "bestsellers", queryKeySuffix],
     queryFn: async () => {
       // 250 (one Storefront page) so every main category is represented;
@@ -745,6 +756,9 @@ export function useShopifyBestsellers(staticItems: Product[] = []): { products: 
     gcTime,
     retry: 1,
   });
+  const { data } = query;
+  const status = queryLoadStatus(query);
+  const retry = query.refetch;
 
   const baseNodes = useMemo(() => data ?? [], [data]);
   const variantIds = useMemo(() => baseNodes.flatMap((n) => n.variants.edges.map((e) => e.node.id)), [baseNodes]);
@@ -764,8 +778,12 @@ export function useShopifyBestsellers(staticItems: Product[] = []): { products: 
   }, [baseNodes, priceOverlay, staticItems]);
 
   return useMemo(
-    () => (live ? { products: live, pricesReady: ready } : { products: staticItems, pricesReady: true }),
-    [live, ready, staticItems],
+    () => ({
+      ...(live ? { products: live, pricesReady: ready } : { products: staticItems, pricesReady: true }),
+      status,
+      retry: () => void retry(),
+    }),
+    [live, ready, staticItems, status, retry],
   );
 }
 
