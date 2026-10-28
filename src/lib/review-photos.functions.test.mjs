@@ -195,3 +195,59 @@ test("no approved reviews, or a signing failure, means no photos (never an error
   const failing = fakeReadClient({ reviews: [{ id: "ok-1", product_handle: "pen", status: "approved" }], images: [img("ok-1", 0)], signFails: true });
   assert.deepEqual(await getApprovedReviewPhotosCore("pen", failing), {});
 });
+
+test("server rejects a full image over 1600x1600 by its real pixel size; exactly 1600 is accepted", async () => {
+  const over = await submitReviewWithPhotosCore({ ...review, photos: [photo(webpVp8xBytes(1601, 900))] }, fakeClient(), () => "x");
+  assert.equal(over.ok, false);
+  assert.match(over.error, /1600/);
+  const tall = await submitReviewWithPhotosCore({ ...review, photos: [photo(webpVp8xBytes(900, 2400))] }, fakeClient(), () => "x");
+  assert.equal(tall.ok, false);
+  const exact = await submitReviewWithPhotosCore({ ...review, photos: [photo(webpVp8xBytes(1600, 1600))] }, fakeClient(), () => "x");
+  assert.deepEqual(exact, { ok: true });
+});
+
+// ---- cleanupAbandonedReviewPhotosCore ----
+import { cleanupAbandonedReviewPhotosCore } from "./review-photos.functions";
+
+function fakeBucketClient({ folders, linked, linkedError = false }) {
+  const removed = [];
+  return {
+    removed,
+    from: () => ({ select: () => ({ in: async () => (linkedError ? { data: null, error: { message: "x" } } : { data: linked.map((id) => ({ review_id: id })), error: null }) }) }),
+    storage: {
+      from: () => ({
+        list: async (path) =>
+          path === ""
+            ? { data: [...Object.keys(folders).map((name) => ({ name, id: null })), { name: "stray.txt", id: "f1" }], error: null }
+            : { data: folders[path], error: null },
+        remove: async (paths) => (removed.push(...paths), { error: null }),
+      }),
+    },
+  };
+}
+const NOW = Date.parse("2026-10-28T12:00:00Z");
+const ago = (mins) => new Date(NOW - mins * 60_000).toISOString();
+const LINKED = "11111111-1111-4111-8111-111111111111";
+const ORPHAN_OLD = "22222222-2222-4222-8222-222222222222";
+const ORPHAN_NEW = "33333333-3333-4333-8333-333333333333";
+
+test("cleanup removes only old, unlinked review folders -- never linked, recent or foreign ones", async () => {
+  const client = fakeBucketClient({
+    folders: {
+      [LINKED]: [{ name: "0-full.webp", created_at: ago(5000) }],
+      [ORPHAN_OLD]: [{ name: "0-full.webp", created_at: ago(120) }, { name: "0-thumb.webp", created_at: ago(120) }],
+      [ORPHAN_NEW]: [{ name: "0-full.webp", created_at: ago(2) }],
+      "not-a-review-folder": [{ name: "x.png", created_at: ago(9999) }],
+    },
+    linked: [LINKED],
+  });
+  const n = await cleanupAbandonedReviewPhotosCore(client, NOW);
+  assert.equal(n, 2);
+  assert.deepEqual(client.removed.sort(), [`${ORPHAN_OLD}/0-full.webp`, `${ORPHAN_OLD}/0-thumb.webp`]);
+});
+
+test("cleanup deletes nothing if it cannot check which folders are linked", async () => {
+  const client = fakeBucketClient({ folders: { [ORPHAN_OLD]: [{ name: "0-full.webp", created_at: ago(500) }] }, linked: [], linkedError: true });
+  assert.equal(await cleanupAbandonedReviewPhotosCore(client, NOW), 0);
+  assert.deepEqual(client.removed, []);
+});

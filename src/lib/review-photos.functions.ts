@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import {
+  FULL_PHOTO_MAX_EDGE,
   IMAGE_CONTENT_TYPE,
   MAX_FULL_PHOTO_BYTES,
   MAX_REVIEW_PHOTOS,
@@ -73,6 +74,9 @@ export async function submitReviewWithPhotosCore(
     const fullInfo = inspectImage(full);
     const thumbInfo = inspectImage(thumb);
     if (!fullInfo || !thumbInfo) return { ok: false, error: `Photo ${i + 1} isn't a valid JPG, PNG or WebP image.` };
+    if (fullInfo.width > FULL_PHOTO_MAX_EDGE || fullInfo.height > FULL_PHOTO_MAX_EDGE) {
+      return { ok: false, error: `Photo ${i + 1} is larger than ${FULL_PHOTO_MAX_EDGE}×${FULL_PHOTO_MAX_EDGE} pixels.` };
+    }
     if (thumbInfo.width > THUMB_PHOTO_EDGE * 2 || thumbInfo.height > THUMB_PHOTO_EDGE * 2) {
       return { ok: false, error: `Photo ${i + 1} could not be processed.` };
     }
@@ -183,6 +187,46 @@ export async function getApprovedReviewPhotosCore(
     (result[r.review_id] ??= []).push({ thumbUrl, fullUrl, width: r.width, height: r.height });
   }
   return result;
+}
+
+const REVIEW_FOLDER = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Deletes abandoned photo files: a `{reviewId}/` folder in the bucket with
+ * NO product_review_images row and whose files are ALL older than
+ * `minAgeMs`. Submissions upload files before writing rows and roll back on
+ * failure, so an orphan only remains if the server was killed mid-request.
+ * The age guard leaves any in-flight submission (seconds) alone; folders
+ * with a row -- pending or approved -- are never touched. Returns the
+ * number of files removed.
+ */
+export async function cleanupAbandonedReviewPhotosCore(
+  client: { from: (table: string) => any; storage: { from: (bucket: string) => any } },
+  now: number = Date.now(),
+  minAgeMs: number = 60 * 60 * 1000,
+): Promise<number> {
+  const bucket = client.storage.from(REVIEW_PHOTO_BUCKET);
+  const { data: entries, error } = await bucket.list("", { limit: 1000 });
+  if (error || !entries?.length) return 0;
+  // Folders are listed with a null id; only ever consider our own uuid folders.
+  const folders: string[] = entries.filter((e: { id: string | null; name: string }) => e.id === null && REVIEW_FOLDER.test(e.name)).map((e: { name: string }) => e.name);
+  if (!folders.length) return 0;
+
+  const { data: linked, error: linkedError } = await client.from("product_review_images").select("review_id").in("review_id", folders);
+  if (linkedError) return 0; // can't tell what's linked -- delete nothing
+  const keep = new Set((linked ?? []).map((r: { review_id: string }) => r.review_id));
+
+  let removed = 0;
+  for (const folder of folders) {
+    if (keep.has(folder)) continue;
+    const { data: files } = await bucket.list(folder, { limit: 100 });
+    if (!files?.length) continue;
+    const allOld = files.every((f: { created_at?: string | null }) => f.created_at && now - Date.parse(f.created_at) >= minAgeMs);
+    if (!allOld) continue;
+    const { error: removeError } = await bucket.remove(files.map((f: { name: string }) => `${folder}/${f.name}`));
+    if (!removeError) removed += files.length;
+  }
+  return removed;
 }
 
 export const getApprovedReviewPhotos = createServerFn({ method: "GET" })

@@ -49,3 +49,28 @@ test("storage paths are generated from the review id and position only", () => {
   assert.deepEqual(reviewPhotoPaths("rid", 2, "webp"), { full: "rid/2-full.webp", thumb: "rid/2-thumb.webp" });
   assert.deepEqual(reviewPhotoPaths("rid", 0, "jpeg"), { full: "rid/0-full.jpg", thumb: "rid/0-thumb.jpg" });
 });
+
+// ---- Optimisation decisions ----
+import { chooseOutputFormat, encodeWithinBudget } from "./review-photos";
+
+test("chooseOutputFormat: WebP when supported; else PNG keeps transparency, JPEG for opaque", () => {
+  assert.equal(chooseOutputFormat({ webpSupported: true, transparent: false }), "webp");
+  assert.equal(chooseOutputFormat({ webpSupported: true, transparent: true }), "webp");
+  assert.equal(chooseOutputFormat({ webpSupported: false, transparent: true }), "png");
+  assert.equal(chooseOutputFormat({ webpSupported: false, transparent: false }), "jpeg");
+});
+
+test("encodeWithinBudget: stops at the first quality that fits, keeps the lowest step if none fit, one encode per step", async () => {
+  const sizes = { 0.82: 420_000, 0.76: 280_000, 0.7: 210_000 };
+  const calls = [];
+  const enc = async (q) => (calls.push(q), { size: sizes[q] });
+  const fits = await encodeWithinBudget(enc, [0.82, 0.76, 0.7], 300 * 1024);
+  assert.equal(fits.quality, 0.76);
+  assert.deepEqual(calls, [0.82, 0.76], "never encodes past the first fit");
+
+  const first = await encodeWithinBudget(async () => ({ size: 90_000 }), [0.82, 0.76, 0.7], 300 * 1024);
+  assert.deepEqual([first.quality, first.attempts], [0.82, 1], "small images are not recompressed harder");
+
+  const none = await encodeWithinBudget(async (q) => ({ size: 900_000 * q }), [0.82, 0.76, 0.7], 300 * 1024);
+  assert.deepEqual([none.quality, none.attempts], [0.7, 3], "detail floor: never below the lowest step");
+});

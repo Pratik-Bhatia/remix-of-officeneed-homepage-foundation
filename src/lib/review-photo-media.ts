@@ -11,8 +11,17 @@
 import {
   ACCEPTED_PHOTO_TYPES,
   FULL_PHOTO_MAX_EDGE,
+  FULL_PHOTO_QUALITY_STEPS,
+  FULL_PHOTO_TARGET_BYTES,
+  MAX_FULL_PHOTO_BYTES,
   MAX_ORIGINAL_PHOTO_BYTES,
+  MAX_THUMB_PHOTO_BYTES,
   THUMB_PHOTO_EDGE,
+  THUMB_PHOTO_QUALITY_STEPS,
+  THUMB_PHOTO_TARGET_BYTES,
+  chooseOutputFormat,
+  encodeWithinBudget,
+  type OutputFormat,
   type ReviewPhoto,
 } from "@/lib/review-photos";
 
@@ -21,11 +30,17 @@ export type { ReviewPhoto };
 export interface PreparedReviewPhoto {
   /** Stable key for the form's thumbnail list. */
   key: string;
+  /** Identifies the picked file (name|size|lastModified), so re-picking it is skipped. */
+  fingerprint: string;
   /** Object URL of the thumbnail, for the in-form preview (revoke on remove). */
   previewUrl: string;
   full: string;
   thumb: string;
+  /** What was produced (shown nowhere; useful for debugging and tests). */
+  meta: { format: OutputFormat; width: number; height: number; fullBytes: number; thumbBytes: number; transparent: boolean };
 }
+
+export const photoFingerprint = (file: File) => `${file.name}|${file.size}|${file.lastModified}`;
 
 async function decode(file: File): Promise<ImageBitmap | HTMLImageElement> {
   if (typeof createImageBitmap === "function") {
@@ -43,14 +58,64 @@ async function decode(file: File): Promise<ImageBitmap | HTMLImageElement> {
   }
 }
 
-function encode(canvas: HTMLCanvasElement, quality: number): Promise<Blob> {
-  return new Promise((resolve, reject) => {
-    // WebP where the browser can encode it (smaller); JPEG otherwise.
-    canvas.toBlob((webp) => {
-      if (webp && webp.type === "image/webp") return resolve(webp);
-      canvas.toBlob((jpeg) => (jpeg ? resolve(jpeg) : reject(new Error("encode failed"))), "image/jpeg", quality);
-    }, "image/webp", quality);
-  });
+const MIME: Record<OutputFormat, string> = { webp: "image/webp", png: "image/png", jpeg: "image/jpeg" };
+
+function toBlob(canvas: HTMLCanvasElement, format: OutputFormat, quality?: number): Promise<Blob> {
+  return new Promise((resolve, reject) =>
+    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("encode failed"))), MIME[format], quality),
+  );
+}
+
+// Browsers that can't encode WebP silently return PNG instead -- detect once.
+let webpSupport: Promise<boolean> | null = null;
+function canEncodeWebp(): Promise<boolean> {
+  webpSupport ??= (async () => {
+    const c = document.createElement("canvas");
+    c.width = c.height = 1;
+    try {
+      return (await toBlob(c, "webp", 0.8)).type === "image/webp";
+    } catch {
+      return false;
+    }
+  })();
+  return webpSupport;
+}
+
+/** True if any pixel is not fully opaque. */
+function hasTransparency(canvas: HTMLCanvasElement): boolean {
+  const data = canvas.getContext("2d")!.getImageData(0, 0, canvas.width, canvas.height).data;
+  for (let i = 3; i < data.length; i += 4) if (data[i]! < 255) return true;
+  return false;
+}
+
+/** Copy of `canvas` composited onto white (for the opaque JPEG last resort). */
+function flattenOnWhite(canvas: HTMLCanvasElement): HTMLCanvasElement {
+  const out = document.createElement("canvas");
+  out.width = canvas.width;
+  out.height = canvas.height;
+  const g = out.getContext("2d")!;
+  g.fillStyle = "#fff";
+  g.fillRect(0, 0, out.width, out.height);
+  g.drawImage(canvas, 0, 0);
+  return out;
+}
+
+/** Encodes one rendition in `format`, stepping quality down toward the byte target. */
+async function encodeRendition(
+  canvas: HTMLCanvasElement,
+  format: OutputFormat,
+  qualities: readonly number[],
+  targetBytes: number,
+  hardCapBytes: number,
+): Promise<Blob> {
+  if (format === "png") {
+    // Lossless -- no quality steps. Too heavy even for the hard cap: keep the
+    // pixels, lose only the transparency (white background, JPEG).
+    const png = await toBlob(canvas, "png");
+    if (png.size <= hardCapBytes) return png;
+    return encodeRendition(flattenOnWhite(canvas), "jpeg", qualities, targetBytes, hardCapBytes);
+  }
+  return (await encodeWithinBudget((q) => toBlob(canvas, format, q), qualities, targetBytes)).result;
 }
 
 async function toBase64(blob: Blob): Promise<string> {
@@ -61,9 +126,14 @@ async function toBase64(blob: Blob): Promise<string> {
 }
 
 /**
- * Validates a picked file and produces the downscaled full image (long edge
- * <= 1600px) and a square thumbnail. Re-encoding drops all metadata,
- * including the GPS location phones embed in photos.
+ * Validates a picked file and produces, in one pass each:
+ *  - the full image: fits 1600x1600 (aspect ratio kept, never upscaled),
+ *    compressed toward ~300 KB;
+ *  - a square, centre-cropped 192px thumbnail, toward ~40 KB.
+ * WebP when the browser can encode it (transparency kept); otherwise PNG for
+ * transparent images and JPEG for opaque ones. Animated images keep only
+ * their first frame. Re-encoding drops all metadata, including the GPS
+ * location phones embed in photos.
  */
 export async function prepareReviewPhoto(file: File): Promise<PreparedReviewPhoto | { error: string }> {
   if (!(ACCEPTED_PHOTO_TYPES as readonly string[]).includes(file.type)) {
@@ -94,12 +164,27 @@ export async function prepareReviewPhoto(file: File): Promise<PreparedReviewPhot
     thumb.width = thumb.height = THUMB_PHOTO_EDGE;
     thumb.getContext("2d")!.drawImage(source, (w - side) / 2, (h - side) / 2, side, side, 0, 0, THUMB_PHOTO_EDGE, THUMB_PHOTO_EDGE);
 
-    const [fullBlob, thumbBlob] = await Promise.all([encode(full, 0.85), encode(thumb, 0.8)]);
+    // JPEG can't carry transparency, so only PNG/WebP sources need the scan.
+    const transparent = file.type !== "image/jpeg" && hasTransparency(full);
+    const format = chooseOutputFormat({ webpSupported: await canEncodeWebp(), transparent });
+    const [fullBlob, thumbBlob] = await Promise.all([
+      encodeRendition(full, format, FULL_PHOTO_QUALITY_STEPS, FULL_PHOTO_TARGET_BYTES, MAX_FULL_PHOTO_BYTES),
+      encodeRendition(thumb, format, THUMB_PHOTO_QUALITY_STEPS, THUMB_PHOTO_TARGET_BYTES, MAX_THUMB_PHOTO_BYTES),
+    ]);
     return {
       key: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      fingerprint: photoFingerprint(file),
       previewUrl: URL.createObjectURL(thumbBlob),
       full: await toBase64(fullBlob),
       thumb: await toBase64(thumbBlob),
+      meta: {
+        format: (fullBlob.type.replace("image/", "") as OutputFormat) || format,
+        width: full.width,
+        height: full.height,
+        fullBytes: fullBlob.size,
+        thumbBytes: thumbBlob.size,
+        transparent,
+      },
     };
   } catch {
     return { error: `"${file.name}" couldn't be processed.` };

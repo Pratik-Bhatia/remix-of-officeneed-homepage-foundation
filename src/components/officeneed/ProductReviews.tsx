@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 import { CheckCircle2, ChevronLeft, ChevronRight, ImagePlus, Plus, X } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { MAX_REVIEW_PHOTOS, photoStrip } from "@/lib/review-photos";
-import { prepareReviewPhoto, type PreparedReviewPhoto, type ReviewPhoto } from "@/lib/review-photo-media";
+import { photoFingerprint, prepareReviewPhoto, type PreparedReviewPhoto, type ReviewPhoto } from "@/lib/review-photo-media";
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem } from "@/components/ui/pagination";
 import { buttonVariants } from "@/components/ui/button";
 import { clampPage, pageItems, pageSlice } from "@/lib/pagination";
@@ -464,11 +464,24 @@ function ReviewForm({
   useEffect(() => () => photosRef.current.forEach((p) => URL.revokeObjectURL(p.previewUrl)), []);
 
   const handlePhotoFiles = async (fileList: FileList | null) => {
-    const files = Array.from(fileList ?? []);
+    const picked = Array.from(fileList ?? []);
     if (fileInputRef.current) fileInputRef.current.value = ""; // allow re-picking the same file
-    if (!files.length) return;
-    const room = MAX_REVIEW_PHOTOS - photos.length;
+    if (!picked.length) return;
     const problems: string[] = [];
+    // Never convert/upload the same file twice (already selected, or picked twice at once).
+    const seen = new Set(photos.map((p) => p.fingerprint));
+    const files = picked.filter((file) => {
+      const fp = photoFingerprint(file);
+      if (seen.has(fp)) return false;
+      seen.add(fp);
+      return true;
+    });
+    if (files.length < picked.length) problems.push("Photos you've already added were skipped.");
+    if (!files.length) {
+      setPhotoError(problems.join(" "));
+      return;
+    }
+    const room = MAX_REVIEW_PHOTOS - photos.length;
     if (files.length > room) problems.push(`You can add up to ${MAX_REVIEW_PHOTOS} photos.`);
     setPreparingPhotos(true);
     const added: PreparedReviewPhoto[] = [];

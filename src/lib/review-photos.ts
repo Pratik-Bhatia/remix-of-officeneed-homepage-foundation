@@ -22,6 +22,49 @@ export const THUMB_PHOTO_EDGE = 192;
 /** Server-side limits on what is actually stored (after downscaling). */
 export const MAX_FULL_PHOTO_BYTES = 2.5 * 1024 * 1024;
 export const MAX_THUMB_PHOTO_BYTES = 200 * 1024;
+
+/**
+ * Compression targets. Each image is encoded at the first quality step that
+ * fits its budget; if even the lowest step doesn't fit, the lowest step's
+ * result is kept anyway -- product and logo detail matter more than the
+ * byte target, and the hard server caps above still apply.
+ */
+export const FULL_PHOTO_TARGET_BYTES = 300 * 1024;
+export const FULL_PHOTO_QUALITY_STEPS = [0.82, 0.76, 0.7] as const;
+export const THUMB_PHOTO_TARGET_BYTES = 40 * 1024;
+export const THUMB_PHOTO_QUALITY_STEPS = [0.8, 0.72] as const;
+
+export type OutputFormat = "webp" | "png" | "jpeg";
+
+/**
+ * WebP whenever the browser can encode it (it keeps transparency). Without
+ * WebP: PNG for images with transparency (lossless, keeps the alpha
+ * channel), JPEG for opaque ones.
+ */
+export function chooseOutputFormat(opts: { webpSupported: boolean; transparent: boolean }): OutputFormat {
+  if (opts.webpSupported) return "webp";
+  return opts.transparent ? "png" : "jpeg";
+}
+
+/**
+ * Encodes at descending quality until the result fits `targetBytes`;
+ * returns the first fit, or the lowest-quality attempt if none fit. Never
+ * encodes more than once per step.
+ */
+export async function encodeWithinBudget<T extends { size: number }>(
+  encode: (quality: number) => Promise<T>,
+  qualities: readonly number[],
+  targetBytes: number,
+): Promise<{ result: T; quality: number; attempts: number }> {
+  let last: { result: T; quality: number; attempts: number } | null = null;
+  for (const [i, quality] of qualities.entries()) {
+    const result = await encode(quality);
+    last = { result, quality, attempts: i + 1 };
+    if (result.size <= targetBytes) return last;
+  }
+  if (!last) throw new Error("no quality steps");
+  return last;
+}
 const MAX_PHOTO_DIMENSION = 8000;
 
 /** An approved photo as the storefront displays it (short-lived signed URLs). */

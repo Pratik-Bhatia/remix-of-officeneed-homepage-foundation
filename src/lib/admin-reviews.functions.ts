@@ -50,6 +50,16 @@ export const listPendingReviews = createServerFn({ method: "POST" })
         }
       }
     }
+
+    // Housekeeping on each moderation visit: delete photo files abandoned
+    // by an interrupted submission (never anything linked to a review).
+    try {
+      const { cleanupAbandonedReviewPhotosCore } = await import("@/lib/review-photos.functions");
+      const removed = await cleanupAbandonedReviewPhotosCore(supabaseAdmin as any);
+      if (removed) console.log(`[admin-reviews] removed ${removed} abandoned review photo file(s)`);
+    } catch (err) {
+      console.error("[admin-reviews] abandoned photo cleanup failed", err);
+    }
     return reviews;
   });
 
