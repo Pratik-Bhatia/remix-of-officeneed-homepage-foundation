@@ -78,6 +78,13 @@
       "when": 1792577654036,
       "tag": "0010_revoke_logo_processing_functions_from_clients",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1793173418764,
+      "tag": "0011_add_review_images",
+      "breakpoints": true
     }
   ]
 }
