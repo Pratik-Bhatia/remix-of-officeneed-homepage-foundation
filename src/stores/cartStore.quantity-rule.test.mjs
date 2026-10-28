@@ -38,6 +38,14 @@ mock.module("@/lib/customer-cart.functions", {
   },
 });
 mock.module("@/lib/meta-pixel", { namedExports: { trackAddToCart: () => {}, trackInitiateCheckout: () => {} } });
+// cartStore reports add/remove-to-cart to Google Analytics, which injects its
+// script into `document` -- absent under node:test. Analytics is not what
+// these tests cover, so stub it like meta-pixel above (no production change).
+mock.module("@/lib/google-analytics", {
+  namedExports: Object.fromEntries(
+    ["initGoogleAnalytics", "trackGooglePageView", "trackGoogleViewItem", "trackGoogleViewItemList", "trackGoogleSearch", "trackGoogleAddToCart", "trackGoogleRemoveFromCart", "trackGoogleViewCart", "trackGoogleBeginCheckout", "trackGooglePurchase"].map((n) => [n, () => {}]),
+  ),
+});
 mock.module("@/lib/attribution", { namedExports: { appendAttribution: (url) => url, getAttribution: () => ({}) } });
 
 let lastCartCreateLines = null;
