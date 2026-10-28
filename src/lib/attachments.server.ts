@@ -19,7 +19,7 @@ const ALLOWED_TYPES = new Set([
 
 /** HMAC that proves a chat-upload path was issued by our own upload function. */
 function attachmentSigningKey(): string | null {
-  return process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.OFFICENEED_ACCESS_GATE_SECRET || null;
+  return process.env['SUPABASE_SERVICE_ROLE_KEY'] || process.env['OFFICENEED_ACCESS_GATE_SECRET'] || null;
 }
 
 export async function signAttachmentPath(path: string): Promise<string | null> {
