@@ -8,15 +8,15 @@
  * but the functions themselves use browser APIs (canvas, createImageBitmap)
  * and are only ever called from effects and event handlers.
  */
-import { supabase } from "@/integrations/supabase/client";
-import type { ReviewPhotoClient } from "@/lib/review-photo-schema";
 import {
   ACCEPTED_PHOTO_TYPES,
   FULL_PHOTO_MAX_EDGE,
   MAX_ORIGINAL_PHOTO_BYTES,
-  REVIEW_PHOTO_BUCKET,
   THUMB_PHOTO_EDGE,
+  type ReviewPhoto,
 } from "@/lib/review-photos";
+
+export type { ReviewPhoto };
 
 export interface PreparedReviewPhoto {
   /** Stable key for the form's thumbnail list. */
@@ -25,13 +25,6 @@ export interface PreparedReviewPhoto {
   previewUrl: string;
   full: string;
   thumb: string;
-}
-
-export interface ReviewPhoto {
-  thumbUrl: string;
-  fullUrl: string;
-  width: number | null;
-  height: number | null;
 }
 
 async function decode(file: File): Promise<ImageBitmap | HTMLImageElement> {
@@ -117,37 +110,16 @@ export async function prepareReviewPhoto(file: File): Promise<PreparedReviewPhot
 
 /**
  * Approved photos for one product, grouped by review id, in upload order.
- * RLS returns rows (and storage signs files) only for approved reviews, so
- * pending/rejected photos never come back. One query plus one batched
- * signed-URL request; failures just mean no photos are shown.
+ * The server signs URLs only for approved reviews' photos (the bucket is
+ * private and the photo table server-only), so pending/rejected photos
+ * never come back. Failures just mean no photos are shown.
  */
 export async function loadApprovedReviewPhotos(productHandle: string): Promise<Map<string, ReviewPhoto[]>> {
-  const byReview = new Map<string, ReviewPhoto[]>();
-  const { data: rows, error } = await (supabase as unknown as ReviewPhotoClient)
-    .from("product_review_images")
-    .select("review_id, position, full_path, thumb_path, width, height")
-    .eq("product_handle", productHandle)
-    .order("position", { ascending: true });
-  if (error || !rows?.length) {
-    if (error) console.error("Error fetching review photos:", error);
-    return byReview;
+  try {
+    const { getApprovedReviewPhotos } = await import("@/lib/review-photos.functions");
+    return new Map(Object.entries(await getApprovedReviewPhotos({ data: { productHandle } })));
+  } catch (error) {
+    console.error("Error loading review photos:", error);
+    return new Map();
   }
-
-  const paths = rows.flatMap((r) => [r.thumb_path, r.full_path]);
-  const { data: signed, error: signError } = await supabase.storage.from(REVIEW_PHOTO_BUCKET).createSignedUrls(paths, 60 * 60);
-  if (signError || !signed) {
-    console.error("Error signing review photo URLs:", signError);
-    return byReview;
-  }
-  const urlFor = new Map(signed.filter((s) => s.signedUrl && !s.error).map((s) => [s.path, s.signedUrl]));
-
-  for (const r of rows) {
-    const thumbUrl = urlFor.get(r.thumb_path);
-    const fullUrl = urlFor.get(r.full_path);
-    if (!thumbUrl || !fullUrl) continue;
-    const list = byReview.get(r.review_id) ?? [];
-    list.push({ thumbUrl, fullUrl, width: r.width, height: r.height });
-    byReview.set(r.review_id, list);
-  }
-  return byReview;
 }

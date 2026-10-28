@@ -5,9 +5,10 @@
  * (review-photos.functions.ts) and the review list.
  *
  * Storage model (see supabase/migrations/*_add_review_images.sql): files
- * live in the PRIVATE `review-images` bucket, one row per photo in
- * `product_review_images`; the public can read a photo only while its
- * review is `approved` (same moderation as the review text).
+ * live in the PRIVATE `review-images` bucket, one row per photo in the
+ * server-only `product_review_images` table. The server hands out signed
+ * URLs only for photos whose review is `approved` (same moderation as the
+ * review text).
  */
 
 export const REVIEW_PHOTO_BUCKET = "review-images";
@@ -22,6 +23,14 @@ export const THUMB_PHOTO_EDGE = 192;
 export const MAX_FULL_PHOTO_BYTES = 2.5 * 1024 * 1024;
 export const MAX_THUMB_PHOTO_BYTES = 200 * 1024;
 const MAX_PHOTO_DIMENSION = 8000;
+
+/** An approved photo as the storefront displays it (short-lived signed URLs). */
+export interface ReviewPhoto {
+  thumbUrl: string;
+  fullUrl: string;
+  width: number | null;
+  height: number | null;
+}
 
 export type ImageFormat = "jpeg" | "png" | "webp";
 export const IMAGE_CONTENT_TYPE: Record<ImageFormat, string> = { jpeg: "image/jpeg", png: "image/png", webp: "image/webp" };

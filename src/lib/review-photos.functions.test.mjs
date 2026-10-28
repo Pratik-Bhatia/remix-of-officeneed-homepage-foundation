@@ -139,3 +139,59 @@ test("a failed photo-row insert removes the files AND the just-created review", 
   assert.deepEqual(client.state.deletedReviews, ["rev-z"]);
   assert.equal(client.state.reviews.length, 0);
 });
+
+// ---- getApprovedReviewPhotosCore: the only path photos reach the storefront ----
+import { getApprovedReviewPhotosCore } from "./review-photos.functions";
+
+function fakeReadClient({ reviews, images, signFails = false }) {
+  const signedPaths = [];
+  const query = (rows) => {
+    let out = rows;
+    const q = {
+      select: () => q,
+      eq: (col, val) => { out = out.filter((r) => r[col] === val); return q; },
+      in: (col, vals) => { out = out.filter((r) => vals.includes(r[col])); return q; },
+      order: (col) => { out = [...out].sort((a, b) => a[col] - b[col]); return q; },
+      then: (resolve) => resolve({ data: out, error: null }),
+    };
+    return q;
+  };
+  return {
+    signedPaths,
+    from: (table) => query(table === "product_reviews" ? reviews : images),
+    storage: {
+      from: () => ({
+        createSignedUrls: async (paths) => {
+          if (signFails) return { data: null, error: { message: "denied" } };
+          signedPaths.push(...paths);
+          return { data: paths.map((p) => ({ path: p, signedUrl: `https://signed/${p}`, error: null })), error: null };
+        },
+      }),
+    },
+  };
+}
+const img = (review_id, position) => ({ review_id, position, product_handle: "pen", full_path: `${review_id}/${position}-full.webp`, thumb_path: `${review_id}/${position}-thumb.webp`, width: 1200, height: 900 });
+
+test("only APPROVED reviews' photos are signed and returned, grouped and in upload order", async () => {
+  const client = fakeReadClient({
+    reviews: [
+      { id: "ok-1", product_handle: "pen", status: "approved" },
+      { id: "wait-1", product_handle: "pen", status: "pending" },
+      { id: "other-product", product_handle: "diary", status: "approved" },
+    ],
+    images: [img("ok-1", 1), img("ok-1", 0), img("wait-1", 0), img("other-product", 0)],
+  });
+  const res = await getApprovedReviewPhotosCore("pen", client);
+  assert.deepEqual(Object.keys(res), ["ok-1"]);
+  assert.deepEqual(res["ok-1"].map((p) => p.thumbUrl), ["https://signed/ok-1/0-thumb.webp", "https://signed/ok-1/1-thumb.webp"]);
+  assert.equal(res["ok-1"][0].fullUrl, "https://signed/ok-1/0-full.webp");
+  assert.ok(client.signedPaths.every((p) => p.startsWith("ok-1/")), "a pending review's files are never even signed");
+});
+
+test("no approved reviews, or a signing failure, means no photos (never an error)", async () => {
+  const none = fakeReadClient({ reviews: [{ id: "wait-1", product_handle: "pen", status: "pending" }], images: [img("wait-1", 0)] });
+  assert.deepEqual(await getApprovedReviewPhotosCore("pen", none), {});
+  assert.deepEqual(none.signedPaths, []);
+  const failing = fakeReadClient({ reviews: [{ id: "ok-1", product_handle: "pen", status: "approved" }], images: [img("ok-1", 0)], signFails: true });
+  assert.deepEqual(await getApprovedReviewPhotosCore("pen", failing), {});
+});

@@ -11,6 +11,7 @@ import {
   reviewPhotoPaths,
   validateReviewFields,
   type ReviewFields,
+  type ReviewPhoto,
 } from "@/lib/review-photos";
 
 /**
@@ -141,6 +142,65 @@ export async function submitReviewWithPhotosCore(
   }
   return { ok: true };
 }
+
+/**
+ * Approved photos for one product, grouped by review id in upload order,
+ * as short-lived signed URLs. This is the ONLY way photos reach the
+ * storefront: the bucket is private and the photo table is server-only, so
+ * the approved-status check here is what keeps pending/rejected photos
+ * unpublished. Any failure just means no photos are shown.
+ */
+export async function getApprovedReviewPhotosCore(
+  productHandle: string,
+  client: { from: (table: string) => any; storage: { from: (bucket: string) => any } },
+): Promise<Record<string, ReviewPhoto[]>> {
+  const result: Record<string, ReviewPhoto[]> = {};
+  const { data: approved, error: reviewsError } = await client
+    .from("product_reviews")
+    .select("id")
+    .eq("product_handle", productHandle)
+    .eq("status", "approved");
+  if (reviewsError || !approved?.length) return result;
+
+  const { data: rows, error: rowsError } = await client
+    .from("product_review_images")
+    .select("review_id, position, full_path, thumb_path, width, height")
+    .in("review_id", approved.map((r: { id: string }) => r.id))
+    .order("position", { ascending: true });
+  if (rowsError || !rows?.length) return result;
+
+  const paths: string[] = rows.flatMap((r: { thumb_path: string; full_path: string }) => [r.thumb_path, r.full_path]);
+  const { data: signed, error: signError } = await client.storage.from(REVIEW_PHOTO_BUCKET).createSignedUrls(paths, 60 * 60);
+  if (signError || !signed) return result;
+  const urlFor = new Map<string, string>(
+    signed.filter((s: { signedUrl?: string; error?: unknown }) => s.signedUrl && !s.error).map((s: { path: string; signedUrl: string }) => [s.path, s.signedUrl]),
+  );
+
+  for (const r of rows as Array<{ review_id: string; full_path: string; thumb_path: string; width: number | null; height: number | null }>) {
+    const thumbUrl = urlFor.get(r.thumb_path);
+    const fullUrl = urlFor.get(r.full_path);
+    if (!thumbUrl || !fullUrl) continue;
+    (result[r.review_id] ??= []).push({ thumbUrl, fullUrl, width: r.width, height: r.height });
+  }
+  return result;
+}
+
+export const getApprovedReviewPhotos = createServerFn({ method: "GET" })
+  .validator((input: { productHandle: string }) => {
+    if (typeof input?.productHandle !== "string" || !input.productHandle || input.productHandle.length > 200) {
+      throw new Error("Invalid product.");
+    }
+    return input;
+  })
+  .handler(async ({ data }): Promise<Record<string, ReviewPhoto[]>> => {
+    try {
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      return await getApprovedReviewPhotosCore(data.productHandle, supabaseAdmin as unknown as Parameters<typeof getApprovedReviewPhotosCore>[1]);
+    } catch (err) {
+      console.error("[review-photos] could not load approved photos", err);
+      return {};
+    }
+  });
 
 const schema = z.object({
   productHandle: z.string().min(1).max(200),
