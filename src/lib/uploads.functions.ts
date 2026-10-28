@@ -19,7 +19,7 @@ const uploadSchema = z.object({
 export const uploadEnquiryAttachment = createServerFn({ method: "POST" })
   .validator((data) => uploadSchema.parse(data))
   .handler(async ({ data }) => {
-    const { ALLOWED_UPLOAD_TYPES, sanitizeFileName, getUploadClient } = await import("./attachments.server");
+    const { ALLOWED_UPLOAD_TYPES, sanitizeFileName, getUploadClient, signAttachmentPath } = await import("./attachments.server");
 
     if (!ALLOWED_UPLOAD_TYPES.has(data.mimeType)) {
       return { ok: false as const, error: "File type not allowed." };
@@ -53,8 +53,11 @@ export const uploadEnquiryAttachment = createServerFn({ method: "POST" })
       return { ok: false as const, error: error.message };
     }
 
+    const token = await signAttachmentPath(path);
+    if (!token) return { ok: false as const, error: "Storage is not configured on the server." };
+
     return {
       ok: true as const,
-      attachment: { path, name: data.name, mimeType: data.mimeType, size: bytes.length },
+      attachment: { path, name: data.name, mimeType: data.mimeType, size: bytes.length, token },
     };
   });

@@ -34,7 +34,8 @@ const enquirySchema = z.object({
   attachments: z
     .array(
       z.object({
-        path: z.string().min(1),
+        path: z.string().min(1).max(300),
+        token: z.string().max(128).optional(),
         name: z.string().min(1).max(200),
         mimeType: z.string().max(160).optional(),
         size: z.number().nonnegative().optional(),

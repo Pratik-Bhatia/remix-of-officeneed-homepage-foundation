@@ -173,7 +173,7 @@ function clientIp(request: Request): string {
 }
 
 function sanitizeRedirectTarget(raw: string): string {
-  if (!raw || !raw.startsWith("/") || raw.startsWith("//") || raw.includes("://") || raw.startsWith(ACCESS_GATE_VERIFY_PATH)) return "/";
+  if (!raw || !raw.startsWith("/") || raw.startsWith("//") || raw.includes("://") || raw.includes("\\") || /[\u0000-\u001f]/.test(raw) || raw.startsWith(ACCESS_GATE_VERIFY_PATH)) return "/";
   return raw;
 }
 
