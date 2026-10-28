@@ -11,3 +11,4 @@
 
 - Google Analytics uses the public connector measurement ID in a root-mounted browser tracker; initialize once and send pathname-only page views on navigation to avoid query-string data exposure and duplicate initial events.
 - Fragrance PDP information uses the shared pure DOM/Markdown resolver for per-field source precedence and description extraction, and always renders the four core sections; this prevents source-format and navigation-dependent missing accordions.
+- Review-photo queries use a local typed migration contract until generated database types include the photo table; this keeps pending-schema code type-safe without editing generated types or implying database deployment.

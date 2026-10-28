@@ -9,6 +9,7 @@
  * and are only ever called from effects and event handlers.
  */
 import { supabase } from "@/integrations/supabase/client";
+import type { ReviewPhotoClient } from "@/lib/review-photo-schema";
 import {
   ACCEPTED_PHOTO_TYPES,
   FULL_PHOTO_MAX_EDGE,
@@ -122,7 +123,7 @@ export async function prepareReviewPhoto(file: File): Promise<PreparedReviewPhot
  */
 export async function loadApprovedReviewPhotos(productHandle: string): Promise<Map<string, ReviewPhoto[]>> {
   const byReview = new Map<string, ReviewPhoto[]>();
-  const { data: rows, error } = await supabase
+  const { data: rows, error } = await (supabase as unknown as ReviewPhotoClient)
     .from("product_review_images")
     .select("review_id, position, full_path, thumb_path, width, height")
     .eq("product_handle", productHandle)
