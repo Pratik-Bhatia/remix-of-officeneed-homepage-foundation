@@ -1,3 +1,4 @@
+import { escapeHtml } from "./upload-validation";
 // Shopify "orders/paid" webhook handler. Server-only -- never imported by
 // client code. Wired into the global request pipeline from src/start.ts,
 // ahead of the access gate, so it keeps working even while the pre-launch
@@ -376,19 +377,19 @@ async function processOrderPaid(payload: ShopifyOrderWebhookPayload): Promise<vo
     });
 
     const html = `
-      <h2>Order Paid Online: ${orderNumber}</h2>
+      <h2>Order Paid Online: ${escapeHtml(orderNumber)}</h2>
       <p><strong>Status:</strong> Paid Online</p>
-      <p><strong>Customer:</strong> ${customerName} (${customerEmail}${customerPhone !== "—" ? `, ${customerPhone}` : ""})</p>
-      <p><strong>Product:</strong> ${record?.product_name ?? productName}${(record?.product_variant ?? variant) ? ` — ${record?.product_variant ?? variant}` : ""}</p>
-      <p><strong>Quantity:</strong> ${record?.quantity ?? quantity}</p>
-      <p><strong>Amount Paid:</strong> ${formatAmount(payload.total_price, payload.currency)}</p>
+      <p><strong>Customer:</strong> ${escapeHtml(customerName)} (${escapeHtml(customerEmail)}${customerPhone !== "—" ? `, ${escapeHtml(customerPhone)}` : ""})</p>
+      <p><strong>Product:</strong> ${escapeHtml(record?.product_name ?? productName)}${(record?.product_variant ?? variant) ? ` — ${escapeHtml(record?.product_variant ?? variant)}` : ""}</p>
+      <p><strong>Quantity:</strong> ${escapeHtml(record?.quantity ?? quantity)}</p>
+      <p><strong>Amount Paid:</strong> ${escapeHtml(formatAmount(payload.total_price, payload.currency))}</p>
       ${record?.logo_filename
-        ? `<p><strong>Logo:</strong> ${record.logo_filename}${record.logo_width_mm && record.logo_height_mm ? ` (${record.logo_width_mm.toFixed(1)} x ${record.logo_height_mm.toFixed(1)} mm)` : ""}</p>
+        ? `<p><strong>Logo:</strong> ${escapeHtml(record.logo_filename)}${record.logo_width_mm && record.logo_height_mm ? ` (${record.logo_width_mm.toFixed(1)} x ${record.logo_height_mm.toFixed(1)} mm)` : ""}</p>
            ${record.logo_url
-             ? `<h3>Attached Logo</h3><p><img src="${record.logo_url}" alt="Logo" style="max-width: 300px; max-height: 300px; border: 1px solid #ccc; background-color: #f9f9f9; padding: 10px;" /></p><p><a href="${record.logo_url}" target="_blank">Download Original Logo</a></p>`
+             ? `<h3>Attached Logo</h3><p><img src="${escapeHtml(record.logo_url)}" alt="Logo" style="max-width: 300px; max-height: 300px; border: 1px solid #ccc; background-color: #f9f9f9; padding: 10px;" /></p><p><a href="${escapeHtml(record.logo_url)}" target="_blank">Download Original Logo</a></p>`
              : ""}`
         : ""}
-      ${record?.printing_method ? `<p><strong>Printing Method:</strong> ${record.printing_method}</p>` : ""}
+      ${record?.printing_method ? `<p><strong>Printing Method:</strong> ${escapeHtml(record.printing_method)}</p>` : ""}
       <p><em>Internal order record attached as a PDF. This is not the customer's invoice -- it is sent to the Officeneed team only.</em></p>
     `;
 

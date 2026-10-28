@@ -17,8 +17,29 @@ const ALLOWED_TYPES = new Set([
   "text/plain",
 ]);
 
+/** HMAC that proves a chat-upload path was issued by our own upload function. */
+function attachmentSigningKey(): string | null {
+  return process.env['SUPABASE_SERVICE_ROLE_KEY'] || process.env['OFFICENEED_ACCESS_GATE_SECRET'] || null;
+}
+
+export async function signAttachmentPath(path: string): Promise<string | null> {
+  const key = attachmentSigningKey();
+  if (!key) return null;
+  const { createHmac } = await import("node:crypto");
+  return createHmac("sha256", key).update(`enquiry-attachment:${path}`).digest("hex");
+}
+
+async function verifyAttachmentPath(path: string, token: string | undefined): Promise<boolean> {
+  if (!token || !/^chat-uploads\/[A-Za-z0-9._-]+$/.test(path)) return false;
+  const expected = await signAttachmentPath(path);
+  if (!expected || expected.length !== token.length) return false;
+  const { timingSafeEqual } = await import("node:crypto");
+  return timingSafeEqual(Buffer.from(expected), Buffer.from(token));
+}
+
 export interface AttachmentInput {
   path: string;
+  token?: string | undefined;
   name: string;
   mimeType?: string | undefined;
   size?: number | undefined;
@@ -128,6 +149,11 @@ export async function persistEnquiryAttachments(params: {
     };
 
     try {
+      if (!(await verifyAttachmentPath(input.path, input.token))) {
+        console.error(`[OfficeNeed] attachment rejected (unverified path): ${fileName}`);
+        results.push(base);
+        continue;
+      }
       if (!ALLOWED_TYPES.has(declaredType)) {
         console.error(`[OfficeNeed] attachment rejected (type): ${fileName} ${declaredType}`);
         results.push(base);

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getUploadClient } from "./attachments.server";
 import { sendCustomerHtmlEmail, sendInternalHtmlEmail } from "./email-service";
 import { generateCorporateQuotePDF } from "./pdf-generator";
+import { base64DecodedSize, escapeHtml, MAX_IMAGE_BYTES, sniffImage } from "./upload-validation";
 
 const MAX_BYTES = 10 * 1024 * 1024; // 10MB
 
@@ -118,15 +119,18 @@ export const submitCorporateQuote = createServerFn({ method: "POST" })
 
       // 1. Upload Logo if exists
       if (data.logo) {
+        if (base64DecodedSize(data.logo.content) > MAX_BYTES) return { ok: false as const, error: "Logo file is too large (max 10MB)." };
         const logoBuffer = base64ToUint8Array(data.logo.content);
         if (logoBuffer.length > MAX_BYTES) return { ok: false as const, error: "Logo file is too large (max 10MB)." };
-        
+        const logoType = sniffImage(logoBuffer);
+        if (!logoType) return { ok: false as const, error: "Logo must be a PNG, JPEG or WebP image." };
+
         const safeName = data.logo.name.replace(/[^a-z0-9.]/gi, "_");
         const path = `logos/${timestamp}-${random}-${safeName}`;
         
         const { error: uploadError } = await client.storage
           .from("corporate-quote-assets")
-          .upload(path, logoBuffer, { contentType: data.logo.mimeType });
+          .upload(path, logoBuffer, { contentType: logoType.mimeType });
           
         if (uploadError) {
           console.error("Logo upload failed:", uploadError);
@@ -139,12 +143,15 @@ export const submitCorporateQuote = createServerFn({ method: "POST" })
       if (data.previewImage) {
         // Strip data:image/png;base64, if present
         const base64Data = data.previewImage.replace(/^data:image\/\w+;base64,/, "");
+        if (base64DecodedSize(base64Data) > MAX_IMAGE_BYTES) return { ok: false as const, error: "Preview image is too large." };
         const previewBuffer = base64ToUint8Array(base64Data);
+        const previewType = sniffImage(previewBuffer);
+        if (!previewType) return { ok: false as const, error: "Preview image is not a valid image." };
         const path = `previews/${timestamp}-${random}-${safeCompanyName}-preview.png`;
         
         const { error: previewError } = await client.storage
           .from("corporate-quote-assets")
-          .upload(path, previewBuffer, { contentType: "image/png" });
+          .upload(path, previewBuffer, { contentType: previewType.mimeType });
           
         if (previewError) {
           console.error("Preview upload failed:", previewError);
@@ -165,12 +172,21 @@ export const submitCorporateQuote = createServerFn({ method: "POST" })
           if (!comp.customized || !comp.previewImage) continue;
           try {
             const base64Data = comp.previewImage.replace(/^data:image\/\w+;base64,/, "");
+            if (base64DecodedSize(base64Data) > MAX_IMAGE_BYTES) {
+              console.error(`Component preview rejected (too large): ${comp.component}`);
+              continue;
+            }
             const buffer = base64ToUint8Array(base64Data);
+            const componentType = sniffImage(buffer);
+            if (!componentType) {
+              console.error(`Component preview rejected (not an image): ${comp.component}`);
+              continue;
+            }
             const safeComponentName = comp.component.replace(/[^a-z0-9]/gi, "_").toLowerCase();
             const path = `previews/${timestamp}-${random}-${safeCompanyName}-component-${i}-${safeComponentName}.png`;
             const { error } = await client.storage
               .from("corporate-quote-assets")
-              .upload(path, buffer, { contentType: "image/png" });
+              .upload(path, buffer, { contentType: componentType.mimeType });
             if (error) {
               console.error(`Component preview upload failed (${comp.component}):`, error);
               continue;
@@ -366,16 +382,16 @@ export const submitCorporateQuote = createServerFn({ method: "POST" })
           <h3>Customization</h3>
           ${data.giftSetCustomizations
             .map((c) => {
-              const label = data.product.variant ? `${c.component} — ${data.product.variant}` : c.component;
+              const label = data.product.variant ? `${escapeHtml(c.component)} — ${escapeHtml(data.product.variant)}` : c.component;
               if (!c.customized) {
-                return `<p>${label} → Not customized</p>`;
+                return `<p>${escapeHtml(label)} → Not customized</p>`;
               }
               const url = componentPreviewUrls.get(c.component);
               const sizeStr = c.widthMm && c.heightMm ? ` (${c.widthMm.toFixed(1)} × ${c.heightMm.toFixed(1)} mm)` : "";
-              const methodStr = c.printingMethod ? ` · ${c.printingMethod}` : "";
+              const methodStr = c.printingMethod ? ` · ${escapeHtml(c.printingMethod)}` : "";
               return `
-                <p><strong>${label} → Customized${sizeStr}${methodStr}</strong></p>
-                ${url ? `<img src="${url}" alt="${c.component} preview" style="max-width: 400px; width: 100%; border: 1px solid #eee; border-radius: 8px; margin-bottom: 12px;" />` : ""}
+                <p><strong>${escapeHtml(label)} → Customized${sizeStr}${escapeHtml(methodStr)}</strong></p>
+                ${url ? `<img src="${escapeHtml(url)}" alt="${escapeHtml(c.component)} preview" style="max-width: 400px; width: 100%; border: 1px solid #eee; border-radius: 8px; margin-bottom: 12px;" />` : ""}
               `;
             })
             .join("")}
@@ -390,29 +406,29 @@ export const submitCorporateQuote = createServerFn({ method: "POST" })
         const internalHtml = `
           <h2>New Corporate Quote Request: ${refNumber}</h2>
           <h3>Customer Details</h3>
-          <p><strong>Name:</strong> ${data.fullName}</p>
-          <p><strong>Company:</strong> ${data.company}</p>
-          <p><strong>Email:</strong> ${data.email}</p>
-          <p><strong>Phone:</strong> ${data.phone}</p>
+          <p><strong>Name:</strong> ${escapeHtml(data.fullName)}</p>
+          <p><strong>Company:</strong> ${escapeHtml(data.company)}</p>
+          <p><strong>Email:</strong> ${escapeHtml(data.email)}</p>
+          <p><strong>Phone:</strong> ${escapeHtml(data.phone)}</p>
           
           <h3>Requirements</h3>
-          <p><strong>Product:</strong> ${data.product.name}</p>
-          ${data.product.variant ? `<p><strong>Variant:</strong> ${data.product.variant}</p>` : ''}
-          <p><strong>Quantity:</strong> ${data.quantity}</p>
-          <p><strong>Printing Method:</strong> ${data.printingMethod || "Standard"}</p>
-          <p><strong>Delivery Location:</strong> ${data.location}</p>
-          <p><strong>Required By:</strong> ${data.deliveryDate || 'Not specified'}</p>
-          <p><strong>Additional Notes:</strong> ${data.requirements || 'None'}</p>
+          <p><strong>Product:</strong> ${escapeHtml(data.product.name)}</p>
+          ${data.product.variant ? `<p><strong>Variant:</strong> ${escapeHtml(data.product.variant)}</p>` : ''}
+          <p><strong>Quantity:</strong> ${escapeHtml(data.quantity)}</p>
+          <p><strong>Printing Method:</strong> ${escapeHtml(data.printingMethod || "Standard")}</p>
+          <p><strong>Delivery Location:</strong> ${escapeHtml(data.location)}</p>
+          <p><strong>Required By:</strong> ${escapeHtml(data.deliveryDate || 'Not specified')}</p>
+          <p><strong>Additional Notes:</strong> ${escapeHtml(data.requirements || 'None')}</p>
           
-          ${logoUrl ? `<h3>Attached Logo</h3><p><img src="${logoUrl}" alt="Logo" style="max-width: 300px; max-height: 300px; border: 1px solid #ccc; background-color: #f9f9f9; padding: 10px;" /></p><p><a href="${logoUrl}" target="_blank">Download Original Logo</a></p>` : '<p>No logo was attached.</p>'}
+          ${logoUrl ? `<h3>Attached Logo</h3><p><img src="${escapeHtml(logoUrl)}" alt="Logo" style="max-width: 300px; max-height: 300px; border: 1px solid #ccc; background-color: #f9f9f9; padding: 10px;" /></p><p><a href="${escapeHtml(logoUrl)}" target="_blank">Download Original Logo</a></p>` : '<p>No logo was attached.</p>'}
           
-          ${previewUrl ? `<h3>Customization Preview</h3><img src="${previewUrl}" alt="Preview" style="max-width: 600px; width: 100%; border: 1px solid #eee; border-radius: 8px;" />` : '<p>No branding preview available.</p>'}
+          ${previewUrl ? `<h3>Customization Preview</h3><img src="${escapeHtml(previewUrl)}" alt="Preview" style="max-width: 600px; width: 100%; border: 1px solid #eee; border-radius: 8px;" />` : '<p>No branding preview available.</p>'}
           ${giftSetComponentsHtml}
           ${pdfAttachments ? '<p><em>The complete quote request, including the customization preview, is attached as a PDF.</em></p>' : ''}
         `;
 
         internalEmailSent = await sendInternalHtmlEmail(
-          `New Corporate Quote Request - ${data.company} - ${data.product.name}`,
+          `New Corporate Quote Request - ${escapeHtml(data.company)} - ${escapeHtml(data.product.name)}`,
           internalHtml,
           pdfAttachments
         );
@@ -420,18 +436,18 @@ export const submitCorporateQuote = createServerFn({ method: "POST" })
         // Customer Confirmation
         const customerHtml = `
           <h2>We've received your corporate quote request.</h2>
-          <p>Hi ${data.fullName},</p>
+          <p>Hi ${escapeHtml(data.fullName)},</p>
           <p>Thank you for submitting your corporate gifting requirements.</p>
           <p>Our team will review your product, quantity, and customization requirements and contact you shortly with pricing and availability.</p>
           <hr />
           <h3>Request Details</h3>
           <p><strong>Reference Number:</strong> ${refNumber}</p>
-          <p><strong>Company:</strong> ${data.company}</p>
-          <p><strong>Product:</strong> ${data.product.name}</p>
-          ${data.product.variant ? `<p><strong>Variant:</strong> ${data.product.variant}</p>` : ''}
-          <p><strong>Quantity:</strong> ${data.quantity}</p>
-          <p><strong>Printing Method:</strong> ${data.printingMethod || "Standard"}</p>
-          ${previewUrl ? `<img src="${previewUrl}" alt="Preview" style="max-width: 400px; width: 100%; border: 1px solid #eee; border-radius: 8px; margin-top: 20px;" />` : ''}
+          <p><strong>Company:</strong> ${escapeHtml(data.company)}</p>
+          <p><strong>Product:</strong> ${escapeHtml(data.product.name)}</p>
+          ${data.product.variant ? `<p><strong>Variant:</strong> ${escapeHtml(data.product.variant)}</p>` : ''}
+          <p><strong>Quantity:</strong> ${escapeHtml(data.quantity)}</p>
+          <p><strong>Printing Method:</strong> ${escapeHtml(data.printingMethod || "Standard")}</p>
+          ${previewUrl ? `<img src="${escapeHtml(previewUrl)}" alt="Preview" style="max-width: 400px; width: 100%; border: 1px solid #eee; border-radius: 8px; margin-top: 20px;" />` : ''}
           ${giftSetComponentsHtml}
           ${pdfAttachments ? '<p style="margin-top: 16px;"><em>We\'ve attached a PDF summary of your request, including your customization preview, for your records.</em></p>' : ''}
         `;

@@ -16,6 +16,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { getUploadClient } from "./attachments.server";
+import { base64DecodedSize, MAX_IMAGE_BYTES, sniffImage } from "./upload-validation";
 
 const MAX_BYTES = 10 * 1024 * 1024; // 10MB, matches corporate-quotes.functions.ts
 
@@ -94,11 +95,12 @@ export async function saveBuyNowCustomizationRecord(
 
       let logoUrl: string | null = null;
       if (data.logo) {
-        const buffer = base64ToUint8Array(data.logo.content);
-        if (buffer.length <= MAX_BYTES) {
+        const buffer = base64DecodedSize(data.logo.content) <= MAX_BYTES ? base64ToUint8Array(data.logo.content) : new Uint8Array();
+        const logoType = sniffImage(buffer);
+        if (buffer.length <= MAX_BYTES && logoType) {
           const safeName = data.logo.name.replace(/[^a-z0-9.]/gi, "_");
           const path = `buy-now/${timestamp}-${random}-logo-${safeName}`;
-          const { error } = await client.storage.from("corporate-quote-assets").upload(path, buffer, { contentType: data.logo.mimeType });
+          const { error } = await client.storage.from("corporate-quote-assets").upload(path, buffer, { contentType: logoType.mimeType });
           if (!error) {
             logoUrl = client.storage.from("corporate-quote-assets").getPublicUrl(path).data.publicUrl;
           } else {
@@ -110,9 +112,12 @@ export async function saveBuyNowCustomizationRecord(
       let previewUrl: string | null = null;
       if (data.previewImage) {
         const base64Data = data.previewImage.replace(/^data:image\/\w+;base64,/, "");
-        const buffer = base64ToUint8Array(base64Data);
+        const buffer = base64DecodedSize(base64Data) <= MAX_IMAGE_BYTES ? base64ToUint8Array(base64Data) : new Uint8Array();
+        const previewType = sniffImage(buffer);
         const path = `buy-now/${timestamp}-${random}-preview.png`;
-        const { error } = await client.storage.from("corporate-quote-assets").upload(path, buffer, { contentType: "image/png" });
+        const { error } = previewType
+          ? await client.storage.from("corporate-quote-assets").upload(path, buffer, { contentType: previewType.mimeType })
+          : { error: new Error("Preview image missing, too large or not a valid image") };
         if (!error) {
           previewUrl = client.storage.from("corporate-quote-assets").getPublicUrl(path).data.publicUrl;
         } else {
@@ -133,10 +138,13 @@ export async function saveBuyNowCustomizationRecord(
           if (comp.previewImage) {
             try {
               const base64Data = comp.previewImage.replace(/^data:image\/\w+;base64,/, "");
+              if (base64DecodedSize(base64Data) > MAX_IMAGE_BYTES) throw new Error("preview too large");
               const buffer = base64ToUint8Array(base64Data);
+              const componentType = sniffImage(buffer);
+              if (!componentType) throw new Error("preview is not a valid image");
               const safeComponentName = comp.component.replace(/[^a-z0-9]/gi, "_").toLowerCase();
               const path = `buy-now/${timestamp}-${random}-component-${i}-${safeComponentName}.png`;
-              const { error } = await client.storage.from("corporate-quote-assets").upload(path, buffer, { contentType: "image/png" });
+              const { error } = await client.storage.from("corporate-quote-assets").upload(path, buffer, { contentType: componentType.mimeType });
               if (!error) {
                 componentPreviewUrl = client.storage.from("corporate-quote-assets").getPublicUrl(path).data.publicUrl;
               }

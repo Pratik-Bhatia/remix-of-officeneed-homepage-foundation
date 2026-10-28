@@ -139,8 +139,8 @@ export function ChatWidget() {
   const [currentRecommendations, setCurrentRecommendations] = useState<Product[]>([]);
   
   const [uploads, setUploads] = useState<Array<{ name: string; size: number; status: "uploading" | "saved" | "failed"; error?: string }>>([]);
-  const attachmentsRef = useRef<Array<{ path: string; name: string; mimeType: string; size: number }>>([]);
-  const setAttachments = (list: Array<{ path: string; name: string; mimeType: string; size: number }>) => {
+  const attachmentsRef = useRef<Array<{ path: string; name: string; mimeType: string; size: number; token: string }>>([]);
+  const setAttachments = (list: Array<{ path: string; name: string; mimeType: string; size: number; token: string }>) => {
     attachmentsRef.current = list;
   };
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -577,7 +577,7 @@ export function ChatWidget() {
     setUploads(accepted.map((f) => ({ name: f.name, size: f.size, status: "uploading" as const })));
 
     let uploadedUrls: string[] = [];
-    const uploadedMeta: Array<{ path: string; name: string; mimeType: string; size: number }> = [];
+    const uploadedMeta: Array<{ path: string; name: string; mimeType: string; size: number; token: string }> = [];
 
     const failures: string[] = [];
 
