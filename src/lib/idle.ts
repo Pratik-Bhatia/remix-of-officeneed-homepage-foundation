@@ -25,3 +25,24 @@ export function whenIdleAfterLoad(fn: () => void, timeout = 2000): () => void {
     if (timer !== undefined) clearTimeout(timer);
   };
 }
+
+/**
+ * Runs `fn` just after the next frame has been rendered, when layout is
+ * already up to date -- so layout reads (scrollWidth, clientWidth, ...) in
+ * `fn` don't force an extra synchronous layout in the middle of a render.
+ * Returns a cancel function.
+ */
+export function afterNextPaint(fn: () => void): () => void {
+  if (typeof requestAnimationFrame !== "function") {
+    const timer = setTimeout(fn, 0);
+    return () => clearTimeout(timer);
+  }
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const frame = requestAnimationFrame(() => {
+    timer = setTimeout(fn, 0);
+  });
+  return () => {
+    cancelAnimationFrame(frame);
+    if (timer !== undefined) clearTimeout(timer);
+  };
+}

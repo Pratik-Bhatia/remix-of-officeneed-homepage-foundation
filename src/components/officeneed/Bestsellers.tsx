@@ -7,6 +7,7 @@ import { ProductCard } from "@/components/officeneed/ProductCard";
 import { LoadError, LoadingRegion, ProductCardSkeleton } from "@/components/officeneed/skeletons";
 import { getLiveNavLabel } from "@/lib/navigation";
 import type { Product } from "@/lib/products";
+import { afterNextPaint } from "@/lib/idle";
 
 const BESTSELLER_CARD_WIDTH = "w-[74vw] shrink-0 snap-start sm:w-[46vw] md:w-[34vw] lg:w-[calc((100%-4.5rem)/4)]";
 
@@ -38,9 +39,14 @@ export function Bestsellers() {
   }, [active, sync]);
 
   useEffect(() => {
-    sync();
+    // Measured after the next paint, not mid-render, so reading the track's
+    // size doesn't force an extra layout of the whole page.
+    const cancel = afterNextPaint(sync);
     window.addEventListener("resize", sync);
-    return () => window.removeEventListener("resize", sync);
+    return () => {
+      cancel();
+      window.removeEventListener("resize", sync);
+    };
   }, [sync]);
 
   const scrollBy = (dir: -1 | 1) => {

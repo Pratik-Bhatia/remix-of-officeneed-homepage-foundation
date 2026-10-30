@@ -10,6 +10,7 @@ import logoUrl from "@/assets/officeneed-logo.png";
 import { AiAssistantIcon } from "@/components/officeneed/AiAssistantIcon";
 import { FragranceQuiz } from "./FragranceQuiz";
 import { cn } from "@/lib/utils";
+import { afterNextPaint } from "@/lib/idle";
 import {
   buildEnquiryMessage,
   chatSteps,
@@ -511,9 +512,12 @@ export function ChatWidget() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingRecommendation, catalogueLoading, cataloguePricesReady, catalogueError, catalogue]);
 
-  useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages, typing, currentRecommendations]);
+  useEffect(
+    // After the next paint, so reading scrollHeight doesn't force a layout
+    // mid-render (e.g. when the widget first mounts).
+    () => afterNextPaint(() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" })),
+    [messages, typing, currentRecommendations],
+  );
 
   useEffect(() => {
     if (open && step && !step.options) inputRef.current?.focus();

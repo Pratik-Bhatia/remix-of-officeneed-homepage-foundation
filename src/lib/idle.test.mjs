@@ -57,3 +57,27 @@ test("no page-lifecycle API at all: runs immediately instead of never", () => {
   whenIdleAfterLoad(() => ran++);
   assert.equal(ran, 1);
 });
+
+test("afterNextPaint runs after the next animation frame, and can be cancelled", async () => {
+  const frames = [];
+  globalThis.requestAnimationFrame = (f) => frames.push(f);
+  globalThis.cancelAnimationFrame = () => frames.splice(0);
+  try {
+    const { afterNextPaint } = await import("./idle");
+    let ran = 0;
+    afterNextPaint(() => ran++);
+    await new Promise((r) => setTimeout(r, 5));
+    assert.equal(ran, 0, "not before the frame");
+    frames.shift()();
+    await new Promise((r) => setTimeout(r, 5));
+    assert.equal(ran, 1, "after the frame");
+
+    const cancel = afterNextPaint(() => ran++);
+    cancel();
+    await new Promise((r) => setTimeout(r, 5));
+    assert.equal(ran, 1, "cancelled before the frame");
+  } finally {
+    delete globalThis.requestAnimationFrame;
+    delete globalThis.cancelAnimationFrame;
+  }
+});

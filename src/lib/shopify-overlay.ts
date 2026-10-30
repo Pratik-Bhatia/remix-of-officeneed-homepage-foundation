@@ -404,7 +404,39 @@ function parseGiftSetComponents(node: ShopifyProductNode): Product["giftSetCompo
   return components.length ? components : undefined;
 }
 
+// Conversion parses each product's full description (Markdown/HTML), which is
+// slow. Nodes are immutable query data, and the price overlay returns the same
+// node object when it changes nothing, so one result per node is reused -- e.g.
+// both homepage carousels read the same 250 bestseller nodes.
+const productByNode = new WeakMap<ShopifyProductNode, Product>();
+const cardProductByNode = new WeakMap<ShopifyProductNode, Product>();
+
 export function shopifyNodeToProduct(node: ShopifyProductNode): Product {
+  let product = productByNode.get(node);
+  if (!product) {
+    product = convertShopifyNode(node, true);
+    productByNode.set(node, product);
+  }
+  return product;
+}
+
+/**
+ * The same Product minus the description-derived detail fields (descriptionHtml,
+ * customSections, features, fragrance notes and description specifications),
+ * which only the product page renders. For lists that are only ever shown as
+ * ProductCards (the homepage bestseller carousels): parsing ~250 descriptions
+ * there was the largest part of the homepage's JavaScript work.
+ */
+export function shopifyNodeToCardProduct(node: ShopifyProductNode): Product {
+  let product = cardProductByNode.get(node);
+  if (!product) {
+    product = convertShopifyNode(node, false);
+    cardProductByNode.set(node, product);
+  }
+  return product;
+}
+
+function convertShopifyNode(node: ShopifyProductNode, withDetails: boolean): Product {
   const images = nodeImages(node);
   const collectionHandles = node.collections?.edges.map(e => e.node.handle) ?? [];
   const mainCategory = resolveMainCategory(collectionHandles);
@@ -429,7 +461,9 @@ export function shopifyNodeToProduct(node: ShopifyProductNode): Product {
   const hasSchema = hasStructuredSchema(mainCategory);
   // Fragrance uses DOM/Markdown extraction rather than the legacy header splitter,
   // which missed Markdown and placed notes in optional raw custom sections.
-  const extracted = category === "Fragrance Gifting"
+  const extracted = !withDetails
+    ? {}
+    : category === "Fragrance Gifting"
     ? resolveFragranceInformation({ description, descriptionHtml: node.descriptionHtml }, metafieldLookup(node))
     : extractStructuredData(node.descriptionHtml || "", hasSchema);
   const specifications = buildProductSpecifications(mainCategory, metafieldLookup(node));
@@ -767,7 +801,8 @@ export function useShopifyBestsellers(staticItems: Product[] = []): { products: 
   const live = useMemo(() => {
     const nodes = applyB2BPriceOverlayToAll(baseNodes, priceOverlay);
     if (nodes.length === 0) return null;
-    const products = nodes.map((node) => ({ ...shopifyNodeToProduct(node), badge: "Bestseller" as const }));
+    // Bestsellers are only rendered as ProductCards, so the description details are skipped.
+    const products = nodes.map((node) => ({ ...shopifyNodeToCardProduct(node), badge: "Bestseller" as const }));
     // Keep the static/demo bestsellers that have no live Shopify equivalent.
     const index = buildShopifyIndex(nodes);
     const liveSlugs = new Set(products.map((p) => p.slug));

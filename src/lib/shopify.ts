@@ -261,16 +261,26 @@ export async function fetchProductByHandle(handle: string, _buyer?: BuyerContext
   return data?.data?.product ?? null;
 }
 
+// Building an Intl.NumberFormat is slow, and formatMoney runs for every product
+// and card on a page, so each currency/fraction combination is built once.
+const moneyFormatters = new Map<string, Intl.NumberFormat>();
+
 export function formatMoney(amount: string | number, currencyCode: string) {
   const value = typeof amount === "string" ? parseFloat(amount) : amount;
   try {
     const whole = Number.isInteger(value);
-    return new Intl.NumberFormat(currencyCode === "INR" ? "en-IN" : undefined, {
-      style: "currency",
-      currency: currencyCode,
-      minimumFractionDigits: whole ? 0 : 2,
-      maximumFractionDigits: 2,
-    }).format(value);
+    const key = `${currencyCode}|${whole}`;
+    let formatter = moneyFormatters.get(key);
+    if (!formatter) {
+      formatter = new Intl.NumberFormat(currencyCode === "INR" ? "en-IN" : undefined, {
+        style: "currency",
+        currency: currencyCode,
+        minimumFractionDigits: whole ? 0 : 2,
+        maximumFractionDigits: 2,
+      });
+      moneyFormatters.set(key, formatter);
+    }
+    return formatter.format(value);
   } catch {
     return `${currencyCode} ${value.toFixed(2)}`;
   }
