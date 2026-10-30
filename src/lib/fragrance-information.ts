@@ -3,22 +3,9 @@ import { parseDocument } from "htmlparser2";
 import { getText, textContent, removeElement, replaceElement } from "domutils";
 import render from "dom-serializer";
 import type { Product } from "./products";
+import { FRAGRANCE_FIELDS as fields, registerFragranceResolver } from "./fragrance-fields";
 
-const fields = [
-  { label: "Origin", key: "origin", aliases: ["Origin", "Country of Origin"] },
-  { label: "Fragrance Family", key: "fragrance_family", aliases: ["Fragrance Family"] },
-  { label: "Concentration", key: "concentration", aliases: ["Concentration"] },
-  { label: "Size", key: "size", aliases: ["Size", "Volume"] },
-  { label: "Gender", key: "gender", aliases: ["Gender"] },
-  { label: "Top Notes", key: "top_notes", aliases: ["Top Notes", "Top Note"] },
-  { label: "Heart Notes", key: "heart_notes", aliases: ["Heart Notes", "Heart Note", "Middle Notes"] },
-  { label: "Base Notes", key: "base_notes", aliases: ["Base Notes", "Base Note"] },
-] as const;
-
-// Explicit supported scalar/list metafields; no inferred values from tags or names.
-export const FRAGRANCE_METAFIELD_IDENTIFIERS = fields.flatMap(({ key }) =>
-  ["product_fragrance", "fragrance", "custom"].map((namespace) => ({ namespace, key })),
-);
+export { FRAGRANCE_METAFIELD_IDENTIFIERS } from "./fragrance-fields";
 
 function plain(value: string): string {
   return textContent(parseDocument(value)).replace(/\*\*|__/g, "").replace(/\s+/g, " ").trim();
@@ -164,3 +151,7 @@ export function resolveFragranceInformation(
     customSections: retainedSections.length ? retainedSections : undefined,
   };
 }
+
+// Lets shopify-overlay.ts use the resolver without importing this module (and
+// its parsers) itself -- see loadProductDetailParsers().
+registerFragranceResolver(resolveFragranceInformation);

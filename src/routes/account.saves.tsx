@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { ProductCard } from "@/components/officeneed/ProductCard";
 import { Button } from "@/components/ui/button";
 import { fetchProductByHandle } from "@/lib/shopify";
-import { shopifyNodeToProduct } from "@/lib/shopify-overlay";
+import { shopifyNodeToCardProduct } from "@/lib/shopify-overlay";
 import { useSaves } from "@/lib/saves";
 import type { Product } from "@/lib/products";
 
@@ -48,7 +48,9 @@ function SavesPage() {
         }),
       );
       if (!active) return;
-      setProducts(nodes.filter(Boolean).map((node) => shopifyNodeToProduct(node!)));
+      // Saved products are only shown as ProductCards, which don't use the
+      // description details -- so the card conversion (no parsers) is enough.
+      setProducts(nodes.filter(Boolean).map((node) => shopifyNodeToCardProduct(node!)));
       setLoading(false);
     })();
     return () => {

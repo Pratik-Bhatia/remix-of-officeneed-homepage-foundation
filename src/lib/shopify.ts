@@ -8,7 +8,7 @@
 import { toast } from "sonner";
 import { proxyStorefrontRequest } from "@/lib/shopify.functions";
 import { REQUIRED_METAFIELD_IDENTIFIERS } from "@/lib/product-details-schema";
-import { FRAGRANCE_METAFIELD_IDENTIFIERS } from "@/lib/fragrance-information";
+import { FRAGRANCE_METAFIELD_IDENTIFIERS } from "@/lib/fragrance-fields";
 
 // Kept in sync with src/lib/shopify.functions.ts's SHOPIFY_API_VERSION --
 // see that file's comment for the live verification behind this value.

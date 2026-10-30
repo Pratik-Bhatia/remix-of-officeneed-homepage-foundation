@@ -15,7 +15,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-const { shopifyNodeToProduct } = await import("@/lib/shopify-overlay");
+const { shopifyNodeToProduct, loadProductDetailParsers } = await import("@/lib/shopify-overlay");
+// Full conversions need the (lazily loaded) description parsers, as in the app.
+await loadProductDetailParsers();
 
 function baseNode(overrides = {}) {
   return {

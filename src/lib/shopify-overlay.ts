@@ -23,7 +23,7 @@ import { buildProductSpecifications, hasStructuredSchema } from "@/lib/product-d
 import { getDevFallbackMetafieldValue } from "@/lib/product-details-dev-fallback";
 import { minVariantCompareAt } from "@/lib/discount";
 import { deriveKeyFeatures } from "@/lib/key-features";
-import { resolveFragranceInformation } from "@/lib/fragrance-information";
+import { getFragranceResolver } from "@/lib/fragrance-fields";
 
 export type ShopifyIndex = Map<string, ShopifyProductNode>;
 
@@ -409,6 +409,23 @@ function parseGiftSetComponents(node: ShopifyProductNode): Product["giftSetCompo
 // node object when it changes nothing, so one result per node is reused -- e.g.
 // both homepage carousels read the same 250 bestseller nodes.
 const productByNode = new WeakMap<ShopifyProductNode, Product>();
+
+// The Markdown/HTML parsers behind fragrance details (fragrance-information.ts)
+// are loaded only for full product details, not with every page. Anything that
+// fully converts products (shopifyNodeToProduct) must await this first; the
+// product page also imports the module statically via ProductInformation.
+let parsersLoading: Promise<void> | undefined;
+export function loadProductDetailParsers(): Promise<void> {
+  if (getFragranceResolver()) return Promise.resolve();
+  parsersLoading ??= import("@/lib/fragrance-information").then(
+    () => undefined,
+    (error) => {
+      parsersLoading = undefined;
+      throw error;
+    },
+  );
+  return parsersLoading;
+}
 const cardProductByNode = new WeakMap<ShopifyProductNode, Product>();
 
 export function shopifyNodeToProduct(node: ShopifyProductNode): Product {
@@ -461,10 +478,14 @@ function convertShopifyNode(node: ShopifyProductNode, withDetails: boolean): Pro
   const hasSchema = hasStructuredSchema(mainCategory);
   // Fragrance uses DOM/Markdown extraction rather than the legacy header splitter,
   // which missed Markdown and placed notes in optional raw custom sections.
+  const resolveFragranceInformation = getFragranceResolver();
+  if (withDetails && category === "Fragrance Gifting" && !resolveFragranceInformation) {
+    throw new Error("Fragrance details need loadProductDetailParsers() to have completed first");
+  }
   const extracted = !withDetails
     ? {}
     : category === "Fragrance Gifting"
-    ? resolveFragranceInformation({ description, descriptionHtml: node.descriptionHtml }, metafieldLookup(node))
+    ? resolveFragranceInformation!({ description, descriptionHtml: node.descriptionHtml }, metafieldLookup(node))
     : extractStructuredData(node.descriptionHtml || "", hasSchema);
   const specifications = buildProductSpecifications(mainCategory, metafieldLookup(node));
 
@@ -704,7 +725,8 @@ export function shopifyCatalogueQueryOptions(buyer: BuyerContext, customerId: st
   return {
     queryKey: ["shopify", "catalog", queryKeySuffix] as const,
     queryFn: async () => {
-      const edges = await fetchAllProducts(undefined, buyer);
+      // The catalogue is fully converted (shopifyNodeToProduct) once it arrives.
+      const [edges] = await Promise.all([fetchAllProducts(undefined, buyer), loadProductDetailParsers()]);
       return edges.map((e) => e.node);
     },
     staleTime,

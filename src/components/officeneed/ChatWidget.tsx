@@ -6,7 +6,8 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { Send, X, Plus, Check, Loader2, Paperclip, ChevronRight, CheckCircle2, Gift, Sparkles } from "lucide-react";
 import { uploadEnquiryAttachment } from "@/lib/uploads.functions";
-import logoUrl from "@/assets/officeneed-logo.png";
+// 2x the 16px-tall header logo (the original PNG is 250x52).
+import logoUrl from "@/assets/officeneed-logo-chat.webp";
 import { AiAssistantIcon } from "@/components/officeneed/AiAssistantIcon";
 import { FragranceQuiz } from "./FragranceQuiz";
 import { cn } from "@/lib/utils";
@@ -942,7 +943,7 @@ export function ChatWidget() {
           {/* Header */}
           <div className="flex items-center justify-between gap-3 border-b border-border bg-white/80 backdrop-blur-md px-5 py-4 z-10 shrink-0">
             <div className="flex items-center gap-3">
-              <img src={logoUrl} alt="" width={640} height={122} loading="lazy" decoding="async" className="h-4 w-auto object-contain" />
+              <img src={logoUrl} alt="" width={154} height={32} loading="lazy" decoding="async" className="h-4 w-auto object-contain" />
               <div className="leading-tight border-l border-border pl-3">
                 <p className="text-sm font-semibold text-foreground">{ASSISTANT_NAME}</p>
                 <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">AI Shopping Guide</p>

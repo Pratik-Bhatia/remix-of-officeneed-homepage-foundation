@@ -9,7 +9,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-const { shopifyNodeToProduct, shopifyNodeToCardProduct } = await import("@/lib/shopify-overlay");
+const { shopifyNodeToProduct, shopifyNodeToCardProduct, loadProductDetailParsers } = await import("@/lib/shopify-overlay");
+// Full conversions need the (lazily loaded) description parsers, as in the app.
+await loadProductDetailParsers();
 const { formatMoney } = await import("@/lib/shopify");
 
 // Only the product page renders these; cards never read them.

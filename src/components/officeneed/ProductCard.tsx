@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { Heart } from "lucide-react";
 import { toast } from "sonner";
-import { memo, useEffect, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import type { Product } from "@/lib/products";
 import { getCustomerToken } from "@/lib/customer";
 import { useSaves } from "@/lib/saves";
@@ -26,7 +26,9 @@ import { formatAverage } from "@/lib/review-ratings";
 // srcset candidate (and the plain `src` fallback), so no device downloads
 // more than before; smaller screens pick a smaller render.
 const PRODUCT_CARD_IMAGE_WIDTH = 600;
-const PRODUCT_CARD_IMAGE_WIDTHS = [200, 300, 400, 600];
+// 520 sits just above what a phone carousel card (~513px at 1.75x) and a
+// Retina desktop grid card (~460px at 2x) need, so neither falls through to 600.
+const PRODUCT_CARD_IMAGE_WIDTHS = [200, 300, 400, 520, 600];
 
 // Rendered width of the card image (card minus the img's p-1.5 / sm:p-8
 // padding) in the /products, related-products and similar grids: max-1600px
@@ -152,15 +154,40 @@ function ProductCardImpl({
     }
   };
 
-  // Warm the browser cache for the hover image as soon as we know the card
-  // has one, so the swap on pointer-enter is instant rather than flashing a
-  // blank/loading frame. Never fetches image[2], image[3], etc.
+  // Warm the browser cache for the hover image so the swap on pointer-enter
+  // is instant rather than flashing a blank/loading frame -- but only once
+  // this card is (nearly) on screen, not for every card as soon as it mounts
+  // (the homepage carousels alone preloaded ~24 images at load). Never
+  // fetches image[2], image[3], etc.
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [wantHoverImage, setWantHoverImage] = useState(false);
   useEffect(() => {
-    if (!hoverImage) return;
+    if (!hoverImage || wantHoverImage) return;
     // The hover swap only ever happens for a mouse pointer (see handlePointerEnter), so on touch-only
     // devices this prefetched a second image for EVERY card on the page (99-330 extra requests on a
     // collection page) that could never be shown, competing with the visible images for bandwidth.
     if (typeof window !== "undefined" && typeof window.matchMedia === "function" && !window.matchMedia("(hover: hover)").matches) return;
+    const el = cardRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") {
+      setWantHoverImage(true);
+      return;
+    }
+    // A little margin so the image is ready before the pointer can reach the card. Cards
+    // scrolled out of a carousel's track are clipped by it, so they don't count as visible.
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          setWantHoverImage(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: "200px" },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hoverImage, wantHoverImage]);
+  useEffect(() => {
+    if (!wantHoverImage || !hoverImage) return;
     // Same srcset/sizes as the card image, so the browser preloads exactly the
     // rendition the hover swap will then use -- not a fixed (larger) size.
     const preload = new Image();
@@ -170,14 +197,17 @@ function ProductCardImpl({
       preload.srcset = srcSet;
     }
     preload.src = shopifyImageUrl(hoverImage, PRODUCT_CARD_IMAGE_WIDTH);
-  }, [hoverImage, imageSizes]);
+  }, [wantHoverImage, hoverImage, imageSizes]);
 
   // Pointer Events tell us definitively whether this came from a mouse
   // (pointerType === "mouse") rather than touch/pen -- unlike CSS :hover,
   // which can be triggered/"stuck" by a tap on some touch browsers. Tapping
   // a card on mobile/tablet must never change its image.
   const handlePointerEnter = (event: React.PointerEvent) => {
-    if (event.pointerType === "mouse" && hoverImage) setIsHovering(true);
+    if (event.pointerType === "mouse" && hoverImage) {
+      setWantHoverImage(true);
+      setIsHovering(true);
+    }
   };
   const handlePointerLeave = (event: React.PointerEvent) => {
     if (event.pointerType === "mouse") setIsHovering(false);
@@ -214,7 +244,7 @@ function ProductCardImpl({
   };
 
   return (
-    <div className={cn("relative h-full", className)}>
+    <div ref={cardRef} className={cn("relative h-full", className)}>
       <Link
         to="/products/$slug"
         params={{ slug: product.slug }}

@@ -69,6 +69,10 @@ export const slides = [
   },
 ];
 
+const ROTATE_MS = 6000;
+const PRELOAD_LEAD_MS = 3000;
+const MANUAL_WAIT_MS = 2500;
+
 export function Hero() {
   const [active, setActive] = useState(0);
   const [dragging, setDragging] = useState(false);
@@ -78,28 +82,85 @@ export function Hero() {
   const locked = useRef<"h" | "v" | null>(null);
   // The hidden slides (2-4) are stacked over slide 1 at opacity 0, so the
   // browser treats them as in-viewport and `loading="lazy"` doesn't defer
-  // them -- they used to download (~234 KB) alongside the LCP image. Their
-  // images now get a source only after the page has finished loading, or as
-  // soon as a slide is actually shown, whichever comes first.
-  const [restSlidesReady, setRestSlidesReady] = useState(false);
+  // them. Each gets its image source only shortly before it is needed: the
+  // next slide ~PRELOAD_LEAD_MS before its rotation (never before the page has
+  // loaded), or all of them as soon as the shopper starts interacting with the
+  // hero. A slide is only switched to once its image has loaded, so it never
+  // appears without one; the 6s rotation timer itself is unchanged.
+  const [requested, setRequested] = useState<boolean[]>(() => slides.map((_, i) => i === 0));
+  const loadedRef = useRef<boolean[]>(slides.map((_, i) => i === 0));
+  const activeRef = useRef(0);
+  activeRef.current = active;
+  const pendingRef = useRef<number | null>(null);
+  const pendingTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const rotationStart = useRef(0);
+  const [pageLoaded, setPageLoaded] = useState(false);
+
   useEffect(() => {
     if (document.readyState === "complete") {
-      setRestSlidesReady(true);
+      setPageLoaded(true);
       return;
     }
-    const onLoad = () => setRestSlidesReady(true);
+    const onLoad = () => setPageLoaded(true);
     window.addEventListener("load", onLoad, { once: true });
     return () => window.removeEventListener("load", onLoad);
   }, []);
 
+  const requestSlide = (i: number) =>
+    setRequested((r) => (r[i] ? r : r.map((v, k) => v || k === i)));
+  const requestAllSlides = () => setRequested((r) => (r.every(Boolean) ? r : r.map(() => true)));
+
+  // Shows slide `i` now if its image is ready; otherwise starts loading it and
+  // switches once it has loaded. A shopper's own click/swipe falls back to
+  // switching after MANUAL_WAIT_MS so it never feels unresponsive.
+  const showSlide = (i: number, manual: boolean) => {
+    clearTimeout(pendingTimer.current);
+    if (loadedRef.current[i]) {
+      pendingRef.current = null;
+      setActive(i);
+      return;
+    }
+    pendingRef.current = i;
+    requestSlide(i);
+    if (manual) {
+      pendingTimer.current = setTimeout(() => {
+        if (pendingRef.current === i) {
+          pendingRef.current = null;
+          setActive(i);
+        }
+      }, MANUAL_WAIT_MS);
+    }
+  };
+
+  const onSlideImageReady = (i: number) => {
+    loadedRef.current[i] = true;
+    if (pendingRef.current === i) {
+      pendingRef.current = null;
+      clearTimeout(pendingTimer.current);
+      setActive(i);
+    }
+  };
+  useEffect(() => () => clearTimeout(pendingTimer.current), []);
+
   useEffect(() => {
     if (dragging) return;
-    const id = setInterval(() => setActive((i) => (i + 1) % slides.length), 6000);
+    rotationStart.current = Date.now();
+    const id = setInterval(() => showSlide((activeRef.current + 1) % slides.length, false), ROTATE_MS);
     return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dragging]);
 
-  const go = (dir: number) =>
-    setActive((i) => (i + dir + slides.length) % slides.length);
+  // Request the next slide's image PRELOAD_LEAD_MS before its rotation is due.
+  useEffect(() => {
+    if (!pageLoaded) return;
+    const next = (active + 1) % slides.length;
+    if (requested[next]) return;
+    const elapsed = (Date.now() - rotationStart.current) % ROTATE_MS;
+    const timer = setTimeout(() => requestSlide(next), Math.max(0, ROTATE_MS - elapsed - PRELOAD_LEAD_MS));
+    return () => clearTimeout(timer);
+  }, [pageLoaded, active, requested]);
+
+  const go = (dir: number) => showSlide((activeRef.current + dir + slides.length) % slides.length, true);
 
   const onPointerDown = (e: React.PointerEvent) => {
     if (e.pointerType === "mouse" && e.button !== 0) return;
@@ -133,6 +194,13 @@ export function Hero() {
     <section
       aria-labelledby="hero-heading"
       className="relative w-full overflow-x-clip bg-background"
+      // A mouse/pen over the hero or keyboard focus inside it suggests the
+      // shopper may switch slides: load the remaining slide images now. (Not
+      // touch -- a phone scroll often starts on the hero; a swipe still loads
+      // its target slide and switches as soon as it is ready.)
+      onPointerEnter={(e) => e.pointerType !== "touch" && requestAllSlides()}
+      onPointerDown={(e) => e.pointerType !== "touch" && requestAllSlides()}
+      onFocusCapture={requestAllSlides}
     >
       <div
         onPointerDown={onPointerDown}
@@ -184,8 +252,16 @@ export function Hero() {
 
               <img
                 // Slide 1 (the LCP image) always has its source; the others only
-                // once the page has loaded or the slide is shown (see above).
-                {...(i === 0 || isActive || restSlidesReady ? { src: s.image, srcSet: s.imageSrcSet } : {})}
+                // once requested (see above).
+                {...(i === 0 || isActive || requested[i] ? { src: s.image, srcSet: s.imageSrcSet } : {})}
+                // An image already loaded (e.g. from cache) before hydration
+                // never fires onLoad -- read its state when the element mounts.
+                ref={(img) => {
+                  if (img?.complete && img.currentSrc) onSlideImageReady(i);
+                }}
+                onLoad={() => onSlideImageReady(i)}
+                // A failed image must not hold the carousel on its current slide.
+                onError={() => onSlideImageReady(i)}
                 alt={s.alt}
                 width={1366}
                 height={768}
@@ -210,7 +286,7 @@ export function Hero() {
               type="button"
               aria-label={`Show ${s.heading}`}
               aria-current={i === active}
-              onClick={() => setActive(i)}
+              onClick={() => showSlide(i, true)}
               // Only the colour animates: a width transition runs on the main
               // thread (non-composited) on every auto-rotation.
               className={`h-2 rounded-full transition-colors ${

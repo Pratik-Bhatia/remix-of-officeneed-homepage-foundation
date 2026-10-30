@@ -33,7 +33,7 @@ import { getProductBySlug, getRelatedProducts } from "@/lib/products";
 import { shopifyImageUrl, shopifyImageSrcSet } from "@/lib/shopify-image";
 import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 import { fetchProductByHandle, fetchRelatedProducts, formatMoney, type ShopifyProductNode, type ShopifyVariantNode, type BuyerContext } from "@/lib/shopify";
-import { mergeProduct, shopifyNodeToProduct, useShopifyCollections, useB2BPriceOverlayMap, useB2BQuantityRuleOverlayMap } from "@/lib/shopify-overlay";
+import { loadProductDetailParsers, mergeProduct, shopifyNodeToProduct, useShopifyCollections, useB2BPriceOverlayMap, useB2BQuantityRuleOverlayMap } from "@/lib/shopify-overlay";
 import type { LoadStatus } from "@/lib/load-status";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ImageUnavailable, hideBrokenImage } from "@/components/officeneed/skeletons";
@@ -173,6 +173,8 @@ export const Route = createFileRoute("/products/$slug")({
       }
     }
 
+    // Full product details (fragrance notes etc.) need the description parsers.
+    await loadProductDetailParsers();
     const product = staticProduct
       ? mergeProduct(staticProduct, node ?? undefined)
       : node

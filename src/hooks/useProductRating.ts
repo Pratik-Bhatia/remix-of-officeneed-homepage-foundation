@@ -8,23 +8,45 @@ const PAGE = 1000; // Supabase's default max rows per request
  * the same view the product page reads), cached and shared by every card --
  * never a request per card. Only handle + rating are fetched.
  */
-async function fetchRatingSummaries(): Promise<Map<string, RatingSummary>> {
-  // Loaded here, not at module scope: ProductCard (on nearly every page)
-  // imports this hook, and a static import put the whole Supabase client
-  // into the shared startup bundle. Now it downloads only when ratings load.
-  const { supabase } = await import("@/integrations/supabase/client");
-  const rows: Array<{ product_handle: string | null; rating: number | null }> = [];
+type RatingRow = { product_handle: string | null; rating: number | null };
+
+/**
+ * The same read the Supabase client made -- `product_reviews_public`,
+ * select product_handle + rating, status = approved, paged by
+ * offset/limit -- sent as a plain REST request. ProductCard is on nearly
+ * every page, and loading the whole Supabase library (auth, realtime,
+ * storage: ~53 KB compressed) just for this one public read was the
+ * largest unused script on the storefront. Same publishable key and
+ * headers as the generated client (it sends only `apikey` for
+ * sb_publishable_ keys), so the same row-level security applies.
+ */
+export async function fetchRatingRows(
+  url: string | undefined = import.meta.env["VITE_SUPABASE_URL"],
+  key: string | undefined = import.meta.env["VITE_SUPABASE_PUBLISHABLE_KEY"],
+  fetchImpl: typeof fetch = fetch,
+): Promise<RatingRow[]> {
+  if (!url || !key) throw new Error("Supabase is not configured");
+  const rows: RatingRow[] = [];
   for (let from = 0; ; from += PAGE) {
-    const { data, error } = await supabase
-      .from("product_reviews_public")
-      .select("product_handle, rating")
-      .eq("status", "approved")
-      .range(from, from + PAGE - 1);
-    if (error) throw error;
-    rows.push(...(data ?? []));
-    if (!data || data.length < PAGE) break;
+    const query = new URLSearchParams({
+      select: "product_handle,rating",
+      status: "eq.approved",
+      offset: String(from),
+      limit: String(PAGE),
+    });
+    const res = await fetchImpl(`${url}/rest/v1/product_reviews_public?${query}`, {
+      headers: { apikey: key, "Accept-Profile": "public" },
+    });
+    if (!res.ok) throw new Error(`Rating summaries request failed (${res.status})`);
+    const data = (await res.json()) as RatingRow[];
+    rows.push(...data);
+    if (data.length < PAGE) break;
   }
-  return summarizeRatingsByProduct(rows);
+  return rows;
+}
+
+async function fetchRatingSummaries(): Promise<Map<string, RatingSummary>> {
+  return summarizeRatingsByProduct(await fetchRatingRows());
 }
 
 /**
