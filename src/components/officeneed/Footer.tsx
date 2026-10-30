@@ -14,11 +14,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { footerShopTargets, getLiveNavLabel } from "@/lib/navigation";
 import { useShopifyCollections } from "@/lib/shopify-overlay";
 import { toast } from "sonner";
-import logoInverse from "@/assets/officeneed-logo-inverse.png";
-import visaAsset from "@/assets/payment-visa.png";
-import mastercardAsset from "@/assets/payment-mastercard.png";
-import amexAsset from "@/assets/payment-amex.png";
-import upiAsset from "@/assets/payment-upi.png";
+// Footer-sized copies (about 2x their display size) of the original artwork in
+// src/assets -- the originals were up to 919px wide for ~30px-tall icons.
+import logoInverse from "@/assets/officeneed-logo-inverse-footer.webp";
+import visaAsset from "@/assets/payment-visa-footer.webp";
+import mastercardAsset from "@/assets/payment-mastercard-footer.webp";
+import amexAsset from "@/assets/payment-amex-footer.png";
+import upiAsset from "@/assets/payment-upi-footer.webp";
 
 
 const benefits = [
@@ -74,11 +76,13 @@ const socials = [
   { icon: Linkedin, label: "LinkedIn", href: "https://www.linkedin.com/company/officeneed-in/" },
 ];
 
+// width/height are each file's intrinsic size, so the browser knows the aspect
+// ratio before the image loads; CSS (h-8 w-auto) still sets the displayed size.
 const paymentMethods = [
-  { label: "Visa", asset: visaAsset },
-  { label: "Mastercard", asset: mastercardAsset },
-  { label: "American Express", asset: amexAsset },
-  { label: "UPI", asset: upiAsset },
+  { label: "Visa", asset: visaAsset, width: 110, height: 64 },
+  { label: "Mastercard", asset: mastercardAsset, width: 81, height: 64 },
+  { label: "American Express", asset: amexAsset, width: 80, height: 80 },
+  { label: "UPI", asset: upiAsset, width: 151, height: 64 },
 ];
 
 function MobileBenefitsCarousel() {
@@ -290,6 +294,8 @@ export function Footer() {
                 decoding="async"
                 src={logoInverse}
                 alt="Officeneed — Expect More..."
+                width={444}
+                height={96}
                 className="h-10 w-auto sm:h-12"
               />
               <p className="mt-6 max-w-md font-heading text-lg font-semibold leading-snug tracking-tight text-background sm:text-xl">
@@ -400,11 +406,13 @@ export function Footer() {
             </div>
 
             <ul className="flex flex-wrap items-center gap-3">
-              {paymentMethods.map(({ label, asset }) => (
+              {paymentMethods.map(({ label, asset, width, height }) => (
                 <li key={label} className="shrink-0">
                   <img
                     src={asset}
                     alt={label}
+                    width={width}
+                    height={height}
                     loading="lazy"
                     className="h-8 w-auto min-w-[40px] rounded-md border border-background/20 object-contain"
                   />
