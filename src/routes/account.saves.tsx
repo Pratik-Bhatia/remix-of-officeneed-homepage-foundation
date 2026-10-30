@@ -8,6 +8,16 @@ import { shopifyNodeToProduct } from "@/lib/shopify-overlay";
 import { useSaves } from "@/lib/saves";
 import type { Product } from "@/lib/products";
 
+// Card image width in this grid: the account layout (max-w-6xl, px-4 / sm:px-6 /
+// lg:px-8, and on lg a 224px menu + 48px gap), 2 / lg:3 columns with gap-x-5,
+// minus the image's p-1.5 / sm:p-8 padding.
+const SAVES_IMAGE_SIZES = [
+  "(min-width: 1152px) 195px",
+  "(min-width: 1024px) calc((100vw - 376px) / 3 - 64px)",
+  "(min-width: 640px) calc((100vw - 68px) / 2 - 64px)",
+  "calc((100vw - 52px) / 2 - 12px)",
+].join(", ");
+
 export const Route = createFileRoute("/account/saves")({
   staticData: { sitemap: false },
   component: SavesPage,
@@ -78,7 +88,7 @@ function SavesPage() {
         <div className="mt-6 grid grid-cols-2 gap-x-5 gap-y-8 lg:grid-cols-3">
           {products.map((product) => (
             <div key={product.slug} className="flex flex-col">
-              <ProductCard product={product} />
+              <ProductCard product={product} imageSizes={SAVES_IMAGE_SIZES} />
               <button
                 type="button"
                 onClick={() => handleRemove(product.slug)}

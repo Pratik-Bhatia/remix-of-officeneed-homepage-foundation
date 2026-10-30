@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import { bestsellerProducts, inBestsellerCategory } from "@/lib/bestsellers";
 import { useShopifyBestsellers } from "@/lib/shopify-overlay";
-import { ProductCard } from "@/components/officeneed/ProductCard";
+import { CAROUSEL_CARD_IMAGE_SIZES, ProductCard } from "@/components/officeneed/ProductCard";
 import { LoadingRegion, ProductCardSkeleton } from "@/components/officeneed/skeletons";
 import type { Product } from "@/lib/products";
 import { afterNextPaint } from "@/lib/idle";
@@ -155,7 +155,7 @@ export function CorporateGiftingCarousel() {
             </LoadingRegion>
           ) : (
             products.map((p) => (
-              <ProductCard key={p.slug} product={p} pricePending={!pricesReady} className={GIFT_CARD_WIDTH} />
+              <ProductCard key={p.slug} product={p} pricePending={!pricesReady} className={GIFT_CARD_WIDTH} imageSizes={CAROUSEL_CARD_IMAGE_SIZES} />
             ))
           )}
           <div aria-hidden className="w-1 shrink-0 sm:w-2" />

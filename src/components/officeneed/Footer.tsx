@@ -180,7 +180,9 @@ function MobileBenefitsCarousel() {
               setIsPaused(true);
             }}
             className={[
-              "h-2 w-2 rounded-full transition-all duration-300",
+              // Colour-only transition: animating the active dot's width ran on
+              // the main thread (non-composited) every slide change.
+              "h-2 w-2 rounded-full transition-colors duration-300",
               i === active
                 ? "w-5 bg-foreground"
                 : "bg-foreground/25 hover:bg-foreground/40",

@@ -7,6 +7,17 @@ import { hideBrokenImage } from "@/components/officeneed/skeletons";
 import { shopifyImageSrcSet, shopifyImageUrl } from "@/lib/shopify-image";
 import exclusiveLogo from "@/assets/officeneed-exclusive-logo.svg.asset.json";
 
+// Rendered width of a tile's image, per breakpoint of the grid below: the
+// container (max 1600px, px-5 / sm:px-8 / lg:px-12), the column gaps
+// (gap-4 / sm:gap-5 / lg:gap-6), 2 or 5 columns, minus the image's own
+// p-8 / sm:p-10 padding.
+const CATEGORY_IMAGE_SIZES = [
+  "(min-width: 1600px) 202px",
+  "(min-width: 1024px) calc((100vw - 192px) / 5 - 80px)",
+  "(min-width: 640px) calc((100vw - 84px) / 2 - 80px)",
+  "calc((100vw - 56px) / 2 - 64px)",
+].join(", ");
+
 /**
  * Homepage "Shop by Category" grid. Reuses the site's single existing
  * primary-category source (navigation.ts, built on top of taxonomy.ts) and
@@ -61,12 +72,14 @@ export function ShopByCategory() {
                     <div className="h-full w-full animate-pulse bg-muted" aria-hidden />
                   ) : image ? (
                     <img
-                      // Shopify CDN resizes on request; the originals are 500px for
-                      // a tile ~180px wide on phones (srcset/sizes pick the smallest
-                      // sharp version). Non-Shopify images (the SVG logo) are untouched.
+                      // Shopify CDN resizes on request; srcset/sizes pick the smallest
+                      // sharp version. `sizes` is the image's own width: the tile
+                      // (grid column) minus its p-8 / sm:p-10 padding -- e.g. ~114px
+                      // on a 412px phone, so ~200w at 1.75x. Non-Shopify images
+                      // (the SVG logo) get no srcset and are untouched.
                       src={shopifyImageUrl(image, 400)}
-                      srcSet={shopifyImageSrcSet(image, [200, 400, 600])}
-                      sizes="(min-width: 1024px) 20vw, 50vw"
+                      srcSet={shopifyImageSrcSet(image, [200, 300, 400, 600])}
+                      sizes={CATEGORY_IMAGE_SIZES}
                       alt={label}
                       loading="lazy"
                       decoding="async"

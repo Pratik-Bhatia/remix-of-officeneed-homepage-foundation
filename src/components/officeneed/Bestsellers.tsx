@@ -3,7 +3,7 @@ import { ArrowLeft, ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { bestsellerFilters, bestsellerProducts, selectBestsellers } from "@/lib/bestsellers";
 import { useShopifyBestsellers, useShopifyCollections } from "@/lib/shopify-overlay";
-import { ProductCard } from "@/components/officeneed/ProductCard";
+import { CAROUSEL_CARD_IMAGE_SIZES, ProductCard } from "@/components/officeneed/ProductCard";
 import { LoadError, LoadingRegion, ProductCardSkeleton } from "@/components/officeneed/skeletons";
 import { getLiveNavLabel } from "@/lib/navigation";
 import type { Product } from "@/lib/products";
@@ -139,6 +139,7 @@ export function Bestsellers() {
                     pricePending={!pricesReady}
                     imageWellClassName="bg-[#F5F5F5]"
                     className={BESTSELLER_CARD_WIDTH}
+                    imageSizes={CAROUSEL_CARD_IMAGE_SIZES}
                   />
                 ))
               ) : (

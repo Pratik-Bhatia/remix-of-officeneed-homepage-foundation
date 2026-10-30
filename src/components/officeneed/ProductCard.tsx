@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 import { productBelongsToCategory, getCategoryByTitle, resolveLiveTitle } from "@/lib/taxonomy";
 import { useNormalizedImageScale } from "@/lib/image-content-scale";
 import { useShopifyCollections } from "@/lib/shopify-overlay";
-import { shopifyImageUrl } from "@/lib/shopify-image";
+import { shopifyImageSrcSet, shopifyImageUrl } from "@/lib/shopify-image";
 import { getDiscount } from "@/lib/discount";
 import { formatMoney } from "@/lib/shopify";
 import { DiscountBadge } from "@/components/officeneed/DiscountBadge";
@@ -22,8 +22,34 @@ import { formatAverage } from "@/lib/review-ratings";
 
 // Grid cards never render wider than a few hundred px -- 600 comfortably
 // covers a ~300px card at 2x pixel density without requesting Shopify's
-// full original (often several thousand px) asset.
+// full original (often several thousand px) asset. It stays the largest
+// srcset candidate (and the plain `src` fallback), so no device downloads
+// more than before; smaller screens pick a smaller render.
 const PRODUCT_CARD_IMAGE_WIDTH = 600;
+const PRODUCT_CARD_IMAGE_WIDTHS = [200, 300, 400, 600];
+
+// Rendered width of the card image (card minus the img's p-1.5 / sm:p-8
+// padding) in the /products, related-products and similar grids: max-1600px
+// container with px-5 / sm:px-8 / lg:px-12, 2 / md:3 / lg:4 columns,
+// gap-x-5 / sm:gap-x-6.
+const GRID_IMAGE_SIZES = [
+  "(min-width: 1600px) 294px",
+  "(min-width: 1024px) calc((100vw - 168px) / 4 - 64px)",
+  "(min-width: 768px) calc((100vw - 112px) / 3 - 64px)",
+  "(min-width: 640px) calc((100vw - 88px) / 2 - 64px)",
+  "calc((100vw - 60px) / 2 - 12px)",
+].join(", ");
+
+/** `imageSizes` for the homepage carousels' cards: w-[74vw] / sm:w-[46vw] /
+ * md:w-[34vw] / lg: a quarter of the track (max-1600px container minus
+ * lg:pl-[58px] lg:pr-12, gap-6), each minus the image padding. */
+export const CAROUSEL_CARD_IMAGE_SIZES = [
+  "(min-width: 1600px) 292px",
+  "(min-width: 1024px) calc((100vw - 178px) / 4 - 64px)",
+  "(min-width: 768px) calc(34vw - 64px)",
+  "(min-width: 640px) calc(46vw - 64px)",
+  "calc(74vw - 12px)",
+].join(", ");
 
 /** Resolves a stable classify()-derived category/subcategory string (e.g.
  * "Pen") to its current Shopify collection title (e.g. "Pen and Pencil"),
@@ -41,6 +67,7 @@ function ProductCardImpl({
   showEyebrow = false,
   imageWellClassName,
   pricePending = false,
+  imageSizes = GRID_IMAGE_SIZES,
 }: {
   product: Product;
   /** Extra classes merged onto the outer card wrapper. Lets a caller like
@@ -63,6 +90,9 @@ function ProductCardImpl({
    * buyer who may turn out to be B2B. See useShopifyCatalogue /
    * useShopifyBestsellers's `pricesReady`. */
   pricePending?: boolean;
+  /** `sizes` for the card image -- its rendered width in this layout. Defaults
+   * to the 2/3/4-column product grid; carousels pass CAROUSEL_CARD_IMAGE_SIZES. */
+  imageSizes?: string;
 }) {
   const { savedHandles, toggleSave } = useSaves();
   const [busy, setBusy] = useState(false);
@@ -131,9 +161,16 @@ function ProductCardImpl({
     // devices this prefetched a second image for EVERY card on the page (99-330 extra requests on a
     // collection page) that could never be shown, competing with the visible images for bandwidth.
     if (typeof window !== "undefined" && typeof window.matchMedia === "function" && !window.matchMedia("(hover: hover)").matches) return;
+    // Same srcset/sizes as the card image, so the browser preloads exactly the
+    // rendition the hover swap will then use -- not a fixed (larger) size.
     const preload = new Image();
+    const srcSet = shopifyImageSrcSet(hoverImage, PRODUCT_CARD_IMAGE_WIDTHS);
+    if (srcSet) {
+      preload.sizes = imageSizes;
+      preload.srcset = srcSet;
+    }
     preload.src = shopifyImageUrl(hoverImage, PRODUCT_CARD_IMAGE_WIDTH);
-  }, [hoverImage]);
+  }, [hoverImage, imageSizes]);
 
   // Pointer Events tell us definitively whether this came from a mouse
   // (pointerType === "mouse") rather than touch/pen -- unlike CSS :hover,
@@ -203,6 +240,8 @@ function ProductCardImpl({
           <img
             ref={imageRef}
             src={shopifyImageUrl(displayedSrc, PRODUCT_CARD_IMAGE_WIDTH)}
+            srcSet={shopifyImageSrcSet(displayedSrc, PRODUCT_CARD_IMAGE_WIDTHS)}
+            sizes={imageSizes}
             alt={product.name}
             loading="lazy"
             decoding="async"
