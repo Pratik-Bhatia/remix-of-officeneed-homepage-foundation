@@ -6,6 +6,7 @@
  *   2. server Conversions API via sendMetaCapiEvent (token stays server-side)
  * Meta deduplicates on event_name + event_id.
  */
+import { whenIdleAfterLoad } from "@/lib/idle";
 import { sendMetaCapiEvent } from "@/lib/meta-capi.functions";
 
 export const META_PIXEL_ID: string = import.meta.env["VITE_META_PIXEL_ID"] ?? "";
@@ -38,11 +39,17 @@ export function initMetaPixel() {
     n.loaded = true;
     n.version = "2.0";
     n.queue = [];
-    const t = document.createElement("script");
-    t.async = true;
-    t.src = "https://connect.facebook.net/en_US/fbevents.js";
-    const s = document.getElementsByTagName("script")[0];
-    s?.parentNode ? s.parentNode.insertBefore(t, s) : document.head.appendChild(t);
+    // The fbq queue above exists immediately, so every event (PageView,
+    // AddToCart, Lead, ...) is queued and sent once fbevents.js arrives; only
+    // the ~270 KB script download/parse waits until after load + idle so it
+    // doesn't compete with first render.
+    whenIdleAfterLoad(() => {
+      const t = document.createElement("script");
+      t.async = true;
+      t.src = "https://connect.facebook.net/en_US/fbevents.js";
+      const s = document.getElementsByTagName("script")[0];
+      s?.parentNode ? s.parentNode.insertBefore(t, s) : document.head.appendChild(t);
+    });
   }
   window.fbq!("init", META_PIXEL_ID);
 }

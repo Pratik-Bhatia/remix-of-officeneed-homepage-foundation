@@ -10,11 +10,12 @@ import {
 import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
+import openSansLatin from "../assets/fonts/open-sans-latin.woff2?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { Toaster } from "@/components/ui/sonner";
 import { useCartSync } from "@/hooks/useCartSync";
 import { useB2BSync } from "@/hooks/useB2BSync";
-import { ChatWidget } from "@/components/officeneed/ChatWidget";
+import { LazyChatWidget } from "@/components/officeneed/LazyChatWidget";
 import { MetaPixel } from "@/components/officeneed/MetaPixel";
 import { GoogleAnalytics } from "@/components/officeneed/GoogleAnalytics";
 import { Clarity } from "@/components/officeneed/Clarity";
@@ -100,12 +101,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         rel: "stylesheet",
         href: appCss,
       },
-      { rel: "preconnect", href: "https://fonts.googleapis.com" },
-      { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
-      {
-        rel: "stylesheet",
-        href: "https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;500;600;700&display=swap",
-      },
+      // Open Sans is self-hosted (@font-face in styles.css) instead of a
+      // render-blocking Google Fonts stylesheet on two extra origins. Only the
+      // latin subset -- needed by every page's text -- is preloaded; the
+      // others (₹, ★, →) load on demand via unicode-range.
+      { rel: "preload", href: openSansLatin, as: "font", type: "font/woff2", crossOrigin: "anonymous" },
       // `?v=3` busts the browser's long-lived favicon cache after the emblem was replaced or refined.
       { rel: "icon", type: "image/x-icon", sizes: "16x16 32x32 48x48", href: "/favicon.ico?v=3" },
       { rel: "icon", type: "image/png", sizes: "16x16", href: "/favicon-16x16.png?v=3" },
@@ -149,7 +149,7 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <Outlet />
-      <ChatWidget />
+      <LazyChatWidget />
       <CartSync />
       <B2BSync />
       <MetaPixel />

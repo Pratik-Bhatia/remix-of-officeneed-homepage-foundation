@@ -1,12 +1,22 @@
 import { useEffect, useRef, useState } from "react";
 import { TAXONOMY } from "@/lib/taxonomy";
+// Imported (not served from /public) so the build gives them hashed /assets/
+// URLs, which the host serves with long-lived immutable caching.
+import heroPerfumesUrl from "@/assets/hero/hero-perfumes.webp";
+import heroPerfumesSmall from "@/assets/hero/hero-perfumes-800.webp";
+import heroExclusiveUrl from "@/assets/hero/officeneed-exclusive-set-v2.webp";
+import heroExclusiveSmall from "@/assets/hero/officeneed-exclusive-set-v2-800.webp";
+import heroGiftingUrl from "@/assets/hero/corporate-gifting.webp";
+import heroGiftingSmall from "@/assets/hero/corporate-gifting-800.webp";
+import heroAIUrl from "@/assets/hero/ai-assistant.webp";
+import heroAISmall from "@/assets/hero/ai-assistant-800.webp";
 
 // `url` is the full-size original; `small` is an 800px-wide variant of the same
 // image so phones don't download a 1350-1536px asset for a ~390px-wide slot.
-const heroPerfumes = { url: "/hero/hero-perfumes.webp", small: "/hero/hero-perfumes-800.webp", width: 1350 };
-const heroExclusive = { url: "/hero/officeneed-exclusive-set-v2.webp", small: "/hero/officeneed-exclusive-set-v2-800.webp", width: 1536 };
-const heroGifting = { url: "/hero/corporate-gifting.webp", small: "/hero/corporate-gifting-800.webp", width: 1536 };
-const heroAI = { url: "/hero/ai-assistant.webp", small: "/hero/ai-assistant-800.webp", width: 1400 };
+const heroPerfumes = { url: heroPerfumesUrl, small: heroPerfumesSmall, width: 1350 };
+const heroExclusive = { url: heroExclusiveUrl, small: heroExclusiveSmall, width: 1536 };
+const heroGifting = { url: heroGiftingUrl, small: heroGiftingSmall, width: 1536 };
+const heroAI = { url: heroAIUrl, small: heroAISmall, width: 1400 };
 
 
 // Collection hrefs below are derived from TAXONOMY (the same single source
@@ -66,6 +76,21 @@ export function Hero() {
   const startX = useRef(0);
   const startY = useRef(0);
   const locked = useRef<"h" | "v" | null>(null);
+  // The hidden slides (2-4) are stacked over slide 1 at opacity 0, so the
+  // browser treats them as in-viewport and `loading="lazy"` doesn't defer
+  // them -- they used to download (~234 KB) alongside the LCP image. Their
+  // images now get a source only after the page has finished loading, or as
+  // soon as a slide is actually shown, whichever comes first.
+  const [restSlidesReady, setRestSlidesReady] = useState(false);
+  useEffect(() => {
+    if (document.readyState === "complete") {
+      setRestSlidesReady(true);
+      return;
+    }
+    const onLoad = () => setRestSlidesReady(true);
+    window.addEventListener("load", onLoad, { once: true });
+    return () => window.removeEventListener("load", onLoad);
+  }, []);
 
   useEffect(() => {
     if (dragging) return;
@@ -158,8 +183,9 @@ export function Hero() {
               </div>
 
               <img
-                src={s.image}
-                srcSet={s.imageSrcSet}
+                // Slide 1 (the LCP image) always has its source; the others only
+                // once the page has loaded or the slide is shown (see above).
+                {...(i === 0 || isActive || restSlidesReady ? { src: s.image, srcSet: s.imageSrcSet } : {})}
                 alt={s.alt}
                 width={1366}
                 height={768}
@@ -185,7 +211,9 @@ export function Hero() {
               aria-label={`Show ${s.heading}`}
               aria-current={i === active}
               onClick={() => setActive(i)}
-              className={`h-2 rounded-full transition-all ${
+              // Only the colour animates: a width transition runs on the main
+              // thread (non-composited) on every auto-rotation.
+              className={`h-2 rounded-full transition-colors ${
                 i === active ? "w-6 bg-foreground" : "w-2 bg-foreground/25"
               }`}
             />

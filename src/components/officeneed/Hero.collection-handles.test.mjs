@@ -14,8 +14,22 @@
 // Run with: npx tsx --test --experimental-test-module-mocks src/components/officeneed/Hero.collection-handles.test.mjs
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { slides } from "./Hero.tsx";
+import { register } from "node:module";
 import { getCategoryByHandle } from "@/lib/taxonomy";
+
+// Hero.tsx imports its slide images (Vite turns them into hashed URLs in the
+// real build). Node can't load .webp files, and this test only checks link
+// targets, so a load hook answers .webp imports with their URL string --
+// what Vite's import gives -- before Hero.tsx is loaded.
+register(
+  "data:text/javascript," +
+    encodeURIComponent(
+      "export async function load(url, context, next) {" +
+        " if (url.endsWith('.webp')) return { format: 'module', source: 'export default ' + JSON.stringify(url), shortCircuit: true };" +
+        " return next(url, context); }",
+    ),
+);
+const { slides } = await import("./Hero.tsx");
 
 function collectionHandleFromHref(href) {
   const match = href.match(/[?&]collection=([^&]+)/);

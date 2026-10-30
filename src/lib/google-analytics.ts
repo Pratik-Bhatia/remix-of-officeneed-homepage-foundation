@@ -1,3 +1,4 @@
+import { whenIdleAfterLoad } from "@/lib/idle";
 declare global {
   interface Window {
     dataLayer?: unknown[];
@@ -74,13 +75,17 @@ export function initGoogleAnalytics() {
   window.gtag("js", new Date());
   window.gtag("config", GA_MEASUREMENT_ID, { send_page_view: false });
 
-  if (!document.querySelector("script[data-officeneed-google-analytics]")) {
+  // dataLayer/gtag above exist immediately, so config, page_view and
+  // ecommerce events queue and are sent once gtag.js arrives; only the
+  // script download/parse waits until after load + idle (off first render).
+  whenIdleAfterLoad(() => {
+    if (document.querySelector("script[data-officeneed-google-analytics]")) return;
     const script = document.createElement("script");
     script.async = true;
     script.dataset["officeneedGoogleAnalytics"] = "true";
     script.src = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(GA_MEASUREMENT_ID)}`;
     document.head.appendChild(script);
-  }
+  });
 
   initialized = true;
   return true;

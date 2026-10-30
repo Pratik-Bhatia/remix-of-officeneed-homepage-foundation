@@ -1,5 +1,4 @@
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { summarizeRatingsByProduct, type RatingSummary } from "@/lib/review-ratings";
 
 const PAGE = 1000; // Supabase's default max rows per request
@@ -10,6 +9,10 @@ const PAGE = 1000; // Supabase's default max rows per request
  * never a request per card. Only handle + rating are fetched.
  */
 async function fetchRatingSummaries(): Promise<Map<string, RatingSummary>> {
+  // Loaded here, not at module scope: ProductCard (on nearly every page)
+  // imports this hook, and a static import put the whole Supabase client
+  // into the shared startup bundle. Now it downloads only when ratings load.
+  const { supabase } = await import("@/integrations/supabase/client");
   const rows: Array<{ product_handle: string | null; rating: number | null }> = [];
   for (let from = 0; ; from += PAGE) {
     const { data, error } = await supabase

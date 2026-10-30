@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 import { primaryNavCategories, navCategoryTarget, getLiveNavLabel } from "@/lib/navigation";
 import { useShopifyCollections } from "@/lib/shopify-overlay";
 import { hideBrokenImage } from "@/components/officeneed/skeletons";
+import { shopifyImageSrcSet, shopifyImageUrl } from "@/lib/shopify-image";
 import exclusiveLogo from "@/assets/officeneed-exclusive-logo.svg.asset.json";
 
 /**
@@ -60,7 +61,12 @@ export function ShopByCategory() {
                     <div className="h-full w-full animate-pulse bg-muted" aria-hidden />
                   ) : image ? (
                     <img
-                      src={image}
+                      // Shopify CDN resizes on request; the originals are 500px for
+                      // a tile ~180px wide on phones (srcset/sizes pick the smallest
+                      // sharp version). Non-Shopify images (the SVG logo) are untouched.
+                      src={shopifyImageUrl(image, 400)}
+                      srcSet={shopifyImageSrcSet(image, [200, 400, 600])}
+                      sizes="(min-width: 1024px) 20vw, 50vw"
                       alt={label}
                       loading="lazy"
                       decoding="async"

@@ -12,6 +12,7 @@
  *   `data-clarity-mask="True"` attribute (see CLARITY_MASK).
  * - Shopify's hosted checkout is a different domain and never loads this script.
  */
+import { whenIdleAfterLoad } from "@/lib/idle";
 export const CLARITY_PROJECT_ID = "z2a061qk44";
 
 /** Spread onto any element whose contents (text AND inputs) must never be recorded. */
@@ -67,13 +68,18 @@ export function initClarity(): boolean {
     stub.q = queue;
     c.clarity = stub;
   }
-  const script = document.createElement("script");
-  script.async = true;
-  script.dataset["officeneedClarity"] = "true";
-  script.src = `https://www.clarity.ms/tag/${CLARITY_PROJECT_ID}`;
-  const first = document.getElementsByTagName("script")[0];
-  if (first?.parentNode) first.parentNode.insertBefore(script, first);
-  else document.head.appendChild(script);
+  // The clarity() queue above exists immediately (calls are queued); only the
+  // tag script download waits until after load + idle, off first render.
+  whenIdleAfterLoad(() => {
+    if (document.querySelector("script[data-officeneed-clarity]")) return;
+    const script = document.createElement("script");
+    script.async = true;
+    script.dataset["officeneedClarity"] = "true";
+    script.src = `https://www.clarity.ms/tag/${CLARITY_PROJECT_ID}`;
+    const first = document.getElementsByTagName("script")[0];
+    if (first?.parentNode) first.parentNode.insertBefore(script, first);
+    else document.head.appendChild(script);
+  });
 
   initialized = true;
   return true;
