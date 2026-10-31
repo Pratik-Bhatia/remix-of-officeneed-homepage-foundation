@@ -148,16 +148,7 @@ export function ProductInformation({ product: sourceProduct }: { product: Produc
     });
   }
 
-  // 8. DELIVERY & RETURNS
-  sections.push({
-    title: "DELIVERY & RETURNS",
-    content: (
-      <div className="text-[13px] leading-relaxed text-muted-foreground space-y-3">
-        <p className="font-semibold text-foreground">No Returns or Refunds</p>
-        <p>All sales are final. Products cannot be returned or exchanged, and refunds are not provided after purchase. Every item undergoes quality checks before dispatch to help ensure it meets our quality standards.</p>
-      </div>
-    ),
-  });
+  if (sections.length === 0) return null;
 
   return (
     // mt-8 (not mt-12): matches the same section-gap token the Trust
