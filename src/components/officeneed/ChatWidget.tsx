@@ -147,6 +147,7 @@ export function ChatWidget() {
   };
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
   const navigate = useNavigate();
   /**
    * Handoff from the open-chat event listener to the "kick off the
@@ -220,6 +221,40 @@ export function ChatWidget() {
       body.style.width = originalWidth;
       body.style.overscrollBehavior = originalOverscroll;
       window.scrollTo(0, scrollY);
+    };
+  }, [open]);
+
+  // Close on any press outside the panel, without blocking it: no overlay and
+  // no preventDefault, so the control underneath still gets its click. Pointer
+  // events cover mouse, touch and pen once each. Touch waits for pointerup, since
+  // the browser sends pointercancel instead when the gesture becomes a page
+  // scroll. Capture phase, so a target's stopPropagation can't hide the press,
+  // and it runs before a target inside the panel is re-rendered away.
+  useEffect(() => {
+    if (!open) return;
+    let tapStartedOutside = false;
+    const isOutside = (e: PointerEvent) => !!dialogRef.current && !e.composedPath().includes(dialogRef.current);
+    const onDown = (e: PointerEvent) => {
+      if (e.pointerType === "mouse") {
+        if (isOutside(e)) setOpen(false);
+      } else {
+        tapStartedOutside = isOutside(e);
+      }
+    };
+    const onUp = (e: PointerEvent) => {
+      if (e.pointerType !== "mouse" && tapStartedOutside && isOutside(e)) setOpen(false);
+      tapStartedOutside = false;
+    };
+    const onCancel = () => {
+      tapStartedOutside = false;
+    };
+    document.addEventListener("pointerdown", onDown, true);
+    document.addEventListener("pointerup", onUp, true);
+    document.addEventListener("pointercancel", onCancel, true);
+    return () => {
+      document.removeEventListener("pointerdown", onDown, true);
+      document.removeEventListener("pointerup", onUp, true);
+      document.removeEventListener("pointercancel", onCancel, true);
     };
   }, [open]);
 
@@ -931,6 +966,7 @@ export function ChatWidget() {
         aria-live="polite"
       >
         <div
+          ref={dialogRef}
           role="dialog"
           {...CLARITY_MASK}
           aria-modal="false"
