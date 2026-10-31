@@ -45,6 +45,26 @@ export function ProductCardSkeleton({ className }: { className?: string }) {
   );
 }
 
+/** The product page's first screen (gallery + purchase column), same grid as the real page. */
+export function ProductDetailSkeleton() {
+  return (
+    <main data-pdp-pending className="mx-auto w-full max-w-[1600px] px-5 pt-6 sm:px-8 lg:px-12">
+      <LoadingRegion label="Loading product">
+        <div className="flex w-full flex-col items-start gap-8 lg:grid lg:grid-cols-[minmax(0,1.1fr)_minmax(min(440px,100%),0.9fr)] lg:gap-12">
+          <Skeleton className="aspect-square w-full rounded-2xl" />
+          <div className="w-full">
+            <Skeleton className="h-8 w-4/5" />
+            <Skeleton className="mt-3 h-4 w-1/3" />
+            <Skeleton className="mt-6 h-8 w-1/3" />
+            <Skeleton className="mt-8 h-11 w-full rounded-md" />
+            <Skeleton className="mt-3 h-11 w-full rounded-md" />
+          </div>
+        </div>
+      </LoadingRegion>
+    </main>
+  );
+}
+
 /** A grid of product-card skeletons; pass the real grid's classes to match it. */
 export function ProductGridSkeleton({
   count = 8,

@@ -278,6 +278,7 @@ export function SearchModal({
                           <Link 
                             to="/products/$slug"
                             params={{ slug: product.slug }}
+                            preload="intent"
                             onClick={() => onOpenChange(false)}
                             className="group flex items-center gap-4 rounded-lg px-2 py-2 hover:bg-muted/50 transition-colors"
                           >

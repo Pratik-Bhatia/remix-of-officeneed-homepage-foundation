@@ -2,6 +2,7 @@ import { haptic } from "@/lib/haptics";
 import { trackViewContent, trackInitiateCheckout } from "@/lib/meta-pixel";
 import { trackGoogleViewItem, trackGoogleBeginCheckout } from "@/lib/google-analytics";
 import { useMemo, useState, useRef, useEffect, lazy, Suspense } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { Minus, Plus, ChevronLeft, ChevronRight, Loader2, ZoomIn, X, ShieldCheck, Lock, Award, Truck, BadgeCheck, Heart } from "lucide-react";
 import { Navbar } from "@/components/officeneed/Navbar";
@@ -36,7 +37,7 @@ import { fetchProductByHandle, fetchRelatedProducts, formatMoney, type ShopifyPr
 import { loadProductDetailParsers, mergeProduct, shopifyNodeToProduct, useShopifyCollections, useB2BPriceOverlayMap, useB2BQuantityRuleOverlayMap } from "@/lib/shopify-overlay";
 import type { LoadStatus } from "@/lib/load-status";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ImageUnavailable, hideBrokenImage } from "@/components/officeneed/skeletons";
+import { ImageUnavailable, ProductCardSkeleton, ProductDetailSkeleton, hideBrokenImage } from "@/components/officeneed/skeletons";
 import { useImageLoadState } from "@/hooks/useImageLoadState";
 import { TAXONOMY, resolveLiveTitle } from "@/lib/taxonomy";
 import { useCartStore, quantityRuleScopeKey } from "@/stores/cartStore";
@@ -44,7 +45,6 @@ import { useB2BStore, getEffectiveCompanyLocationId } from "@/stores/b2bStore";
 import { getCustomerToken } from "@/lib/customer";
 import { useSaves } from "@/lib/saves";
 import { setPendingSave } from "@/lib/pending-save";
-import { getB2BPriceOverlay } from "@/lib/b2b-pricing.functions";
 import { applyB2BPriceOverlay, applyB2BPriceOverlayToAll } from "@/lib/b2b-pricing";
 import { createServerOnlyFn } from "@tanstack/react-start";
 import { setResponseHeader } from "@tanstack/react-start/server";
@@ -81,11 +81,48 @@ const setPrivateCacheHeader = createServerOnlyFn(() => {
   setResponseHeader("Cache-Control", "private, no-store");
 });
 
+// The main gallery image's rendered width at each breakpoint (measured: the
+// page's grid columns, thumbnail rail and padding; capped at 635px from 1600px).
+const GALLERY_IMAGE_WIDTHS = [480, 640, 800, 1200, 1600];
+const GALLERY_IMAGE_SIZES = [
+  "(min-width: 1600px) 635px",
+  "(min-width: 1100px) calc(55vw - 245px)",
+  "(min-width: 1024px) 350px",
+  "(min-width: 640px) calc(100vw - 130px)",
+  "calc(100vw - 74px)",
+].join(", ");
+
+/** Same srcset/sizes as the gallery's main image, so the browser reuses this download. */
+function preloadMainProductImage(node: ShopifyProductNode) {
+  if (typeof window === "undefined" || new URLSearchParams(window.location.search).has("variant")) return;
+  const edges = node.variants?.edges ?? [];
+  const defaultVariant = edges.find((e) => e.node.availableForSale)?.node ?? edges[0]?.node;
+  const url = defaultVariant?.image?.url ?? node.featuredImage?.url;
+  if (!url) return;
+  const img = new Image();
+  img.fetchPriority = "high";
+  img.sizes = GALLERY_IMAGE_SIZES;
+  img.srcset = shopifyImageSrcSet(url, GALLERY_IMAGE_WIDTHS) ?? "";
+  img.src = shopifyImageUrl(url, 1200);
+}
+
 export const Route = createFileRoute("/products/$slug")({
   staticData: { sitemap: true },
+  // Show the page skeleton if data isn't ready almost immediately, with no
+  // minimum display time (the default would hold it for 500ms).
+  pendingMs: 150,
+  pendingMinMs: 0,
+  pendingComponent: ProductDetailPending,
+  // A guest re-opening a product (or hovering then clicking) within 30s reuses
+  // the data already loaded instead of fetching it again; a signed-in shopper
+  // always gets it fresh. Loader data never holds customer prices (see the
+  // loader), so nothing in this cache can reach a different shopper.
+  staleTime: 30_000,
+  preloadStaleTime: 30_000,
+  shouldReload: ({ cause }) => (getCustomerToken() && cause === "enter" ? true : undefined),
   validateSearch: (search: Record<string, unknown>): { variant?: string } =>
     search["variant"] != null && String(search["variant"]) !== "" ? { variant: String(search["variant"]) } : {},
-  loader: async ({ params }) => {
+  loader: async ({ params, preload }) => {
     const staticProduct = getProductBySlug(params.slug);
 
     // getCustomerToken() returns null during SSR (no window/localStorage
@@ -142,9 +179,18 @@ export const Route = createFileRoute("/products/$slug")({
       node = null;
     }
 
+    // Start the main image as soon as its URL is known, while the page's code
+    // and render are still finishing. Not for a hover preload: the shopper may
+    // never open this product.
+    if (node && !preload) preloadMainProductImage(node);
+
     let related: any[] = [];
     let relatedNodes: Awaited<ReturnType<typeof fetchRelatedProducts>> = [];
-    if (node) {
+    // Related products sit at the bottom of the page and must not hold up an
+    // in-app navigation: in the browser ProductDetail fetches them after it has
+    // rendered. Server-rendered pages still include them.
+    const relatedDeferred = typeof window !== "undefined";
+    if (node && !relatedDeferred) {
       try {
         const collectionHandles = node.collections?.edges.map((e: any) => e.node.handle) ?? [];
         relatedNodes = await fetchRelatedProducts(node.handle, node.productType, collectionHandles, 4, buyer);
@@ -153,26 +199,10 @@ export const Route = createFileRoute("/products/$slug")({
       }
     }
 
-    // B2B catalog price overlay (Admin API contextualPricing) -- see
-    // src/lib/b2b-pricing.functions.ts. companyLocationId here was
-    // resolved server-side above from the token, never accepted from the
-    // browser as-is; getB2BPriceOverlay re-verifies it against the
-    // customer's actual assigned locations again before using it. Any
-    // failure/empty result just means node/relatedNodes keep their normal
-    // Storefront prices -- never blocks rendering.
-    if (node && companyLocationId && token) {
-      try {
-        const variantIds = [node, ...relatedNodes].flatMap((n) => n.variants.edges.map((e: any) => e.node.id));
-        const overlay = await getB2BPriceOverlay({ data: { customerAccessToken: token, companyLocationId, variantIds } });
-        if (Object.keys(overlay).length > 0) {
-          node = applyB2BPriceOverlay(node, overlay);
-          relatedNodes = relatedNodes.map((n) => applyB2BPriceOverlay(n, overlay));
-        }
-      } catch (err) {
-        console.error("[B2B pricing] PDP overlay failed, falling back to normal pricing:", err);
-      }
-    }
-
+    // B2B prices stay out of loader data: the router keeps it after sign-out and
+    // shows it while revalidating, which would flash one buyer's price to the
+    // next. ProductDetail applies them with useB2BPriceOverlayMap instead, which
+    // holds the price back until they are ready.
     // Full product details (fragrance notes etc.) need the description parsers.
     await loadProductDetailParsers();
     const product = staticProduct
@@ -186,13 +216,9 @@ export const Route = createFileRoute("/products/$slug")({
     related = relatedNodes.map(shopifyNodeToProduct);
 
     // relatedNodes (raw, pre-conversion) travels alongside `related` so the
-    // component can re-apply a freshly-fetched client-side price overlay --
-    // see ProductDetail()'s pdpPriceOverlay below. This loader's own
-    // overlay application above only ever runs with a token (a client-side
-    // navigation); a hard refresh's SSR pass always has token=null, so
-    // without this the component would be stuck showing anonymous pricing
-    // for the lifetime of the page view for a signed-in B2B buyer.
-    return { product, node, related, relatedNodes };
+    // component can apply the client-side price overlay -- see ProductDetail()'s
+    // relatedPriceOverlay below.
+    return { product, node, related, relatedNodes, relatedDeferred };
   },
   head: ({ params, loaderData, match }) => {
     if (!loaderData) {
@@ -288,28 +314,57 @@ function ProductNotFound() {
   );
 }
 
+function ProductDetailPending() {
+  return (
+    <div className="min-h-screen bg-background">
+      <Navbar />
+      <ProductDetailSkeleton />
+    </div>
+  );
+}
+
 function ProductDetail() {
-  const { product: loaderProduct, node: loaderNode, related: loaderRelated, relatedNodes: loaderRelatedNodes } = Route.useLoaderData();
+  const { product: loaderProduct, node: loaderNode, related: loaderRelated, relatedNodes: loaderRelatedNodes, relatedDeferred } = Route.useLoaderData();
   const slug = Route.useParams().slug;
 
-  // Re-applies the B2B contextual-pricing overlay CLIENT-SIDE, on top of
-  // whatever the loader returned. Required because the loader's own
-  // overlay application (above) only ever has a token on a client-side
-  // navigation -- a hard refresh's SSR pass always runs with token=null,
-  // so without this, a signed-in B2B buyer would see anonymous pricing
-  // baked into the page for its entire lifetime (TanStack Router's loader
-  // data has no built-in revalidation once mounted). Same overlay
-  // mechanism the catalogue/bestsellers grids already use reactively
-  // (useB2BPriceOverlayMap) -- no new B2B architecture, just applying the
-  // existing one on this route too instead of only inside its loader.
-  // Idempotent against the loader's own application (applyB2BPriceOverlay
-  // just overwrites price/compareAtPrice from the same overlay map either
-  // way), so this is safe whether or not the loader already applied it.
-  const pdpVariantIds = useMemo(() => {
-    const nodes = [loaderNode, ...loaderRelatedNodes].filter((n): n is ShopifyProductNode => !!n);
-    return nodes.flatMap((n) => n.variants.edges.map((e) => e.node.id));
-  }, [loaderNode, loaderRelatedNodes]);
+  // See the loader: in-app navigations fetch related products here, after the
+  // page has rendered. The base Storefront response is anonymous, so it is safe
+  // to share; any B2B prices are applied below by useB2BPriceOverlayMap.
+  const { data: fetchedRelatedNodes, isLoading: relatedLoading } = useQuery({
+    queryKey: ["shopify", "related-products", slug],
+    queryFn: () =>
+      fetchRelatedProducts(
+        loaderNode!.handle,
+        loaderNode!.productType,
+        loaderNode!.collections?.edges.map((e: { node: { handle: string } }) => e.node.handle) ?? [],
+        4,
+        null,
+      ),
+    enabled: relatedDeferred && !!loaderNode,
+    staleTime: 60_000,
+    retry: 1,
+  });
+  const relatedNodes = useMemo(
+    () => (relatedDeferred ? (fetchedRelatedNodes ?? []) : loaderRelatedNodes),
+    [relatedDeferred, fetchedRelatedNodes, loaderRelatedNodes],
+  );
+
+  // Applies the B2B contextual-pricing overlay CLIENT-SIDE, on top of the
+  // anonymous data the loader returned (see the loader for why it never
+  // holds B2B prices). Same overlay mechanism the catalogue/bestsellers
+  // grids already use reactively (useB2BPriceOverlayMap).
+  const pdpVariantIds = useMemo(
+    () => loaderNode?.variants.edges.map((e) => e.node.id) ?? [],
+    [loaderNode],
+  );
   const { overlay: pdpPriceOverlay, ready: pricesReady } = useB2BPriceOverlayMap(pdpVariantIds);
+  // Separate from the product's own overlay: related products arrive later, and
+  // adding their ids to it would flash this product's price back to a skeleton.
+  const relatedVariantIds = useMemo(
+    () => relatedNodes.flatMap((n) => n.variants.edges.map((e) => e.node.id)),
+    [relatedNodes],
+  );
+  const { overlay: relatedPriceOverlay, ready: relatedPricesReady } = useB2BPriceOverlayMap(relatedVariantIds);
 
   // Only THIS product's own variants, not the related-products ids above --
   // a B2B company-location quantity rule is only ever relevant to what's
@@ -353,9 +408,9 @@ function ProductDetail() {
     return staticProductForSlug ? mergeProduct(staticProductForSlug, node) : shopifyNodeToProduct(node);
   }, [node, staticProductForSlug, loaderProduct]);
   const related = useMemo(() => {
-    if (loaderRelatedNodes.length === 0) return loaderRelated;
-    return applyB2BPriceOverlayToAll(loaderRelatedNodes, pdpPriceOverlay).map(shopifyNodeToProduct);
-  }, [loaderRelatedNodes, loaderRelated, pdpPriceOverlay]);
+    if (relatedNodes.length === 0) return loaderRelated;
+    return applyB2BPriceOverlayToAll(relatedNodes, relatedPriceOverlay).map(shopifyNodeToProduct);
+  }, [relatedNodes, loaderRelated, relatedPriceOverlay]);
 
   const { collections, isLoading: collectionsLoading } = useShopifyCollections();
   // Best-effort initial minimum straight from the raw Shopify node --
@@ -1122,8 +1177,8 @@ function ProductDetail() {
                         <img
                           {...galleryImages.imageProps(url)}
                           src={shopifyImageUrl(url, 1200)}
-                          srcSet={shopifyImageSrcSet(url, [480, 800, 1200, 1600])}
-                          sizes="(min-width: 1024px) 60vw, 100vw"
+                          srcSet={shopifyImageSrcSet(url, GALLERY_IMAGE_WIDTHS)}
+                          sizes={GALLERY_IMAGE_SIZES}
                           alt={activeMedia?.alt || `${product.name} - image ${activeImage + 1}`}
                           width={1080}
                           height={1080}
@@ -1160,8 +1215,8 @@ function ProductDetail() {
                           <img
                             {...galleryImages.imageProps(media.url)}
                             src={shopifyImageUrl(media.url, 1200)}
-                            srcSet={shopifyImageSrcSet(media.url, [480, 800, 1200, 1600])}
-                            sizes="(min-width: 1024px) 60vw, 100vw"
+                            srcSet={shopifyImageSrcSet(media.url, GALLERY_IMAGE_WIDTHS)}
+                            sizes={GALLERY_IMAGE_SIZES}
                             alt={media.alt || `${product.name} - image ${i + 1}`}
                             width={1080}
                             height={1080}
@@ -1630,7 +1685,7 @@ function ProductDetail() {
             previously this passed bg-[#F5F5F7], which (combined with the
             page's plain white background behind it) was the inverse of
             the intended look. */}
-        {related.length > 0 ? (
+        {related.length > 0 || relatedLoading ? (
           <section aria-labelledby="related-heading" className="mt-16 bg-[#F5F5F7] sm:mt-24">
             <div className="mx-auto w-full max-w-[1600px] px-5 py-14 sm:px-8 sm:py-16 lg:px-12 lg:py-20">
               <div className="text-center mb-10">
@@ -1642,9 +1697,11 @@ function ProductDetail() {
                 </p>
               </div>
               <div className="grid grid-cols-2 gap-x-5 gap-y-10 sm:gap-x-6 md:grid-cols-3 lg:grid-cols-4">
-                {related.map((p) => (
-                  <ProductCard key={p.slug} product={p} pricePending={pricePending} />
-                ))}
+                {relatedLoading
+                  ? Array.from({ length: 4 }, (_, i) => <ProductCardSkeleton key={i} />)
+                  : related.map((p) => (
+                      <ProductCard key={p.slug} product={p} pricePending={!relatedPricesReady} />
+                    ))}
               </div>
             </div>
           </section>

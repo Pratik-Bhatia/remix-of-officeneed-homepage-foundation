@@ -1,4 +1,4 @@
-import { Link } from "@tanstack/react-router";
+import { Link, useRouter } from "@tanstack/react-router";
 import { Heart } from "lucide-react";
 import { toast } from "sonner";
 import { memo, useEffect, useRef, useState } from "react";
@@ -63,6 +63,22 @@ function eyebrowLabel(collections: Array<{ handle: string; title: string }>, lab
   return resolveLiveTitle(collections, match.node);
 }
 
+// Fetches the product page's code on the shopper's first interaction (any page
+// showing product cards), so opening a product waits only for its data. Not at
+// load: a visitor who never interacts shouldn't download it.
+let productRoutePrefetchArmed = false;
+function armProductRoutePrefetch(router: ReturnType<typeof useRouter>) {
+  if (productRoutePrefetchArmed) return;
+  productRoutePrefetchArmed = true;
+  const events = ["pointerdown", "pointermove", "scroll", "keydown"];
+  const load = () => {
+    for (const type of events) window.removeEventListener(type, load);
+    const route = router.routesById["/products/$slug"];
+    if (route) void Promise.resolve(router.loadRouteChunk(route)).catch(() => {});
+  };
+  for (const type of events) window.addEventListener(type, load, { passive: true });
+}
+
 function ProductCardImpl({
   product,
   className,
@@ -98,6 +114,8 @@ function ProductCardImpl({
 }) {
   const { savedHandles, toggleSave } = useSaves();
   const [busy, setBusy] = useState(false);
+  const router = useRouter();
+  useEffect(() => armProductRoutePrefetch(router), [router]);
   if (import.meta.env.DEV) {
     // Dev-only (tree-shaken in production builds). Slug + boolean only.
     console.debug("[ProductCard] slug:", product.slug, "| pricePending:", pricePending);
