@@ -1,7 +1,7 @@
 // Regression tests for processLogoCore (src/lib/logo-processing-core.server.ts)
-// -- the full remove.bg orchestration: validation -> dedup/rate-limit
-// safeguards -> the outbound API call -> the PNG recolor step -> the
-// response. processLogoServer itself (the createServerFn wrapper) can't
+// -- the full background-removal orchestration: validation -> dedup/rate-
+// limit safeguards -> the outbound provider call (+ at most one fallback)
+// -> the PNG normalise/recolor step -> the response. processLogoServer itself (the createServerFn wrapper) can't
 // run under node:test, same as every createServerFn handler in this
 // codebase (see enquiries.functions.test.mjs) -- processLogoCore is the
 // extracted, request-context-free piece that actually can.
@@ -19,6 +19,13 @@ import assert from "node:assert/strict";
 process.env.LOGO_PROCESSING_POLL_INTERVAL_MS = "10";
 process.env.LOGO_PROCESSING_POLL_TIMEOUT_MS = "60";
 process.env.REMOVE_BG_API_KEY = "test-fake-key-never-real";
+// The original suite below exercises the pipeline with remove.bg as the
+// sole provider (BG_REMOVAL_PROVIDER=removebg, no fallback) -- exactly the
+// pre-API4AI behaviour. The API4AI-primary + fallback tests at the end of
+// this file override these per test via withEnv().
+process.env.BG_REMOVAL_PROVIDER = "removebg";
+process.env.BG_REMOVAL_FALLBACK_PROVIDER = "none";
+delete process.env.API4AI_API_KEY;
 
 function makePngBase64(width, height, seedByte = 0) {
   const sig = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
@@ -58,6 +65,19 @@ function cleanArrayBufferFromBase64(base64) {
 let fakeRemoveBg = async () => { throw new Error("no fake remove.bg configured for this test"); };
 mock.module("@/lib/remove-bg-client.server", {
   namedExports: { callRemoveBgApi: (params) => fakeRemoveBg(params) },
+});
+
+// API4AI transport mocked the same way, so no test can ever reach the real
+// (paid) API. The real module's constants are re-exported unchanged.
+let fakeApi4ai = async () => { throw new Error("no fake API4AI configured for this test"); };
+mock.module("@/lib/api4ai-client.server", {
+  namedExports: {
+    callApi4aiApi: (params) => fakeApi4ai(params),
+    API4AI_ENDPOINT: "https://api4ai.cloud/img-bg-removal/v1/results",
+    API4AI_MODE: "fg-image",
+    API4AI_KIND: "general",
+    API4AI_MAX_RESPONSE_BYTES: 40 * 1024 * 1024,
+  },
 });
 
 function makeFakeStore() {
@@ -213,13 +233,21 @@ test("missing REMOVE_BG_API_KEY: fails safe without claiming a cache slot or cal
   delete process.env.REMOVE_BG_API_KEY;
   let called = false;
   fakeRemoveBg = async () => { called = true; throw new Error("must not be called"); };
+  // A client-style variable must never be used as a fallback.
+  process.env.VITE_REMOVE_BG_API_KEY = "test-fake-client-key";
+  const logged = [];
+  const savedError = console.error;
+  console.error = (...args) => logged.push(args.join(" "));
   try {
     const result = await processLogoCore({ imageBase64: makePngBase64(10, 10) }, freshIp());
     assert.equal(result.success, false);
     assert.match(result.error, /not configured/);
     assert.equal(called, false);
     assert.equal(fakeStore.cache.size, 0);
+    assert.ok(logged.some((line) => line.includes("REMOVE_BG_API_KEY is not set")));
   } finally {
+    console.error = savedError;
+    delete process.env.VITE_REMOVE_BG_API_KEY;
     process.env.REMOVE_BG_API_KEY = savedKey;
   }
 });
@@ -499,4 +527,378 @@ test("abandoned concurrency lease: expired slots from crashed workers are purged
   // The request should automatically purge expired slots and succeed
   const result = await processLogoCore({ imageBase64: REAL_1X1_PNG_BASE64 }, ip);
   assert.equal(result.success, true);
+});
+
+// ===========================================================================
+// API4AI as primary provider (the new default) + single remove.bg fallback
+// ===========================================================================
+
+const { encode: encodePng, decode: decodePng } = await import("fast-png");
+const { computeFingerprint: fingerprintOf } = await import("./logo-processing-safeguards.server");
+const { getProvider } = await import("./background-removal-providers.server");
+
+const FAKE_API4AI_KEY = "test-fake-api4ai-key-never-real";
+
+/** Runs fn with the given env vars set (undefined = deleted), then restores. */
+async function withEnv(vars, fn) {
+  const saved = {};
+  for (const [k, v] of Object.entries(vars)) {
+    saved[k] = process.env[k];
+    if (v === undefined) delete process.env[k]; else process.env[k] = v;
+  }
+  try { return await fn(); } finally {
+    for (const [k, v] of Object.entries(saved)) {
+      if (v === undefined) delete process.env[k]; else process.env[k] = v;
+    }
+  }
+}
+
+/** Default production-like config: API4AI primary, remove.bg fallback. */
+const API4AI_DEFAULTS = {
+  BG_REMOVAL_PROVIDER: undefined,
+  BG_REMOVAL_FALLBACK_PROVIDER: undefined,
+  API4AI_API_KEY: FAKE_API4AI_KEY,
+  REMOVE_BG_API_KEY: "test-fake-key-never-real",
+};
+
+function rgbaPng(width, height, pixel = () => [20, 40, 110, 255]) {
+  const data = new Uint8Array(width * height * 4);
+  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+    data.set(pixel(x, y), (y * width + x) * 4);
+  }
+  return Uint8Array.from(encodePng({ width, height, data, channels: 4, depth: 8 }));
+}
+
+function api4aiSuccess(pngBytes, overrides = {}) {
+  let calls = 0;
+  const seen = [];
+  const fn = async (params) => {
+    calls++;
+    seen.push(params);
+    return {
+      ok: true, status: 200,
+      arrayBuffer: pngBytes.buffer.slice(pngBytes.byteOffset, pngBytes.byteOffset + pngBytes.byteLength),
+      creditsCharged: null, responseType: "api4ai", responseWidth: "1", responseHeight: "1",
+      ...overrides,
+    };
+  };
+  fn.getCallCount = () => calls;
+  fn.seen = seen;
+  return fn;
+}
+
+function api4aiFailure(status = 500, errorText = "upstream error body") {
+  let calls = 0;
+  const fn = async () => {
+    calls++;
+    return { ok: false, status, errorText, creditsCharged: null, responseType: null, responseWidth: null, responseHeight: null };
+  };
+  fn.getCallCount = () => calls;
+  return fn;
+}
+
+function inputBytes(base64) {
+  return Uint8Array.from(Buffer.from(base64, "base64"));
+}
+
+function seedCacheRow(fingerprint, uv, laser) {
+  fakeStore.cache.set(fingerprint, {
+    fingerprint, status: "succeeded", owner_token: null, lease_expires_at: null,
+    uv_logo_url: uv, laser_logo_url: laser,
+    credits_charged: "0", response_type: "preview", response_width: "1", response_height: "1", error_message: null,
+  });
+}
+
+const api4aiFingerprint = (b64) => fingerprintOf(inputBytes(b64), getProvider("api4ai").cacheVariant);
+const removeBgFingerprint = (b64) => fingerprintOf(inputBytes(b64), "small");
+
+test("api4ai default: API4AI is called once, remove.bg never, and the result is cached under the API4AI-specific fingerprint", async () => {
+  reset();
+  await withEnv(API4AI_DEFAULTS, async () => {
+    const api = api4aiSuccess(rgbaPng(4, 2));
+    fakeApi4ai = api;
+    let removeBgCalls = 0;
+    fakeRemoveBg = async () => { removeBgCalls++; throw new Error("must not be called"); };
+    const result = await processLogoCore({ imageBase64: REAL_1X1_PNG_BASE64 }, freshIp());
+    assert.equal(result.success, true);
+    assert.equal(api.getCallCount(), 1);
+    assert.equal(removeBgCalls, 0);
+    assert.equal(api.seen[0].apiKey, FAKE_API4AI_KEY);
+    assert.equal(api.seen[0].mimeType, "image/png");
+    assert.deepEqual([...api.seen[0].imageBytes], [...inputBytes(REAL_1X1_PNG_BASE64)]);
+    assert.notEqual(api4aiFingerprint(REAL_1X1_PNG_BASE64), removeBgFingerprint(REAL_1X1_PNG_BASE64));
+    assert.equal(fakeStore.cache.get(api4aiFingerprint(REAL_1X1_PNG_BASE64))?.status, "succeeded");
+    assert.equal(fakeStore.cache.has(removeBgFingerprint(REAL_1X1_PNG_BASE64)), false);
+    assert.equal(fakeStore.usageRows.at(-1).outcome, "api_call_succeeded");
+    assert.equal(fakeStore.usageRows.at(-1).response_type, "api4ai");
+  });
+});
+
+test("api4ai: a full-size output is downscaled to a 768px longest side with alpha preserved, and the laser image matches it", async () => {
+  reset();
+  await withEnv(API4AI_DEFAULTS, async () => {
+    // 1600x800: left half opaque navy, right half fully transparent
+    fakeApi4ai = api4aiSuccess(rgbaPng(1600, 800, (x) => (x < 800 ? [20, 40, 110, 255] : [0, 0, 0, 0])));
+    const result = await processLogoCore({ imageBase64: REAL_1X1_PNG_BASE64 }, freshIp());
+    assert.equal(result.success, true);
+    const uv = decodePng(Buffer.from(result.uvLogoUrl.split(",")[1], "base64"));
+    const laser = decodePng(Buffer.from(result.laserLogoUrl.split(",")[1], "base64"));
+    assert.equal(uv.width, 768); assert.equal(uv.height, 384);
+    assert.equal(uv.channels, 4); assert.equal(uv.depth, 8);
+    assert.equal(laser.width, 768); assert.equal(laser.height, 384);
+    const at = (img, x, y) => [...img.data.slice((y * img.width + x) * 4, (y * img.width + x) * 4 + 4)];
+    assert.deepEqual(at(uv, 10, 10), [20, 40, 110, 255]);
+    assert.equal(at(uv, 700, 10)[3], 0, "transparent region stays transparent");
+    const [lr, lg, lb, la] = at(laser, 10, 10);
+    assert.ok(lr === lg && lg === lb && lr >= 160 && lr <= 220 && la === 255, "laser pixel is the silver recolour");
+    assert.equal(at(laser, 700, 10)[3], 0);
+  });
+});
+
+test("api4ai: an existing cached remove.bg result is NOT served to an API4AI request, and stays untouched", async () => {
+  reset();
+  await withEnv(API4AI_DEFAULTS, async () => {
+    seedCacheRow(removeBgFingerprint(REAL_1X1_PNG_BASE64), "data:image/png;base64,OLD-REMOVEBG-UV", "data:image/png;base64,OLD-REMOVEBG-LASER");
+    const api = api4aiSuccess(rgbaPng(2, 2));
+    fakeApi4ai = api;
+    const result = await processLogoCore({ imageBase64: REAL_1X1_PNG_BASE64 }, freshIp());
+    assert.equal(result.success, true);
+    assert.equal(api.getCallCount(), 1);
+    assert.notEqual(result.uvLogoUrl, "data:image/png;base64,OLD-REMOVEBG-UV");
+    assert.equal(fakeStore.cache.get(removeBgFingerprint(REAL_1X1_PNG_BASE64)).uv_logo_url, "data:image/png;base64,OLD-REMOVEBG-UV");
+  });
+});
+
+test("rollback: with BG_REMOVAL_PROVIDER=removebg, existing cached remove.bg results are served with no API call at all", async () => {
+  reset();
+  await withEnv({ ...API4AI_DEFAULTS, BG_REMOVAL_PROVIDER: "removebg" }, async () => {
+    seedCacheRow(removeBgFingerprint(REAL_1X1_PNG_BASE64), "data:image/png;base64,OLD-REMOVEBG-UV", "data:image/png;base64,OLD-REMOVEBG-LASER");
+    let calls = 0;
+    fakeApi4ai = async () => { calls++; throw new Error("must not be called"); };
+    fakeRemoveBg = async () => { calls++; throw new Error("must not be called"); };
+    const result = await processLogoCore({ imageBase64: REAL_1X1_PNG_BASE64 }, freshIp());
+    assert.equal(result.success, true);
+    assert.equal(result.uvLogoUrl, "data:image/png;base64,OLD-REMOVEBG-UV");
+    assert.equal(calls, 0);
+  });
+});
+
+test("fallback: an API4AI failure triggers exactly ONE remove.bg call; the result is cached under remove.bg's fingerprint, never API4AI's", async () => {
+  reset();
+  await withEnv(API4AI_DEFAULTS, async () => {
+    const api = api4aiFailure(503);
+    fakeApi4ai = api;
+    const removeBg = successfulRemoveBgMock();
+    fakeRemoveBg = removeBg;
+    const result = await processLogoCore({ imageBase64: REAL_1X1_PNG_BASE64 }, freshIp());
+    assert.equal(result.success, true);
+    assert.equal(api.getCallCount(), 1);
+    assert.equal(removeBg.getCallCount(), 1);
+    const primaryRow = fakeStore.cache.get(api4aiFingerprint(REAL_1X1_PNG_BASE64));
+    assert.equal(primaryRow.status, "failed", "primary row is never marked succeeded with a fallback result");
+    assert.match(primaryRow.error_message, /served by remove\.bg fallback/);
+    assert.equal(fakeStore.cache.get(removeBgFingerprint(REAL_1X1_PNG_BASE64)).status, "succeeded");
+    const outcomes = fakeStore.usageRows.map((r) => [r.outcome, r.was_outbound_call]);
+    assert.deepEqual(outcomes.slice(-2), [["api_call_failed", true], ["api_call_succeeded", true]]);
+    assert.equal(fakeStore.dailyCounters.get("global:global"), 1, "one upload = one daily-quota reservation, even with the fallback");
+  });
+});
+
+test("fallback: when remove.bg already has this image cached, an API4AI failure reuses it with no paid fallback call", async () => {
+  reset();
+  await withEnv(API4AI_DEFAULTS, async () => {
+    seedCacheRow(removeBgFingerprint(REAL_1X1_PNG_BASE64), "data:image/png;base64,CACHED-UV", "data:image/png;base64,CACHED-LASER");
+    fakeApi4ai = api4aiFailure(500);
+    let removeBgCalls = 0;
+    fakeRemoveBg = async () => { removeBgCalls++; throw new Error("must not be called"); };
+    const result = await processLogoCore({ imageBase64: REAL_1X1_PNG_BASE64 }, freshIp());
+    assert.equal(result.success, true);
+    assert.equal(result.uvLogoUrl, "data:image/png;base64,CACHED-UV");
+    assert.equal(removeBgCalls, 0);
+    assert.equal(fakeStore.usageRows.at(-1).outcome, "cache_hit");
+  });
+});
+
+test("fallback: when both providers fail there is no retry loop (one call each) and no upstream error text reaches the browser", async () => {
+  reset();
+  await withEnv(API4AI_DEFAULTS, async () => {
+    const api = api4aiFailure(500, "API4AI-INTERNAL-DETAIL");
+    fakeApi4ai = api;
+    let removeBgCalls = 0;
+    fakeRemoveBg = async () => { removeBgCalls++; return { ok: false, status: 402, errorText: "REMOVEBG-INTERNAL-DETAIL", creditsCharged: null, responseType: null, responseWidth: null, responseHeight: null }; };
+    const result = await processLogoCore({ imageBase64: REAL_1X1_PNG_BASE64 }, freshIp());
+    assert.equal(result.success, false);
+    assert.equal(api.getCallCount(), 1);
+    assert.equal(removeBgCalls, 1);
+    assert.doesNotMatch(result.error, /INTERNAL-DETAIL|500|402/);
+    assert.match(result.error, /couldn.t process this logo/);
+    const primaryRow = fakeStore.cache.get(api4aiFingerprint(REAL_1X1_PNG_BASE64));
+    assert.equal(primaryRow.status, "failed");
+    assert.match(primaryRow.error_message, /API4AI-INTERNAL-DETAIL.*REMOVEBG-INTERNAL-DETAIL/, "details kept server-side");
+  });
+});
+
+test("fallback: the cache lease is extended before the fallback call", async () => {
+  reset();
+  await withEnv(API4AI_DEFAULTS, async () => {
+    fakeApi4ai = api4aiFailure(500);
+    let extendCalls = 0;
+    const originalExtend = fakeStore.extendLease;
+    fakeStore.extendLease = async (...args) => { extendCalls++; return originalExtend(...args); };
+    let extendedBeforeFallback = false;
+    const removeBg = successfulRemoveBgMock();
+    fakeRemoveBg = async (params) => { extendedBeforeFallback = extendCalls === 1; return removeBg(params); };
+    const result = await processLogoCore({ imageBase64: REAL_1X1_PNG_BASE64 }, freshIp());
+    assert.equal(result.success, true);
+    assert.equal(extendedBeforeFallback, true);
+  });
+});
+
+test("fallback disabled (BG_REMOVAL_FALLBACK_PROVIDER=none): an API4AI failure returns an error without calling remove.bg", async () => {
+  reset();
+  await withEnv({ ...API4AI_DEFAULTS, BG_REMOVAL_FALLBACK_PROVIDER: "none" }, async () => {
+    fakeApi4ai = api4aiFailure(500);
+    let removeBgCalls = 0;
+    fakeRemoveBg = async () => { removeBgCalls++; throw new Error("must not be called"); };
+    const result = await processLogoCore({ imageBase64: REAL_1X1_PNG_BASE64 }, freshIp());
+    assert.equal(result.success, false);
+    assert.equal(removeBgCalls, 0);
+  });
+});
+
+test("an API4AI output without transparency (RGB PNG) is rejected as invalid and the fallback is used", async () => {
+  reset();
+  await withEnv(API4AI_DEFAULTS, async () => {
+    const rgb = Uint8Array.from(encodePng({ width: 2, height: 2, data: new Uint8Array(12).fill(200), channels: 3, depth: 8 }));
+    fakeApi4ai = api4aiSuccess(rgb);
+    const removeBg = successfulRemoveBgMock();
+    fakeRemoveBg = removeBg;
+    const result = await processLogoCore({ imageBase64: REAL_1X1_PNG_BASE64 }, freshIp());
+    assert.equal(result.success, true);
+    assert.equal(removeBg.getCallCount(), 1);
+    assert.match(fakeStore.cache.get(api4aiFingerprint(REAL_1X1_PNG_BASE64)).error_message, /no alpha channel/);
+  });
+});
+
+test("an API4AI malformed PNG output is rejected and the fallback is used", async () => {
+  reset();
+  await withEnv(API4AI_DEFAULTS, async () => {
+    const broken = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3, 4, 5]);
+    fakeApi4ai = api4aiSuccess(broken);
+    const removeBg = successfulRemoveBgMock();
+    fakeRemoveBg = removeBg;
+    const result = await processLogoCore({ imageBase64: REAL_1X1_PNG_BASE64 }, freshIp());
+    assert.equal(result.success, true);
+    assert.equal(removeBg.getCallCount(), 1);
+    assert.match(fakeStore.cache.get(api4aiFingerprint(REAL_1X1_PNG_BASE64)).error_message, /output rejected/);
+  });
+});
+
+test("an API4AI thrown transport error is contained and falls back once", async () => {
+  reset();
+  await withEnv(API4AI_DEFAULTS, async () => {
+    fakeApi4ai = async () => { throw new Error("socket hang up"); };
+    const removeBg = successfulRemoveBgMock();
+    fakeRemoveBg = removeBg;
+    const result = await processLogoCore({ imageBase64: REAL_1X1_PNG_BASE64 }, freshIp());
+    assert.equal(result.success, true);
+    assert.equal(removeBg.getCallCount(), 1);
+  });
+});
+
+test("missing API4AI_API_KEY with REMOVE_BG_API_KEY set: remove.bg is used as primary (old cache variant); a VITE_ copy of the key is ignored", async () => {
+  reset();
+  await withEnv({ ...API4AI_DEFAULTS, API4AI_API_KEY: undefined, VITE_API4AI_API_KEY: "test-fake-client-key" }, async () => {
+    let api4aiCalls = 0;
+    fakeApi4ai = async () => { api4aiCalls++; throw new Error("must not be called"); };
+    fakeRemoveBg = successfulRemoveBgMock();
+    const logged = [];
+    const savedError = console.error;
+    console.error = (...args) => logged.push(args.join(" "));
+    try {
+      const result = await processLogoCore({ imageBase64: REAL_1X1_PNG_BASE64 }, freshIp());
+      assert.equal(result.success, true);
+      assert.equal(api4aiCalls, 0);
+      assert.ok(logged.some((l) => l.includes("API4AI_API_KEY is not set")));
+      assert.equal(fakeStore.cache.get(removeBgFingerprint(REAL_1X1_PNG_BASE64)).status, "succeeded");
+    } finally {
+      console.error = savedError;
+    }
+  });
+});
+
+test("missing BOTH provider keys: fails safe as 'not configured' without claiming a cache slot or calling anything", async () => {
+  reset();
+  await withEnv({ ...API4AI_DEFAULTS, API4AI_API_KEY: undefined, REMOVE_BG_API_KEY: undefined }, async () => {
+    let calls = 0;
+    fakeApi4ai = async () => { calls++; throw new Error("must not be called"); };
+    fakeRemoveBg = async () => { calls++; throw new Error("must not be called"); };
+    const savedError = console.error;
+    console.error = () => {};
+    try {
+      const result = await processLogoCore({ imageBase64: REAL_1X1_PNG_BASE64 }, freshIp());
+      assert.equal(result.success, false);
+      assert.match(result.error, /not configured/);
+      assert.equal(calls, 0);
+      assert.equal(fakeStore.cache.size, 0);
+    } finally {
+      console.error = savedError;
+    }
+  });
+});
+
+test("api4ai: identical sequential uploads hit the cache (one API4AI call total)", async () => {
+  reset();
+  await withEnv(API4AI_DEFAULTS, async () => {
+    const api = api4aiSuccess(rgbaPng(2, 2));
+    fakeApi4ai = api;
+    const a = await processLogoCore({ imageBase64: REAL_1X1_PNG_BASE64 }, freshIp());
+    const b = await processLogoCore({ imageBase64: REAL_1X1_PNG_BASE64 }, freshIp());
+    assert.equal(a.success, true); assert.equal(b.success, true);
+    assert.equal(b.uvLogoUrl, a.uvLogoUrl);
+    assert.equal(api.getCallCount(), 1);
+    assert.equal(fakeStore.usageRows.at(-1).outcome, "cache_hit");
+  });
+});
+
+test("api4ai: the per-identity concurrency cap (3) and the per-identity daily cap still apply", async () => {
+  reset();
+  await withEnv({ ...API4AI_DEFAULTS, LOGO_PROCESSING_USER_DAILY_LIMIT: "3" }, async () => {
+    let calls = 0;
+    fakeApi4ai = async () => {
+      calls++;
+      await new Promise((r) => setTimeout(r, 30));
+      const png = rgbaPng(2, 2);
+      return { ok: true, status: 200, arrayBuffer: png.buffer.slice(0), creditsCharged: null, responseType: "api4ai", responseWidth: "2", responseHeight: "2" };
+    };
+    const ip = freshIp();
+    const results = await Promise.all([1, 2, 3, 4].map((i) => processLogoCore({ imageBase64: makePngBase64(1, 1, 200 + i) }, ip)));
+    assert.equal(results.filter((r) => !r.success && r.error.includes("already have a logo being processed")).length, 1);
+    assert.equal(calls, 3);
+    const fourth = await processLogoCore({ imageBase64: makePngBase64(1, 1, 250) }, ip);
+    assert.equal(fourth.success, false);
+    assert.match(fourth.error, /today's logo-processing limit/);
+    assert.equal(calls, 3);
+  });
+});
+
+test("api4ai: neither provider key appears in the response, usage rows, cache rows or server log lines; the log names each provider", async () => {
+  reset();
+  await withEnv(API4AI_DEFAULTS, async () => {
+    fakeApi4ai = api4aiFailure(500);
+    fakeRemoveBg = successfulRemoveBgMock();
+    const lines = [];
+    const saved = { log: console.log, warn: console.warn, error: console.error };
+    console.log = console.warn = console.error = (...args) => lines.push(args.join(" "));
+    try {
+      const result = await processLogoCore({ imageBase64: REAL_1X1_PNG_BASE64 }, freshIp());
+      const haystack = JSON.stringify(result) + JSON.stringify(fakeStore.usageRows) + JSON.stringify([...fakeStore.cache.values()]) + lines.join("\n");
+      assert.ok(!haystack.includes(FAKE_API4AI_KEY));
+      assert.ok(!haystack.includes("test-fake-key-never-real"));
+      assert.ok(lines.some((l) => l.includes("provider=api4ai outcome=api_call_failed")));
+      assert.ok(lines.some((l) => l.includes("provider=removebg outcome=api_call_succeeded")));
+    } finally {
+      Object.assign(console, saved);
+    }
+  });
 });

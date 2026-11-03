@@ -602,3 +602,18 @@ cd <repository-name>
 npm i
 npm run dev
 ```
+
+## Logo background removal (product customizer)
+
+Uploaded logos are background-removed server-side by `processLogoServer` (`src/lib/logo-processing-core.server.ts`). Provider-specific code lives in `src/lib/api4ai-client.server.ts` and `src/lib/remove-bg-client.server.ts`, selected by `src/lib/background-removal-providers.server.ts`. Results are validated and downscaled to a 768 px longest side (`src/lib/png-output.server.ts`) and cached in Supabase (`logo_processing_*` tables).
+
+Server-side environment variables (Lovable Cloud secrets; never prefix them with `VITE_`, the build fails if a key reaches a bundle):
+
+| Variable | Purpose | Default |
+| --- | --- | --- |
+| `API4AI_API_KEY` | API4AI key (API4AI Developer Portal) | — |
+| `REMOVE_BG_API_KEY` | remove.bg key | — |
+| `BG_REMOVAL_PROVIDER` | Primary provider: `api4ai` or `removebg` | `api4ai` |
+| `BG_REMOVAL_FALLBACK_PROVIDER` | One fallback attempt per upload: `removebg`, `api4ai` or `none` | `removebg` when the primary is `api4ai`, otherwise `none` |
+
+If the primary provider's key is missing, the fallback (when its key is set) is used as the primary. Cache entries are provider-specific: existing remove.bg results keep being served when remove.bg is the primary, and an API4AI request never receives a cached remove.bg result unless API4AI fails and the fallback is used.

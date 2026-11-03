@@ -1,14 +1,16 @@
-// Server-only logo-processing orchestration (remove.bg call, validation,
-// per-IP/concurrency/daily-cap safeguards, hashing). Lives in a `.server`
+// Server-only logo-processing orchestration (background-removal provider
+// call with at most one fallback, validation, per-IP/concurrency/daily-cap
+// safeguards, hashing, output normalisation). Lives in a `.server`
 // module on purpose: image-processing.functions.ts is imported by browser
 // code (ProductCustomizer), so anything it keeps at module level -- including
 // an exported plain function like this one -- is part of the client graph.
 // Keeping the orchestration here, and loading it only inside the server
 // function's handler, is what keeps node:crypto, the safeguards and the
-// remove.bg key handling out of the browser.
-import { decode, encode } from "fast-png";
-import { validateUploadedImage } from "@/lib/image-validation.server";
-import { callRemoveBgApi } from "@/lib/remove-bg-client.server";
+// provider API keys out of the browser.
+import { validateUploadedImage, type ValidatedImage } from "@/lib/image-validation.server";
+import { resolveProviderPlan, type ConfiguredProvider } from "@/lib/background-removal-providers.server";
+import { buildLogoOutputs } from "@/lib/png-output.server";
+import type { BackgroundRemovalApiResult } from "@/lib/background-removal-types";
 import {
   hashIdentityKey,
   computeFingerprint,
@@ -19,6 +21,10 @@ import {
   finalizeFailure,
   recordUsage,
   getUserConcurrentLimit,
+  getLeaseDurationSeconds,
+  extendClaimLease,
+  lookupCachedResult,
+  cacheResultIfAbsent,
 } from "@/lib/logo-processing-safeguards.server";
 
 function arrayBufferToBase64(buffer: ArrayBuffer | Uint8Array) {
@@ -61,7 +67,56 @@ function checkRateLimit(ip: string): boolean {
   return true;
 }
 
-const REMOVE_BG_SIZE = "small" as const;
+/** Per-provider-call timeout. With one fallback the worst case is two of
+ * these back to back; the cache lease is extended before the fallback. */
+const PROVIDER_TIMEOUT_MS = 30_000;
+
+/** Shown to the shopper for any provider/output failure. The detailed
+ * reason (which may include upstream response text) is kept server-side in
+ * the cache row, the usage row and the log -- never sent to the browser. */
+export const PROCESSING_FAILED_ERROR = "We couldn't process this logo. Please try again or upload a different image.";
+
+type ProviderAttempt =
+  | { ok: true; uvLogoUrl: string; laserLogoUrl: string; api: BackgroundRemovalApiResult; durationMs: number }
+  | { ok: false; errorMessage: string; api: BackgroundRemovalApiResult | null; reachedProvider: boolean; durationMs: number };
+
+/** Exactly one outbound call to one provider, plus output validation and
+ * UV/laser generation. Never retries. A throw is converted into a failed
+ * attempt so the caller can decide on the (single) fallback. */
+async function attemptProvider(configured: ConfiguredProvider, image: ValidatedImage, imageBase64: string): Promise<ProviderAttempt> {
+  const { provider, apiKey } = configured;
+  const startedAt = Date.now();
+  let api: BackgroundRemovalApiResult;
+  try {
+    api = await provider.call({ apiKey, image, imageBase64, timeoutMs: PROVIDER_TIMEOUT_MS });
+  } catch (e: any) {
+    return { ok: false, errorMessage: `${provider.displayName} call threw: ${e?.message || String(e)}`, api: null, reachedProvider: true, durationMs: Date.now() - startedAt };
+  }
+  const durationMs = Date.now() - startedAt;
+  if (!api.ok || !api.arrayBuffer) {
+    return { ok: false, errorMessage: `${provider.displayName} API failed: ${api.status} ${api.errorText ?? ""}`.trim(), api, reachedProvider: true, durationMs };
+  }
+  const outputs = buildLogoOutputs(new Uint8Array(api.arrayBuffer));
+  if (!outputs.ok) {
+    return { ok: false, errorMessage: `${provider.displayName} output rejected: ${outputs.error}`, api, reachedProvider: true, durationMs };
+  }
+  return {
+    ok: true,
+    uvLogoUrl: `data:image/png;base64,${arrayBufferToBase64(outputs.images.uvPng)}`,
+    laserLogoUrl: `data:image/png;base64,${arrayBufferToBase64(outputs.images.laserPng)}`,
+    api,
+    durationMs,
+  };
+}
+
+function apiAuditFields(api: BackgroundRemovalApiResult | null) {
+  return {
+    creditsCharged: api?.creditsCharged ?? null,
+    responseType: api?.responseType ?? null,
+    responseWidth: api?.responseWidth ?? null,
+    responseHeight: api?.responseHeight ?? null,
+  };
+}
 
 export type ProcessLogoResult =
   | { success: true; uvLogoUrl: string; laserLogoUrl: string }
@@ -86,12 +141,15 @@ export async function processLogoCore(data: { imageBase64: string }, ip: string)
         return { success: false, error: "Too many requests. Please try again later." };
       }
 
-      const apiKey = process.env["REMOVE_BG_API_KEY"];
-      if (!apiKey) {
+      const plan = resolveProviderPlan();
+      if (!plan) {
         // Fail safe: never proceed (and never claim a cache slot) without
-        // a key to actually call remove.bg with.
+        // a key to actually call a provider with. Keys come only from the
+        // server-side API4AI_API_KEY / REMOVE_BG_API_KEY variables (never a
+        // VITE_ copy); resolveProviderPlan logs which one is missing.
         return { success: false, error: "Image processing is not configured." };
       }
+      const primary = plan.primary;
 
       const base64Data = data.imageBase64.replace(/^data:image\/\w+;base64,/, "");
       let binaryString: string;
@@ -110,7 +168,7 @@ export async function processLogoCore(data: { imageBase64: string }, ip: string)
       // Server-side validation only -- never trusts the browser's MIME
       // type, filename extension, or any client-reported width/height.
       // Nothing past this point runs for a file that fails here, so an
-      // invalid upload never reaches remove.bg (and never costs a credit
+      // invalid upload never reaches a provider (and never costs a credit
       // or a free-preview slot).
       const validation = validateUploadedImage(bytes);
       if (!validation.valid) {
@@ -118,11 +176,13 @@ export async function processLogoCore(data: { imageBase64: string }, ip: string)
         return { success: false, error: validation.error };
       }
 
-      // Fingerprint of the ACTUAL validated bytes (+ the size parameter
-      // that will be sent), computed here server-side -- never anything
-      // the client asserts. Drives both the cross-instance cache lookup
-      // below and the concurrency-slot key.
-      fingerprint = computeFingerprint(validation.image.bytes, REMOVE_BG_SIZE);
+      // Fingerprint of the ACTUAL validated bytes (+ the primary provider's
+      // cache variant), computed here server-side -- never anything the
+      // client asserts. Provider-specific: remove.bg keeps its original
+      // variant (existing cached results still match); API4AI has its own,
+      // so it is never served a remove.bg result.
+      const image = validation.image;
+      fingerprint = computeFingerprint(image.bytes, primary.provider.cacheVariant);
 
       const reservation = await tryReserveConcurrentSlot(identityKey);
       if (reservation.kind === "over_limit") {
@@ -134,7 +194,7 @@ export async function processLogoCore(data: { imageBase64: string }, ip: string)
         // in-memory counter alone -- see logo-processing-safeguards.server.ts),
         // so if we can't reach it we can't safely enforce it. Refusing the
         // request here is the whole point of requirement 2 -- never let a
-        // remove.bg call through uncounted just because our own
+        // provider call through uncounted just because our own
         // infrastructure had a hiccup.
         await recordUsage({ identityKey, fingerprint, outcome: "unavailable", wasOutboundCall: false, errorMessage: "concurrency store unavailable" });
         return { success: false, error: "Logo processing is temporarily unavailable. Please try again in a few minutes." };
@@ -159,7 +219,7 @@ export async function processLogoCore(data: { imageBase64: string }, ip: string)
       }
 
       if (claim.kind === "cache_hit") {
-        await recordUsage({ identityKey, fingerprint, outcome: "cache_hit", wasOutboundCall: false });
+        await recordUsage({ identityKey, fingerprint, provider: primary.provider.id, outcome: "cache_hit", wasOutboundCall: false });
         return { success: true, uvLogoUrl: claim.row.uv_logo_url!, laserLogoUrl: claim.row.laser_logo_url! };
       }
 
@@ -171,7 +231,7 @@ export async function processLogoCore(data: { imageBase64: string }, ip: string)
       if (claim.kind === "timed_out_waiting") {
         // An identical upload is apparently still being processed
         // elsewhere and didn't resolve within our wait window. We do NOT
-        // fall through and call remove.bg ourselves here -- that request
+        // fall through and call the provider ourselves here -- that request
         // may still complete successfully, and firing a second one now
         // would be exactly the duplicate-billing risk this module exists
         // to prevent. The honest answer is "we don't know the outcome
@@ -181,62 +241,74 @@ export async function processLogoCore(data: { imageBase64: string }, ip: string)
       }
 
       // claim.kind === "claimed" -- we're the one request that actually
-      // holds the lease and calls remove.bg for this fingerprint.
+      // holds the lease and calls the provider for this fingerprint.
       claimToken = claim.ownerToken;
-      const startedAt = Date.now();
-      const apiResult = await callRemoveBgApi({ apiKey, imageBase64: base64Data, size: REMOVE_BG_SIZE });
-      const durationMs = Date.now() - startedAt;
+      const first = await attemptProvider(primary, image, base64Data);
 
-      if (!apiResult.ok) {
-        const errorMessage = `Remove.bg API failed: ${apiResult.status} ${apiResult.errorText ?? ""}`.trim();
-        await finalizeFailure(fingerprint, claimToken, errorMessage);
+      if (first.ok) {
+        await finalizeSuccess(fingerprint, claimToken, { uvLogoUrl: first.uvLogoUrl, laserLogoUrl: first.laserLogoUrl, ...apiAuditFields(first.api) });
         await recordUsage({
-          identityKey, fingerprint, outcome: "api_call_failed", wasOutboundCall: true,
-          creditsCharged: apiResult.creditsCharged, responseType: apiResult.responseType,
-          responseWidth: apiResult.responseWidth, responseHeight: apiResult.responseHeight,
-          durationMs, errorMessage,
+          identityKey, fingerprint, provider: primary.provider.id, outcome: "api_call_succeeded", wasOutboundCall: true,
+          ...apiAuditFields(first.api), durationMs: first.durationMs,
         });
-        return { success: false, error: errorMessage };
+        return { success: true, uvLogoUrl: first.uvLogoUrl, laserLogoUrl: first.laserLogoUrl };
       }
 
-      const uvArrayBuffer = apiResult.arrayBuffer!;
-      const uvBase64 = `data:image/png;base64,${arrayBufferToBase64(uvArrayBuffer)}`;
-
-      const pngImage = decode(uvArrayBuffer);
-      const pixels = pngImage.data;
-      for (let i = 0; i < pixels.length; i += 4) {
-        if (pixels[i + 3]! > 0) {
-          const r = pixels[i]!;
-          const g = pixels[i + 1]!;
-          const b = pixels[i + 2]!;
-          const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
-          const silverBase = Math.floor(160 + (luminance / 255) * 60);
-          pixels[i] = silverBase;
-          pixels[i + 1] = silverBase;
-          pixels[i + 2] = silverBase;
-        }
-      }
-      const laserUint8 = encode(pngImage);
-      const laserBase64 = `data:image/png;base64,${arrayBufferToBase64(laserUint8)}`;
-
-      await finalizeSuccess(fingerprint, claimToken, {
-        uvLogoUrl: uvBase64, laserLogoUrl: laserBase64,
-        creditsCharged: apiResult.creditsCharged, responseType: apiResult.responseType,
-        responseWidth: apiResult.responseWidth, responseHeight: apiResult.responseHeight,
-      });
       await recordUsage({
-        identityKey, fingerprint, outcome: "api_call_succeeded", wasOutboundCall: true,
-        creditsCharged: apiResult.creditsCharged, responseType: apiResult.responseType,
-        responseWidth: apiResult.responseWidth, responseHeight: apiResult.responseHeight,
-        durationMs,
+        identityKey, fingerprint, provider: primary.provider.id, outcome: "api_call_failed", wasOutboundCall: first.reachedProvider,
+        ...apiAuditFields(first.api), durationMs: first.durationMs, errorMessage: first.errorMessage,
       });
 
-      return { success: true, uvLogoUrl: uvBase64, laserLogoUrl: laserBase64 };
+      const fallback = plan.fallback;
+      if (!fallback) {
+        await finalizeFailure(fingerprint, claimToken, first.errorMessage);
+        return { success: false, error: PROCESSING_FAILED_ERROR };
+      }
+
+      // ONE fallback attempt, never a loop. The primary's own cache row is
+      // always finalized as FAILED here (even if the fallback succeeds), so
+      // a fallback result is never stored under the primary provider's
+      // fingerprint and a later upload retries the primary.
+      const fallbackFingerprint = computeFingerprint(image.bytes, fallback.provider.cacheVariant);
+      const cachedFallback = await lookupCachedResult(fallbackFingerprint);
+      if (cachedFallback.kind === "hit") {
+        // The fallback provider already processed this exact image (e.g. a
+        // pre-existing remove.bg cache entry): reuse it, no paid call.
+        await finalizeFailure(fingerprint, claimToken, `${first.errorMessage}; served cached ${fallback.provider.displayName} result`);
+        await recordUsage({ identityKey, fingerprint: fallbackFingerprint, provider: fallback.provider.id, outcome: "cache_hit", wasOutboundCall: false });
+        return { success: true, uvLogoUrl: cachedFallback.row.uv_logo_url!, laserLogoUrl: cachedFallback.row.laser_logo_url! };
+      }
+
+      // Keep our claim alive across the second call so a duplicate upload
+      // can't reclaim the row (and pay again) while we're still working.
+      await extendClaimLease(fingerprint, claimToken, getLeaseDurationSeconds());
+      console.warn(`[logo-processing] ${primary.provider.displayName} failed; trying ${fallback.provider.displayName} fallback once.`);
+      const second = await attemptProvider(fallback, image, base64Data);
+
+      if (!second.ok) {
+        await finalizeFailure(fingerprint, claimToken, `${first.errorMessage}; fallback: ${second.errorMessage}`);
+        await recordUsage({
+          identityKey, fingerprint: fallbackFingerprint, provider: fallback.provider.id, outcome: "api_call_failed", wasOutboundCall: second.reachedProvider,
+          ...apiAuditFields(second.api), durationMs: second.durationMs, errorMessage: second.errorMessage,
+        });
+        return { success: false, error: PROCESSING_FAILED_ERROR };
+      }
+
+      await finalizeFailure(fingerprint, claimToken, `${first.errorMessage}; served by ${fallback.provider.displayName} fallback`);
+      // Cached under the FALLBACK provider's own fingerprint (only if no row
+      // exists yet), so the next primary failure for this image reuses it.
+      await cacheResultIfAbsent(fallbackFingerprint, { uvLogoUrl: second.uvLogoUrl, laserLogoUrl: second.laserLogoUrl, ...apiAuditFields(second.api) });
+      await recordUsage({
+        identityKey, fingerprint: fallbackFingerprint, provider: fallback.provider.id, outcome: "api_call_succeeded", wasOutboundCall: true,
+        ...apiAuditFields(second.api), durationMs: second.durationMs,
+      });
+      return { success: true, uvLogoUrl: second.uvLogoUrl, laserLogoUrl: second.laserLogoUrl };
     } catch (e: any) {
       if (fingerprint && claimToken) {
         await finalizeFailure(fingerprint, claimToken, e?.message || String(e));
       }
-      return { success: false, error: "Server error: " + (e.message || String(e)) };
+      console.error("[logo-processing] unexpected error:", e?.message || String(e));
+      return { success: false, error: PROCESSING_FAILED_ERROR };
     } finally {
       if (slotId) await releaseConcurrentSlot(slotId);
     }

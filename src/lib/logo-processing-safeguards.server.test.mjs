@@ -462,3 +462,32 @@ test("claimProcessingSlot fails closed if store becomes unavailable mid-poll", a
   const outcome = await claimProcessingSlot("fp-flaky", "id-8");
   assert.equal(outcome.kind, "unavailable");
 });
+
+// --- provider-fallback cache helpers (lookupCachedResult / cacheResultIfAbsent) ---
+
+test("lookupCachedResult: only a succeeded row with both images is a hit; in_progress/failed/missing are misses; store down is unavailable", async () => {
+  reset();
+  const { lookupCachedResult } = safeguards;
+  assert.equal((await lookupCachedResult("nope")).kind, "miss");
+  fake.cache.set("fp-progress", { fingerprint: "fp-progress", status: "in_progress", uv_logo_url: null, laser_logo_url: null });
+  assert.equal((await lookupCachedResult("fp-progress")).kind, "miss");
+  fake.cache.set("fp-ok", { fingerprint: "fp-ok", status: "succeeded", uv_logo_url: "uv", laser_logo_url: "laser" });
+  const hit = await lookupCachedResult("fp-ok");
+  assert.equal(hit.kind, "hit");
+  assert.equal(hit.row.uv_logo_url, "uv");
+  fake.setUnavailable(true);
+  assert.equal((await lookupCachedResult("fp-ok")).kind, "unavailable");
+});
+
+test("cacheResultIfAbsent: stores a new succeeded row, but never overwrites an existing row for that fingerprint", async () => {
+  reset();
+  const { cacheResultIfAbsent } = safeguards;
+  const fields = { uvLogoUrl: "uv-new", laserLogoUrl: "laser-new", creditsCharged: "1", responseType: "other", responseWidth: "2", responseHeight: "2" };
+  await cacheResultIfAbsent("fp-new", fields);
+  assert.equal(fake.cache.get("fp-new").status, "succeeded");
+  assert.equal(fake.cache.get("fp-new").uv_logo_url, "uv-new");
+
+  fake.cache.set("fp-existing", { fingerprint: "fp-existing", status: "succeeded", owner_token: null, uv_logo_url: "uv-old", laser_logo_url: "laser-old" });
+  await cacheResultIfAbsent("fp-existing", fields);
+  assert.equal(fake.cache.get("fp-existing").uv_logo_url, "uv-old");
+});

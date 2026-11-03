@@ -1,5 +1,8 @@
-// Server-side dedup/cache/usage-cap safeguards for the remove.bg
-// integration (processLogoServer, logo-processing-core.server.ts).
+// Server-side dedup/cache/usage-cap safeguards for the logo
+// background-removal integration (processLogoServer,
+// logo-processing-core.server.ts). Provider-neutral: the provider in use
+// (API4AI or remove.bg, see background-removal-providers.server.ts) only
+// affects the fingerprint's variant string.
 //
 // This module owns the DECISIONS (claim/poll/reclaim state machine, daily
 // and global cap checks, concurrency reservation); the actual Supabase
@@ -37,7 +40,7 @@
 // be reached, and claimProcessingSlot propagates that straight back as
 // ClaimOutcome's "unavailable" kind -- logo-processing-core.server.ts
 // turns that into a clear "temporarily unavailable" error WITHOUT ever
-// calling remove.bg.
+// calling a background-removal provider.
 
 import { createHash } from "node:crypto";
 import {
@@ -51,8 +54,10 @@ import {
   reserveConcurrencySlot,
   releaseConcurrencySlot,
   insertUsageRow,
+  extendLease,
   type CacheRow,
 } from "@/lib/logo-processing-store.server";
+import type { BackgroundRemovalProviderId } from "@/lib/background-removal-types";
 
 export const DEFAULT_USER_DAILY_LIMIT = 10;
 export const DEFAULT_USER_CONCURRENT_LIMIT = 3;
@@ -101,10 +106,14 @@ export function hashIdentityKey(rawIdentity: string): string {
   return createHash("sha256").update(`${salt}:${rawIdentity}`).digest("hex");
 }
 
-/** Computed from the actual validated upload bytes plus the exact
- * remove.bg parameters that affect the output (today, just `size`). */
-export function computeFingerprint(bytes: Uint8Array, size: "small" | "auto"): string {
-  return createHash("sha256").update(size).update(bytes).digest("hex");
+/** Computed from the actual validated upload bytes plus the provider's
+ * cache variant (every provider parameter that affects the output). For
+ * remove.bg the variant is its `size` value ("small"), exactly what this
+ * function hashed before providers existed, so existing cached remove.bg
+ * results keep matching; API4AI uses a distinct variant so it can never be
+ * served a remove.bg result. */
+export function computeFingerprint(bytes: Uint8Array, variant: string): string {
+  return createHash("sha256").update(variant).update(bytes).digest("hex");
 }
 
 export function generateOwnerToken(): string {
@@ -163,7 +172,7 @@ async function reserveQuotaOrReleaseClaim(
   return { kind: "unavailable" };
 }
 
-/** Attempts to become the one request that actually calls remove.bg for
+/** Attempts to become the one request that actually calls the provider for
  * this fingerprint.
  * - If a row does not exist, claims it with a time-bounded lease and unique ownerToken.
  * - If a row exists with status='succeeded', returns cache_hit.
@@ -172,7 +181,7 @@ async function reserveQuotaOrReleaseClaim(
  *   * If lease_expires_at <= now() (stale lease from a crashed worker), atomically
  *     reclaims the row via reclaimStaleCacheRow.
  *   * If lease_expires_at > now() (active lease), polls until it resolves or deadline elapses.
- * - Never triggers a second remove.bg call while an active request is running. */
+ * - Never triggers a second provider call while an active request is running. */
 export async function claimProcessingSlot(fingerprint: string, identityKey: string): Promise<ClaimOutcome> {
   const deadline = Date.now() + getCachePollTimeoutMs();
   const ownerToken = generateOwnerToken();
@@ -256,8 +265,51 @@ export async function finalizeFailure(
   await updateCacheRowFailed(fingerprint, ownerToken, errorMessage);
 }
 
+/** Extends this request's cache lease (only while it still owns the row),
+ * used before a fallback provider call so the combined primary + fallback
+ * time can't outlive the lease and let a duplicate request reclaim it. */
+export async function extendClaimLease(fingerprint: string, ownerToken: string, extensionSeconds: number): Promise<boolean> {
+  const result = await extendLease(fingerprint, ownerToken, extensionSeconds);
+  return result.ok && result.extended;
+}
+
+export type CachedResultLookup =
+  | { kind: "hit"; row: CacheRow }
+  | { kind: "miss" }
+  | { kind: "unavailable" };
+
+/** Read-only lookup of a SUCCEEDED cache row. Never claims, polls or
+ * reserves quota -- used to reuse an existing fallback-provider result
+ * instead of paying for a new fallback call. */
+export async function lookupCachedResult(fingerprint: string): Promise<CachedResultLookup> {
+  const existing = await getCacheRow(fingerprint);
+  if (!existing.ok) return { kind: "unavailable" };
+  const row = existing.row;
+  if (row && row.status === "succeeded" && row.uv_logo_url && row.laser_logo_url) return { kind: "hit", row };
+  return { kind: "miss" };
+}
+
+/** Best-effort: stores a result under a fingerprint nobody holds yet (a
+ * fallback provider's own fingerprint), using the same insert-then-finalize
+ * ownership protocol as a normal claim. Silently skips if any row already
+ * exists for that fingerprint or the store is unreachable -- caching here
+ * is an optimisation, never a correctness requirement. */
+export async function cacheResultIfAbsent(
+  fingerprint: string,
+  result: { uvLogoUrl: string; laserLogoUrl: string; creditsCharged: string | null; responseType: string | null; responseWidth: string | null; responseHeight: string | null },
+): Promise<void> {
+  const ownerToken = generateOwnerToken();
+  const inserted = await insertCacheInProgress(fingerprint, ownerToken, getLeaseDurationSeconds());
+  if (!inserted.ok) return;
+  await finalizeSuccess(fingerprint, ownerToken, result);
+}
+
 export interface UsageLogEntry {
   identityKey: string;
+  /** Which provider this attempt used (null when no provider was reached
+   * or selected, e.g. a validation rejection). Logged only; the usage
+   * table has no provider column. */
+  provider?: BackgroundRemovalProviderId | null;
   fingerprint: string | null;
   outcome: "validation_rejected" | "rate_limited" | "cache_hit" | "api_call_succeeded" | "api_call_failed" | "unavailable";
   wasOutboundCall: boolean;
@@ -270,7 +322,7 @@ export interface UsageLogEntry {
 }
 
 export async function recordUsage(entry: UsageLogEntry): Promise<void> {
-  const logLine = `[remove.bg] outcome=${entry.outcome} outbound=${entry.wasOutboundCall} credits_charged=${entry.creditsCharged ?? "n/a"} type=${entry.responseType ?? "n/a"} width=${entry.responseWidth ?? "n/a"} height=${entry.responseHeight ?? "n/a"} duration_ms=${entry.durationMs ?? "n/a"} fingerprint=${entry.fingerprint?.slice(0, 12) ?? "n/a"}`;
+  const logLine = `[logo-processing] provider=${entry.provider ?? "n/a"} outcome=${entry.outcome} outbound=${entry.wasOutboundCall} credits_charged=${entry.creditsCharged ?? "n/a"} type=${entry.responseType ?? "n/a"} width=${entry.responseWidth ?? "n/a"} height=${entry.responseHeight ?? "n/a"} duration_ms=${entry.durationMs ?? "n/a"} fingerprint=${entry.fingerprint?.slice(0, 12) ?? "n/a"}`;
   console.log(logLine);
   await insertUsageRow({
     identity_key: entry.identityKey,
