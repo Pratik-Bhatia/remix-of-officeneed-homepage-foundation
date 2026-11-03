@@ -6,7 +6,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { encode, decode } from "fast-png";
 
-const { buildLogoOutputs, targetSize, MAX_OUTPUT_LONGEST_SIDE_PX } = await import("./png-output.server");
+const { buildLogoOutputs, buildLogoOutputsFromRgba, targetSize, MAX_OUTPUT_LONGEST_SIDE_PX } = await import("./png-output.server");
 
 function png(width, height, channels, depth, pixel) {
   const Arr = depth === 16 ? Uint16Array : Uint8Array;
@@ -120,4 +120,19 @@ test("a PNG whose header declares dimensions over 4096px is refused before any p
   const r = buildLogoOutputs(bytes);
   assert.equal(r.ok, false);
   assert.match(r.error, /dimensions too large \(5000x5000\)/);
+});
+
+test("buildLogoOutputsFromRgba: same resize + laser as the PNG path, and rejects invalid pixel data", () => {
+  const w = 1536, h = 512, data = new Uint8Array(w * h * 4);
+  for (let p = 0; p < w * h; p++) if (p % w < 768) data.set([200, 30, 40, 255], p * 4);
+  const r = buildLogoOutputsFromRgba({ width: w, height: h, data });
+  assert.equal(r.ok, true);
+  const uv = decode(r.images.uvPng);
+  assert.equal(uv.width, 768); assert.equal(uv.height, 256);
+  assert.deepEqual(px(uv, 10, 10), [200, 30, 40, 255]);
+  assert.equal(px(uv, 700, 10)[3], 0);
+  const laser = decode(r.images.laserPng);
+  assert.equal(px(laser, 700, 10)[3], 0, "transparent stays transparent in the laser image");
+  assert.equal(buildLogoOutputsFromRgba({ width: 10, height: 10, data: new Uint8Array(5) }).ok, false);
+  assert.equal(buildLogoOutputsFromRgba({ width: 5000, height: 1, data: new Uint8Array(20000) }).ok, false);
 });

@@ -9,7 +9,8 @@
 // provider API keys out of the browser.
 import { validateUploadedImage, type ValidatedImage } from "@/lib/image-validation.server";
 import { resolveProviderPlan, type ConfiguredProvider } from "@/lib/background-removal-providers.server";
-import { buildLogoOutputs } from "@/lib/png-output.server";
+import { buildLogoOutputs, buildLogoOutputsFromRgba } from "@/lib/png-output.server";
+import { analyzeForLocalRemoval, LOCAL_CACHE_VARIANT, type LocalAnalysis } from "@/lib/local-background-removal.server";
 import type { BackgroundRemovalApiResult } from "@/lib/background-removal-types";
 import {
   hashIdentityKey,
@@ -201,6 +202,26 @@ export async function processLogoCore(data: { imageBase64: string }, ip: string)
       }
       slotId = reservation.slotId;
 
+      // Plain-background / already-transparent logos are processed locally
+      // (no paid call, sub-second). Runs only AFTER the concurrency slot is
+      // held, so its CPU work is bounded by the same per-identity cap. The
+      // local path still goes through the SAME claim -> daily-quota -> cache
+      // flow below; it only changes the cache variant and the processor.
+      const localStartedAt = Date.now();
+      let local: LocalAnalysis;
+      try {
+        local = analyzeForLocalRemoval(image);
+      } catch (e: any) {
+        local = { kind: "unsuitable", reason: `local analysis threw: ${e?.message || String(e)}` };
+      }
+      const localAnalysisMs = Date.now() - localStartedAt;
+      if (local.kind !== "unsuitable") {
+        fingerprint = computeFingerprint(image.bytes, LOCAL_CACHE_VARIANT);
+      } else {
+        console.log(`[logo-processing] local removal not used (${local.reason}); using ${primary.provider.displayName}.`);
+      }
+      const source = local.kind !== "unsuitable" ? ("local" as const) : primary.provider.id;
+
       const claim = await claimProcessingSlot(fingerprint, identityKey);
 
       if (claim.kind === "unavailable") {
@@ -219,7 +240,7 @@ export async function processLogoCore(data: { imageBase64: string }, ip: string)
       }
 
       if (claim.kind === "cache_hit") {
-        await recordUsage({ identityKey, fingerprint, provider: primary.provider.id, outcome: "cache_hit", wasOutboundCall: false });
+        await recordUsage({ identityKey, fingerprint, provider: source, outcome: "cache_hit", wasOutboundCall: false });
         return { success: true, uvLogoUrl: claim.row.uv_logo_url!, laserLogoUrl: claim.row.laser_logo_url! };
       }
 
@@ -243,6 +264,33 @@ export async function processLogoCore(data: { imageBase64: string }, ip: string)
       // claim.kind === "claimed" -- we're the one request that actually
       // holds the lease and calls the provider for this fingerprint.
       claimToken = claim.ownerToken;
+
+      if (local.kind !== "unsuitable") {
+        // Local result: same finalize/usage bookkeeping as a provider call.
+        // The usage table outcome values are fixed by its CHECK constraint,
+        // so a local success is recorded as api_call_succeeded with
+        // was_outbound_call=false and response_type="local".
+        const outputStartedAt = Date.now();
+        const outputs = buildLogoOutputsFromRgba(local.rgba);
+        const durationMs = localAnalysisMs + (Date.now() - outputStartedAt);
+        const audit = {
+          creditsCharged: null, responseType: "local",
+          responseWidth: String(local.rgba.width), responseHeight: String(local.rgba.height),
+        };
+        if (!outputs.ok) {
+          const errorMessage = `local output rejected: ${outputs.error}`;
+          await finalizeFailure(fingerprint, claimToken, errorMessage);
+          await recordUsage({ identityKey, fingerprint, provider: "local", outcome: "api_call_failed", wasOutboundCall: false, ...audit, durationMs, errorMessage });
+          return { success: false, error: PROCESSING_FAILED_ERROR };
+        }
+        const uvLogoUrl = `data:image/png;base64,${arrayBufferToBase64(outputs.images.uvPng)}`;
+        const laserLogoUrl = `data:image/png;base64,${arrayBufferToBase64(outputs.images.laserPng)}`;
+        await finalizeSuccess(fingerprint, claimToken, { uvLogoUrl, laserLogoUrl, ...audit });
+        console.log(`[logo-processing] local ${local.kind}: removed=${local.stats.removedPct}% kept=${local.stats.keptPct}% enclosed_bg=${local.stats.enclosedBackgroundPct}% work=${local.stats.workWidth}x${local.stats.workHeight}`);
+        await recordUsage({ identityKey, fingerprint, provider: "local", outcome: "api_call_succeeded", wasOutboundCall: false, ...audit, durationMs });
+        return { success: true, uvLogoUrl, laserLogoUrl };
+      }
+
       const first = await attemptProvider(primary, image, base64Data);
 
       if (first.ok) {

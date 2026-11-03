@@ -57,7 +57,7 @@ import {
   extendLease,
   type CacheRow,
 } from "@/lib/logo-processing-store.server";
-import type { BackgroundRemovalProviderId } from "@/lib/background-removal-types";
+import type { ProcessingSourceId } from "@/lib/background-removal-types";
 
 export const DEFAULT_USER_DAILY_LIMIT = 10;
 export const DEFAULT_USER_CONCURRENT_LIMIT = 3;
@@ -306,10 +306,10 @@ export async function cacheResultIfAbsent(
 
 export interface UsageLogEntry {
   identityKey: string;
-  /** Which provider this attempt used (null when no provider was reached
-   * or selected, e.g. a validation rejection). Logged only; the usage
-   * table has no provider column. */
-  provider?: BackgroundRemovalProviderId | null;
+  /** Which provider (or "local") this attempt used (null when none was
+   * reached or selected, e.g. a validation rejection). Logged only; the
+   * usage table has no provider column. */
+  provider?: ProcessingSourceId | null;
   fingerprint: string | null;
   outcome: "validation_rejected" | "rate_limited" | "cache_hit" | "api_call_succeeded" | "api_call_failed" | "unavailable";
   wasOutboundCall: boolean;

@@ -902,3 +902,133 @@ test("api4ai: neither provider key appears in the response, usage rows, cache ro
     }
   });
 });
+
+// ===========================================================================
+// Local plain-background path (no provider call) inside the full pipeline
+// ===========================================================================
+
+const { LOCAL_CACHE_VARIANT } = await import("./local-background-removal.server");
+
+/** Black disc on a plain white background, as an RGB PNG (base64). */
+function plainBackgroundLogoBase64(seed = 0) {
+  const w = 240, h = 160, data = new Uint8Array(w * h * 3).fill(255);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    if (Math.hypot(x - 120, y - 80) < 50 + seed) data.set([12, 12, 12], (y * w + x) * 3);
+  }
+  return Buffer.from(encodePng({ width: w, height: h, data, channels: 3, depth: 8 })).toString("base64");
+}
+
+/** Smooth gradient over the whole image: not a plain background. */
+function complexImageBase64() {
+  const w = 200, h = 120, data = new Uint8Array(w * h * 3);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) data.set([x, y * 2, 128], (y * w + x) * 3);
+  return Buffer.from(encodePng({ width: w, height: h, data, channels: 3, depth: 8 })).toString("base64");
+}
+
+test("local: a plain-background logo is processed WITHOUT any provider call, with transparent background and opaque logo", async () => {
+  reset();
+  await withEnv(API4AI_DEFAULTS, async () => {
+    let calls = 0;
+    fakeApi4ai = async () => { calls++; throw new Error("must not be called"); };
+    fakeRemoveBg = async () => { calls++; throw new Error("must not be called"); };
+    const b64 = plainBackgroundLogoBase64();
+    const result = await processLogoCore({ imageBase64: b64 }, freshIp());
+    assert.equal(result.success, true);
+    assert.equal(calls, 0);
+    const uv = decodePng(Buffer.from(result.uvLogoUrl.split(",")[1], "base64"));
+    const laser = decodePng(Buffer.from(result.laserLogoUrl.split(",")[1], "base64"));
+    const at = (img, x, y) => [...img.data.slice((y * img.width + x) * 4, (y * img.width + x) * 4 + 4)];
+    assert.equal(at(uv, 3, 3)[3], 0, "UV background transparent");
+    assert.deepEqual(at(uv, 120, 80), [12, 12, 12, 255], "UV logo opaque, original colour");
+    assert.equal(at(laser, 3, 3)[3], 0, "laser background transparent (not grey)");
+    const [lr, lg, lb, la] = at(laser, 120, 80);
+    assert.ok(lr === lg && lg === lb && la === 255);
+    const usage = fakeStore.usageRows.at(-1);
+    assert.equal(usage.outcome, "api_call_succeeded");
+    assert.equal(usage.was_outbound_call, false);
+    assert.equal(usage.response_type, "local");
+    const fp = fingerprintOf(inputBytes(b64), LOCAL_CACHE_VARIANT);
+    assert.equal(fakeStore.cache.get(fp)?.status, "succeeded");
+    assert.equal(fakeStore.cache.has(api4aiFingerprint(b64)), false, "never stored as an API4AI result");
+  });
+});
+
+test("local: still counts against the daily quota and still respects the per-identity daily limit", async () => {
+  reset();
+  await withEnv({ ...API4AI_DEFAULTS, LOGO_PROCESSING_USER_DAILY_LIMIT: "1" }, async () => {
+    fakeApi4ai = async () => { throw new Error("must not be called"); };
+    const ip = freshIp();
+    const first = await processLogoCore({ imageBase64: plainBackgroundLogoBase64(0) }, ip);
+    assert.equal(first.success, true);
+    assert.equal(fakeStore.dailyCounters.get("global:global"), 1);
+    const second = await processLogoCore({ imageBase64: plainBackgroundLogoBase64(5) }, ip);
+    assert.equal(second.success, false);
+    assert.match(second.error, /today's logo-processing limit/);
+  });
+});
+
+test("local: the per-identity concurrency cap still applies to local processing", async () => {
+  reset();
+  await withEnv(API4AI_DEFAULTS, async () => {
+    fakeApi4ai = async () => { throw new Error("must not be called"); };
+    const ip = freshIp();
+    const originalClaimInsert = fakeStore.insertCacheInProgress;
+    fakeStore.insertCacheInProgress = async (...args) => { await new Promise((r) => setTimeout(r, 30)); return originalClaimInsert(...args); };
+    const results = await Promise.all([0, 3, 6, 9].map((s) => processLogoCore({ imageBase64: plainBackgroundLogoBase64(s) }, ip)));
+    assert.equal(results.filter((r) => !r.success && r.error.includes("already have a logo being processed")).length, 1);
+  });
+});
+
+test("local: an identical re-upload is a cache hit", async () => {
+  reset();
+  await withEnv(API4AI_DEFAULTS, async () => {
+    fakeApi4ai = async () => { throw new Error("must not be called"); };
+    const b64 = plainBackgroundLogoBase64();
+    const a = await processLogoCore({ imageBase64: b64 }, freshIp());
+    const b = await processLogoCore({ imageBase64: b64 }, freshIp());
+    assert.equal(b.uvLogoUrl, a.uvLogoUrl);
+    assert.equal(fakeStore.usageRows.at(-1).outcome, "cache_hit");
+  });
+});
+
+test("local: an already-transparent PNG is used as-is without a provider call", async () => {
+  reset();
+  await withEnv(API4AI_DEFAULTS, async () => {
+    let calls = 0;
+    fakeApi4ai = async () => { calls++; throw new Error("must not be called"); };
+    const png = rgbaPng(100, 60, (x, y) => (x > 20 && x < 80 && y > 15 && y < 45 ? [200, 30, 40, 255] : [0, 0, 0, 0]));
+    const result = await processLogoCore({ imageBase64: Buffer.from(png).toString("base64") }, freshIp());
+    assert.equal(result.success, true);
+    assert.equal(calls, 0);
+    const uv = decodePng(Buffer.from(result.uvLogoUrl.split(",")[1], "base64"));
+    assert.deepEqual([...uv.data.slice((30 * 100 + 50) * 4, (30 * 100 + 50) * 4 + 4)], [200, 30, 40, 255]);
+    assert.equal(uv.data[3], 0);
+  });
+});
+
+test("complex image (gradient/photo): local is not used and API4AI is called exactly once", async () => {
+  reset();
+  await withEnv(API4AI_DEFAULTS, async () => {
+    const api = api4aiSuccess(rgbaPng(4, 4));
+    fakeApi4ai = api;
+    const b64 = complexImageBase64();
+    const result = await processLogoCore({ imageBase64: b64 }, freshIp());
+    assert.equal(result.success, true);
+    assert.equal(api.getCallCount(), 1);
+    assert.equal(fakeStore.cache.get(api4aiFingerprint(b64))?.status, "succeeded");
+    assert.equal(fakeStore.usageRows.at(-1).response_type, "api4ai");
+  });
+});
+
+test("complex image + API4AI failure + BG_REMOVAL_FALLBACK_PROVIDER=none: generic error, remove.bg never called", async () => {
+  reset();
+  await withEnv({ ...API4AI_DEFAULTS, BG_REMOVAL_FALLBACK_PROVIDER: "none" }, async () => {
+    fakeApi4ai = api4aiFailure(500, "API4AI-DETAIL");
+    let removeBgCalls = 0;
+    fakeRemoveBg = async () => { removeBgCalls++; throw new Error("must not be called"); };
+    const result = await processLogoCore({ imageBase64: complexImageBase64() }, freshIp());
+    assert.equal(result.success, false);
+    assert.equal(result.error, "We couldn't process this logo. Please try again or upload a different image.");
+    assert.equal(removeBgCalls, 0);
+  });
+});

@@ -34,7 +34,7 @@ export interface LogoOutputImages {
 
 export type LogoOutputResult = { ok: true; images: LogoOutputImages } | { ok: false; error: string };
 
-interface Rgba8 {
+export interface Rgba8 {
   width: number;
   height: number;
   data: Uint8Array;
@@ -187,16 +187,31 @@ export function buildLogoOutputs(pngBytes: Uint8Array): LogoOutputResult {
   const rgba = toRgba8(decoded);
   if (typeof rgba === "string") return { ok: false, error: rgba };
 
-  const target = targetSize(rgba.width, rgba.height);
-  const resized = target.width !== rgba.width || target.height !== rgba.height;
-  const finalImage = resized ? downscaleRgba(rgba, target.width, target.height) : rgba;
-
   // An already-small 8-bit RGBA result is passed through byte-for-byte as
   // the UV image (exactly what the pre-provider code did with remove.bg's
   // response); anything converted or resized is re-encoded.
-  const passThrough = !resized && decoded.channels === 4 && decoded.depth === 8;
-  const uvPng = passThrough ? pngBytes : encodeRgba(finalImage);
-  const laserPng = encodeRgba(toLaser(finalImage));
+  const canPassThrough = decoded.channels === 4 && decoded.depth === 8;
+  return finishOutputs(rgba, canPassThrough ? pngBytes : null);
+}
 
+/** Same as buildLogoOutputs, for a cut-out that is already decoded 8-bit
+ * RGBA (the local background-removal path), so it isn't PNG-encoded and
+ * re-decoded just to reach the identical resize + laser step. */
+export function buildLogoOutputsFromRgba(rgba: Rgba8): LogoOutputResult {
+  if (rgba.width <= 0 || rgba.height <= 0 || rgba.data.length < rgba.width * rgba.height * 4) {
+    return { ok: false, error: "cut-out pixel data is invalid" };
+  }
+  if (rgba.width > MAX_DIMENSION_PX || rgba.height > MAX_DIMENSION_PX) {
+    return { ok: false, error: `cut-out dimensions too large (${rgba.width}x${rgba.height})` };
+  }
+  return finishOutputs(rgba, null);
+}
+
+function finishOutputs(rgba: Rgba8, passThroughPng: Uint8Array | null): LogoOutputResult {
+  const target = targetSize(rgba.width, rgba.height);
+  const resized = target.width !== rgba.width || target.height !== rgba.height;
+  const finalImage = resized ? downscaleRgba(rgba, target.width, target.height) : rgba;
+  const uvPng = !resized && passThroughPng ? passThroughPng : encodeRgba(finalImage);
+  const laserPng = encodeRgba(toLaser(finalImage));
   return { ok: true, images: { uvPng, laserPng, width: finalImage.width, height: finalImage.height, resized } };
 }

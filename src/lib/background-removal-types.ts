@@ -15,3 +15,7 @@ export interface BackgroundRemovalApiResult {
 }
 
 export type BackgroundRemovalProviderId = "api4ai" | "removebg";
+
+/** Where a logo result came from: a paid provider, or the local
+ * plain-background path (local-background-removal.server.ts). */
+export type ProcessingSourceId = BackgroundRemovalProviderId | "local";

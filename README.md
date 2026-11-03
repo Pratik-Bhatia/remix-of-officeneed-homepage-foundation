@@ -616,4 +616,13 @@ Server-side environment variables (Lovable Cloud secrets; never prefix them with
 | `BG_REMOVAL_PROVIDER` | Primary provider: `api4ai` or `removebg` | `api4ai` |
 | `BG_REMOVAL_FALLBACK_PROVIDER` | One fallback attempt per upload: `removebg`, `api4ai` or `none` | `removebg` when the primary is `api4ai`, otherwise `none` |
 
+**Local processing first** (`src/lib/local-background-removal.server.ts`, no API call): before any provider is used, each upload is checked locally.
+
+- Already-transparent PNGs (transparent border, visible content) are used as-is.
+- Opaque PNG/JPEG logos on a uniform background have only the background **connected to the image border** removed (edge flood fill with noise-aware tolerance; anti-aliased edges keep soft alpha and take the logo colour, so no light fringe).
+- Everything else (WebP, photos, gradients, noisy or non-uniform borders, logos touching the border, logos inside a background-coloured box, implausible results) goes to the provider as before.
+- Local results use their own cache key and still count against the daily quota and concurrency limits.
+
+**Known limitation:** background-coloured areas **fully enclosed** by the logo (for example the inside of an "O", or intentional white artwork) are kept, because nothing in the image reliably distinguishes the two. On a dark product they show as the logo's own white/light area (light grey in the laser preview). Customers who need such areas transparent should upload a transparent PNG, which is used unchanged.
+
 If the primary provider's key is missing, the fallback (when its key is set) is used as the primary. Cache entries are provider-specific: existing remove.bg results keep being served when remove.bg is the primary, and an API4AI request never receives a cached remove.bg result unless API4AI fails and the fallback is used.

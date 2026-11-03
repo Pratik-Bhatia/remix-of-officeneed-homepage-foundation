@@ -903,7 +903,7 @@ export function ProductCustomizer({ product, selectedVariant, open, onOpenChange
     return used.length ? summarizeComponentMethods(used) : fallback;
   };
   const currentDisplayLogo = printingMethod === "Laser Engraving" ? laserLogo : uvLogo;
-  const laserDropShadow = "drop-shadow(0px -1px 0px rgba(0,0,0,0.3)) drop-shadow(0px 1px 1px rgba(255,255,255,0.2))";
+  const laserDropShadow = "drop-shadow(0px -1px 0px rgba(0,0,0,0.3))";
   
   const activeMixBlend = "normal";
 
