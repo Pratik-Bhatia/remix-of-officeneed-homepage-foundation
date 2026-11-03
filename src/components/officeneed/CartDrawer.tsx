@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useLayoutEffect, useState, useRef, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "@tanstack/react-router";
 import { Loader2, ShoppingBag, X } from "lucide-react";
@@ -13,8 +13,19 @@ import { CartLineItem } from "@/components/officeneed/CartLineItem";
 import { CartProfileLinks } from "@/components/officeneed/CartProfileLinks";
 import { DiscountCodeInput } from "@/components/officeneed/DiscountCodeInput";
 
-export function CartDrawer({ triggerClassName }: { triggerClassName?: string }) {
+export function CartDrawer({
+  triggerClassName,
+  anchorRef,
+}: {
+  triggerClassName?: string;
+  /** The sticky site header. The panel opens flush with its real bottom
+   * edge -- which moves with the promo bar above it (shown at the top of
+   * the page, scrolled away later), so it can't be a fixed offset. Same
+   * anchoring as SearchModal. */
+  anchorRef?: RefObject<HTMLElement | null>;
+}) {
   const [isOpen, setIsOpen] = useState(false);
+  const [anchorTop, setAnchorTop] = useState(0);
   const items = useCartStore((s) => s.items);
   const updateQuantity = useCartStore((s) => s.updateQuantity);
   const removeItem = useCartStore((s) => s.removeItem);
@@ -87,6 +98,17 @@ export function CartDrawer({ triggerClassName }: { triggerClassName?: string }) 
       setPreparing(false);
     }
   };
+
+  // Measured before paint so the panel never flashes at the wrong offset.
+  // lockScroll() blocks scrolling without moving layout, so this stays
+  // valid while open; only a resize (or rotation) can change it.
+  useLayoutEffect(() => {
+    if (!isOpen) return;
+    const measure = () => setAnchorTop(Math.max(0, Math.round(anchorRef?.current?.getBoundingClientRect().bottom ?? 0)));
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [isOpen, anchorRef]);
 
   const wasOpenRef = useRef(false);
   useEffect(() => {
@@ -171,18 +193,23 @@ export function CartDrawer({ triggerClassName }: { triggerClassName?: string }) 
             onClick={() => setIsOpen(false)}
           />
 
-          {/* Main Content Dropdown */}
+          {/* Main Content Dropdown -- flush with the header's real bottom
+              edge and never taller than the space below it (dvh tracks the
+              mobile browser's visible viewport as its toolbars show/hide).
+              The panel is a flex column: the heading row stays put and only
+              the body below it scrolls. */}
           <div
-            className="relative mt-[64px] lg:mt-[80px] w-full bg-background/95 backdrop-blur-md border-b border-border shadow-[0_10px_40px_-10px_rgba(0,0,0,0.1)] animate-in slide-in-from-top-4 fade-in duration-300 overflow-hidden"
+            className="absolute inset-x-0 flex flex-col w-full bg-background/95 backdrop-blur-md border-b border-border shadow-[0_10px_40px_-10px_rgba(0,0,0,0.1)] animate-in slide-in-from-top-4 fade-in duration-300 overflow-hidden"
+            style={{ top: anchorTop, maxHeight: `calc(100dvh - ${anchorTop}px)` }}
           >
-            <div className="mx-auto max-w-[700px] px-4 sm:px-6 py-6 md:py-10">
+            <div className="mx-auto flex min-h-0 w-full max-w-[700px] flex-col px-4 sm:px-6 pt-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] md:py-10">
 
               {/* Header Row -- Review Cart sits at the same horizontal level
                   as the heading (Apple's "Review Bag" placement), not as a
                   second action stacked under the cart items. It's the only
                   primary action this drawer offers; Checkout itself lives on
                   the full cart page. */}
-              <div className="flex items-center justify-between gap-3 mb-4 md:mb-6">
+              <div className="flex shrink-0 items-center justify-between gap-3 mb-4 md:mb-6">
                 <h2 className="text-xl md:text-[26px] font-medium tracking-tight text-foreground">
                   {items.length === 0 ? "Your Bag is Empty" : "Your Bag"}
                 </h2>
@@ -207,7 +234,9 @@ export function CartDrawer({ triggerClassName }: { triggerClassName?: string }) 
               </div>
 
               {items.length === 0 ? (
-                <div className="flex flex-col min-h-[300px]">
+                // Sized to its content (no min-height filler); still scrolls
+                // inside the drawer on a very short viewport (landscape).
+                <div className="flex min-h-0 flex-col overflow-y-auto overscroll-contain" data-scrollable="true">
                   <p className="text-[13px] md:text-sm text-muted-foreground">
                     Items you add will appear here.
                   </p>
@@ -226,13 +255,13 @@ export function CartDrawer({ triggerClassName }: { triggerClassName?: string }) 
                 </div>
               ) : (
                 // The whole body (items + actions + profile links + continue
-                // shopping) scrolls together as one region, bounded to a
-                // reasonable viewport-relative height -- so on a short
-                // viewport (mobile, or a full cart) everything stays
-                // reachable by scrolling the drawer itself rather than the
-                // profile section getting pushed off-screen or the drawer
-                // growing taller than the viewport.
-                <div className="max-h-[75vh] overflow-y-auto pr-2" data-scrollable="true">
+                // shopping) scrolls together as one region that fills the
+                // space the panel's dvh-based max-height leaves below the
+                // heading -- so on a short viewport (mobile, or a full cart)
+                // everything stays reachable by scrolling the drawer itself,
+                // the heading never scrolls away, and the drawer never grows
+                // past the visible viewport.
+                <div className="min-h-0 overflow-y-auto overscroll-contain pr-2" data-scrollable="true">
                   <div className="space-y-5">
                     {items.map((item) => (
                       <CartLineItem

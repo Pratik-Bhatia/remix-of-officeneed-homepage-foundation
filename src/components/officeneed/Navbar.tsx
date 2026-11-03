@@ -336,7 +336,7 @@ export function Navbar() {
               <User className="size-5 md:size-[22px] xl:size-5" strokeWidth={1.6} />
             </IconButton>
           </span>
-          <CartDrawer triggerClassName="size-[26px] md:size-10 xl:size-11" />
+          <CartDrawer triggerClassName="size-[26px] md:size-10 xl:size-11" anchorRef={headerRef} />
         </div>
       </div>
 
