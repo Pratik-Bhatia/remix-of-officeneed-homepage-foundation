@@ -148,18 +148,18 @@ function AdminReviewsPage() {
 
 
       <div className="bg-white border border-border rounded-xl shadow-sm overflow-hidden">
-        <table className="w-full text-sm text-left">
-          <thead className="bg-muted/50 border-b border-border">
+        <table className="block w-full text-sm text-left md:table md:table-fixed">
+          <thead className="hidden bg-muted/50 border-b border-border md:table-header-group">
             <tr>
-              <th className="px-6 py-4 font-semibold">Product</th>
-              <th className="px-6 py-4 font-semibold">Rating</th>
-              <th className="px-6 py-4 font-semibold">Author</th>
+              <th className="w-[16%] px-6 py-4 font-semibold">Product</th>
+              <th className="w-[110px] px-6 py-4 font-semibold">Rating</th>
+              <th className="w-[18%] px-6 py-4 font-semibold">Author</th>
               <th className="px-6 py-4 font-semibold">Review</th>
-              <th className="px-6 py-4 font-semibold">Date</th>
-              <th className="px-6 py-4 font-semibold text-right">Actions</th>
+              <th className="w-[110px] px-6 py-4 font-semibold">Date</th>
+              <th className="w-[190px] px-6 py-4 font-semibold text-right">Actions</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className="block md:table-row-group">
             {loading ? (
               <tr>
                 <td colSpan={6} className="px-6 py-8 text-center text-muted-foreground">
@@ -180,8 +180,8 @@ function AdminReviewsPage() {
               </tr>
             ) : (
               reviews.map((review) => (
-                <tr key={review.id} className="border-b border-border hover:bg-muted/20 align-top">
-                  <td className="px-6 py-4 font-medium">
+                <tr key={review.id} className="block border-b border-border p-2 hover:bg-muted/20 md:table-row md:p-0 md:align-top">
+                  <td className="block px-4 py-2 font-medium break-words md:table-cell md:px-6 md:py-4">
                     <Link
                       to="/products/$slug"
                       params={{ slug: review.product_handle }}
@@ -190,19 +190,19 @@ function AdminReviewsPage() {
                       {review.product_handle}
                     </Link>
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="block px-4 py-2 md:table-cell md:px-6 md:py-4">
                     <StarDisplay rating={review.rating} />
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="block min-w-0 px-4 py-2 break-words md:table-cell md:px-6 md:py-4">
                     <div className="font-medium">{review.author_name}</div>
                     <div className="text-xs text-muted-foreground">{review.author_email}</div>
                     {review.is_verified_buyer && (
                       <Badge variant="secondary" className="mt-1">Verified buyer</Badge>
                     )}
                   </td>
-                  <td className="px-6 py-4 max-w-sm">
-                    <div className="font-medium">{review.title}</div>
-                    <p className="mt-1 text-muted-foreground line-clamp-3">{review.body}</p>
+                  <td className="block px-4 py-2 md:table-cell md:px-6 md:py-4">
+                    <div className="font-medium break-words">{review.title}</div>
+                    <p className="mt-1 text-muted-foreground whitespace-pre-wrap break-words">{review.body}</p>
                     {review.photos?.length ? (
                       <div className="mt-2 flex flex-wrap gap-1.5">
                         {review.photos.map((photo: { thumbUrl: string; fullUrl: string }, i: number) => (
@@ -220,10 +220,10 @@ function AdminReviewsPage() {
                       </div>
                     ) : null}
                   </td>
-                  <td className="px-6 py-4 text-muted-foreground whitespace-nowrap">
+                  <td className="block px-4 py-2 text-muted-foreground whitespace-nowrap md:table-cell md:px-6 md:py-4">
                     {new Date(review.created_at).toLocaleDateString()}
                   </td>
-                  <td className="px-6 py-4 text-right whitespace-nowrap">
+                  <td className="block px-4 py-2 whitespace-nowrap md:table-cell md:px-6 md:py-4 md:text-right">
                     <div className="inline-flex gap-2">
                       <Button
                         size="sm"
