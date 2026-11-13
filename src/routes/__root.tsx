@@ -16,6 +16,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { useCartSync } from "@/hooks/useCartSync";
 import { useB2BSync } from "@/hooks/useB2BSync";
 import { LazyChatWidget } from "@/components/officeneed/LazyChatWidget";
+import { DiscountLinkHandler } from "@/components/officeneed/DiscountLinkHandler";
 import { MetaPixel } from "@/components/officeneed/MetaPixel";
 import { GoogleAnalytics } from "@/components/officeneed/GoogleAnalytics";
 import { Clarity } from "@/components/officeneed/Clarity";
@@ -151,6 +152,7 @@ function RootComponent() {
       <Outlet />
       <LazyChatWidget />
       <CartSync />
+      <DiscountLinkHandler />
       <B2BSync />
       <MetaPixel />
       <GoogleAnalytics />

@@ -915,9 +915,12 @@ function ProductDetail() {
       const chosen = useCouponStore.getState().selectedCode;
       const bag = useCartStore.getState();
       if (promo && chosen === promo.code && !bag.discountCodes.some((d) => d.applicable && d.code.toUpperCase() === chosen)) {
-        const r = await bag.applyDiscountCode(chosen);
-        if (r.ok) toast.success(`${chosen} applied to your bag`);
-        else toast.info(`${chosen} wasn't applied to your bag: ${r.message}`);
+        // Conflict-checked and queued like every other entry point: never
+        // stacks with (or silently replaces) a different code on the bag.
+        const r = await bag.applyDiscountCodeChecked(chosen);
+        if (r.status === "applied") toast.success(`${chosen} applied to your bag`);
+        else if (r.status === "conflict") toast.info(`Your bag already has ${r.existing.map((e) => e.code).join(" + ")}. Open your bag to compare offers.`);
+        else if (r.status !== "already-applied") toast.info(`${chosen} wasn't applied to your bag: ${r.message}`);
       }
     }
   };

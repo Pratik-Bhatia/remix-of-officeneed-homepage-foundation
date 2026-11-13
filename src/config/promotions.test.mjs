@@ -87,3 +87,47 @@ test("Buy Now also carries the code the shopper selected with Apply Code, but on
   assert.equal(getPromotionCodeToCarry(["european-perfume"], [], null), null);
   assert.equal(getPromotionCodeToCarry(["european-perfume"], [], undefined), null);
 });
+
+// --- Exact Shopify discount configuration (verified collection handles) ---
+import { productMatchesPromotion, getPromotionByCode, getPromotionsForProduct } from "./promotions.ts";
+
+test("OFFICENEED10 covers exactly its nine Shopify collections", () => {
+  const p = getPromotionByCode("officeneed10");
+  assert.deepEqual([...p.collectionHandles].sort(), ["bags", "corporate-gifting", "diaries", "drinkware-utensils", "gift-sets", "keychains", "luxury-pens", "metal-pen", "mobile-stand"]);
+  for (const h of p.collectionHandles) assert.equal(getPromotionForProduct([h])?.code, "OFFICENEED10", h);
+});
+
+test("OFFICENEED20 covers exactly its four Shopify collections, with its usage terms", () => {
+  const p = getPromotionByCode("OFFICENEED20");
+  assert.deepEqual([...p.collectionHandles].sort(), ["eastern-perfume", "european-perfume", "perfume-gift-set-1", "perfumes"]);
+  for (const h of p.collectionHandles) assert.equal(getPromotionForProduct([h])?.code, "OFFICENEED20", h);
+  assert.equal(p.terms, "One use per customer.");
+});
+
+test("Electronics alone is NOT eligible; an Electronics product also in an eligible collection IS", () => {
+  assert.equal(getPromotionForProduct(["electronics"]), null);
+  assert.equal(getPromotionForProduct(["electronics", "mobile-stand"])?.code, "OFFICENEED10");
+  assert.equal(productMatchesPromotion(["electronics"], getPromotionByCode("OFFICENEED10")), false);
+});
+
+test("Body Deodorant (in the Fragrance navigation group) is not covered by OFFICENEED20", () => {
+  assert.equal(getPromotionForProduct(["body-deodorant"]), null);
+});
+
+test("announcement bar: Electronics and Body Deodorant listings no longer advertise a code", () => {
+  assert.deepEqual(codes({ pathname: "/products", collection: "electronics" }), []);
+  assert.deepEqual(codes({ pathname: "/products", collection: "body-deodorant" }), []);
+  assert.deepEqual(codes({ pathname: "/products", collection: "metal-pen" }), ["OFFICENEED10"]);
+  assert.deepEqual(codes({ pathname: "/products", collection: "perfume-gift-set-1" }), ["OFFICENEED20"]);
+  assert.deepEqual(codes({ pathname: "/products/x", productHandles: ["electronics"] }), []);
+});
+
+test("Buy Now never carries OFFICENEED10 for an Electronics-only product", () => {
+  assert.equal(getPromotionCodeToCarry(["electronics"], on("OFFICENEED10")), null);
+  assert.equal(getPromotionCodeToCarry(["electronics", "keychains"], on("OFFICENEED10")), "OFFICENEED10");
+});
+
+test("a product in both lists reports both promotions (the cart lets the shopper choose)", () => {
+  assert.deepEqual(getPromotionsForProduct(["perfumes", "gift-sets"]).map((p) => p.code), ["OFFICENEED20", "OFFICENEED10"]);
+  assert.equal(getPromotionByCode("NOPE"), null);
+});

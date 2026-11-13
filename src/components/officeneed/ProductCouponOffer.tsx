@@ -38,7 +38,7 @@ export function ProductCouponOffer({
   const bagHasCode = useCartStore((s) =>
     promo ? s.discountCodes.some((d) => d.applicable && d.code.toUpperCase() === promo.code) : false,
   );
-  const applyDiscountCode = useCartStore((s) => s.applyDiscountCode);
+  const applyDiscountCodeChecked = useCartStore((s) => s.applyDiscountCodeChecked);
   const removeDiscountCode = useCartStore((s) => s.removeDiscountCode);
 
   const [phase, setPhase] = useState<Phase>("idle");
@@ -84,9 +84,17 @@ export function ProductCouponOffer({
     selectCoupon(promo.code);
     // If the shopper already has a bag, attach the code to it too -- Shopify
     // re-validates it against the whole cart and the result decides the note.
+    // Never replaces a different discount already on the bag: that choice is
+    // made in the bag, with both offers' savings shown.
     if (hasCart && !bagHasCode) {
-      const r = await applyDiscountCode(promo.code);
-      setNote(r.ok ? "Also applied to your bag." : `Not applied to your bag: ${r.message}`);
+      const r = await applyDiscountCodeChecked(promo.code);
+      setNote(
+        r.status === "applied" || r.status === "already-applied"
+          ? "Also applied to your bag."
+          : r.status === "conflict"
+            ? `Your bag already has ${r.existing.map((e) => e.code).join(" + ")}. Open your bag to compare offers.`
+            : `Not applied to your bag: ${r.message}`,
+      );
     }
   };
 

@@ -28,7 +28,7 @@ export const TAXONOMY: Record<MainCategory, CategoryNode> = {
   },
   "Corporate Gifting": {
     title: "Corporate Gifting",
-    id: "gid://shopify/Collection/497947345124",
+    id: "gid://shopify/Collection/315650965597",
     handle: "corporate-gifting",
     subcategories: {
       "Gift Sets": { title: "Gift Sets", id: null, handle: "gift-sets" },
@@ -44,7 +44,7 @@ export const TAXONOMY: Record<MainCategory, CategoryNode> = {
   },
   "Fragrance Gifting": {
     title: "Fragrance Gifting",
-    id: "gid://shopify/Collection/498084937956",
+    id: "gid://shopify/Collection/315481129053",
     handle: "perfumes",
     subcategories: {
       "European Perfume": { title: "European Perfume", id: "gid://shopify/Collection/315489419357", handle: "european-perfume" },

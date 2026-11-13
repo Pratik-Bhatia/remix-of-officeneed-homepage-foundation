@@ -2,9 +2,18 @@ import { useEffect } from "react";
 import { useCartStore } from "@/stores/cartStore";
 import { captureAttribution } from "@/lib/attribution";
 import { getCustomerToken } from "@/lib/customer";
+import { useCouponStore } from "@/stores/couponStore";
 
 // Must match TOKEN_EVENT in src/lib/customer.ts
 const CUSTOMER_TOKEN_EVENT = "officeneed-customer-token";
+// Must match TOKEN_KEY in src/lib/customer.ts (localStorage key).
+export const CUSTOMER_TOKEN_STORAGE_KEY = "officeneed_customer_token";
+
+/** A sign-in/out or account switch in ANOTHER tab only shows up here as a
+ * storage event on the shared token key (TOKEN_EVENT is same-tab only). */
+export function isCustomerTokenStorageChange(key: string | null): boolean {
+  return key === CUSTOMER_TOKEN_STORAGE_KEY || key === null; // null = storage.clear()
+}
 
 export function useCartSync() {
   const syncCart = useCartStore((state) => state.syncCart);
@@ -32,7 +41,12 @@ export function useCartSync() {
       // cart or its Supabase saved-cart mapping, so whichever identity
       // is now active still gets its own real saved bag back via
       // syncCustomerCart below (or, for a guest, starts a fresh local one).
-      if (previousToken) useCartStore.getState().clearCart();
+      if (previousToken) {
+        useCartStore.getState().clearCart();
+        // The previous shopper's coupon intent (a selected product-page code
+        // or a pending discount link) must not carry into the next identity.
+        useCouponStore.getState().resetSession();
+      }
       if (!token) return false;
       await syncCustomerCart(token);
       return true;
@@ -50,6 +64,7 @@ export function useCartSync() {
     // Another tab changed the bag: pull its state into this tab.
     const handleStorage = (e: StorageEvent) => {
       if (e.key === "shopify-cart") void useCartStore.persist.rehydrate();
+      if (isCustomerTokenStorageChange(e.key)) void syncAccount();
     };
     document.addEventListener("visibilitychange", handleVisibilityChange);
     window.addEventListener(CUSTOMER_TOKEN_EVENT, handleToken);

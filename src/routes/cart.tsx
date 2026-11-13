@@ -4,13 +4,14 @@ import { ShoppingBag, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Navbar } from "@/components/officeneed/Navbar";
 import { Footer } from "@/components/officeneed/Footer";
-import { useCartStore, checkoutFailureMessage } from "@/stores/cartStore";
+import { useCartStore, checkoutFailureMessage, summarizeCartPricing } from "@/stores/cartStore";
 import { trackInitiateCheckout } from "@/lib/meta-pixel";
 import { trackGoogleViewCart, trackGoogleBeginCheckout } from "@/lib/google-analytics";
 import { formatMoney } from "@/lib/shopify";
 import { CartLineItem } from "@/components/officeneed/CartLineItem";
 import { CartProfileLinks } from "@/components/officeneed/CartProfileLinks";
 import { DiscountCodeInput } from "@/components/officeneed/DiscountCodeInput";
+import { CartCouponOffer } from "@/components/officeneed/CartCouponOffer";
 import { DeliveryAddressSelector } from "@/components/officeneed/DeliveryAddressSelector";
 import { CartLineSkeleton, LoadingRegion } from "@/components/officeneed/skeletons";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -50,10 +51,11 @@ function CartPage() {
     (sum, item) => sum + parseFloat(item.price.amount) * item.quantity,
     0,
   );
-  const currency = cost.subtotal?.currencyCode ?? items[0]?.price.currencyCode ?? "INR";
-  // Shopify's discounted subtotal is authoritative once available.
+  // Analytics value: Shopify's discounted cart subtotal (unchanged).
   const subtotal = cost.subtotal ? parseFloat(cost.subtotal.amount) : totalPrice;
-  const discount = Math.max(0, totalPrice - subtotal);
+  // Displayed summary: Shopify's per-line costs and discount allocations.
+  const pricing = summarizeCartPricing(items, cost);
+  const { currency, discount } = pricing;
 
   const hasTrackedViewCartRef = useRef(false);
   useEffect(() => {
@@ -174,17 +176,26 @@ function CartPage() {
                 <DeliveryAddressSelector />
 
                 <div className="rounded-2xl border border-border p-6 space-y-5">
+                  <CartCouponOffer />
                   <DiscountCodeInput />
                   <div className="flex items-center justify-between">
                     <span className="text-[15px] font-medium text-foreground">Subtotal</span>
                     <span className="text-[17px] font-medium tabular-nums text-foreground">
-                      {formatMoney(subtotal, currency)}
+                      {formatMoney(pricing.subtotal, currency)}
                     </span>
                   </div>
                   {discount > 0.009 ? (
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">Discount</span>
                       <span className="tabular-nums text-foreground">−{formatMoney(discount, currency)}</span>
+                    </div>
+                  ) : null}
+                  {discount > 0.009 ? (
+                    <div className="flex items-center justify-between border-t border-border pt-5">
+                      <span className="text-[15px] font-medium text-foreground">Total</span>
+                      <span className="text-[17px] font-medium tabular-nums text-foreground">
+                        {formatMoney(pricing.total, currency)}
+                      </span>
                     </div>
                   ) : null}
                   <button

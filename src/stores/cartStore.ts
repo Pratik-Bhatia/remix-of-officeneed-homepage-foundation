@@ -8,9 +8,19 @@ import { useB2BStore, getEffectiveCompanyLocationId } from "@/stores/b2bStore";
 import { appendAttribution, getAttribution } from "@/lib/attribution";
 import { getCustomerCart, saveCustomerCart } from "@/lib/customer-cart.functions";
 import { trackAddToCart } from "@/lib/meta-pixel";
-import { getPromotionCodeToCarry } from "@/config/promotions";
+import { getPromotionCodeToCarry, getPromotionByCode } from "@/config/promotions";
 import { useCouponStore } from "@/stores/couponStore";
-import { interpretPreviewCart, type CouponPreview } from "@/lib/coupon-preview";
+import { codeSavings, lineDiscountTotal } from "@/lib/line-discounts";
+import {
+  interpretPreviewCart,
+  interpretCodesPreview,
+  isCodeApplicable,
+  savingsForCode,
+  resolveSavings,
+  type CouponPreview,
+  type CodesPreview,
+  type PreviewLine,
+} from "@/lib/coupon-preview";
 import { trackGoogleAddToCart, trackGoogleRemoveFromCart } from "@/lib/google-analytics";
 
 export interface CartItem {
@@ -38,6 +48,25 @@ export interface CartItem {
    * existing same-variant line, so a customized purchase's attributes are
    * never silently lost into a prior plain line's quantity bump. */
   lineAttributes?: Array<{ key: string; value: string }>;
+  /** Shopify's own cost for this line, straight from the cart: `subtotal` is
+   * before line-level (product) discounts, `total` after. Absent until the
+   * cart has been fetched with per-line pricing. Never computed client-side. */
+  lineCost?: { subtotal: LineMoney | null; total: LineMoney | null; perQuantity?: LineMoney | null } | null;
+  /** Shopify's per-line discount allocations (CartLine.discountAllocations):
+   * which code discounted this line and by how much. Empty when nothing
+   * applies. Never computed client-side. */
+  lineDiscounts?: LineDiscount[];
+}
+
+export interface LineMoney {
+  amount: string;
+  currencyCode: string;
+}
+
+export interface LineDiscount {
+  /** The discount code, for code discounts; null for automatic/custom ones. */
+  code: string | null;
+  amount: LineMoney;
 }
 
 /** Selected-variant image, falling back to the product's featured image,
@@ -234,9 +263,24 @@ const DELIVERY_FIELDS = `
   }
 `;
 
+/** Shopify's per-line pricing: cost before/after line discounts, and which
+ * code discounted the line by how much. Shared by every cart read. */
+const LINE_PRICING_FIELDS = `
+        cost {
+          amountPerQuantity { amount currencyCode }
+          subtotalAmount { amount currencyCode }
+          totalAmount { amount currencyCode }
+        }
+        discountAllocations {
+          discountedAmount { amount currencyCode }
+          ... on CartCodeDiscountAllocation { code }
+        }
+`;
+
 const FULL_CART_FIELDS = `
   id
   checkoutUrl
+  updatedAt
   totalQuantity
   discountCodes { code applicable }
   cost {
@@ -261,6 +305,7 @@ const FULL_CART_FIELDS = `
             image { url altText }
           }
         }
+        ${LINE_PRICING_FIELDS}
       }
     }
   }
@@ -343,6 +388,7 @@ const ADOPT_CART_QUERY = `
     cart(id: $id) {
       id
       checkoutUrl
+      updatedAt
       totalQuantity
       discountCodes { code applicable }
       cost {
@@ -370,9 +416,11 @@ const ADOPT_CART_QUERY = `
                   vendor
                   priceRange { minVariantPrice { amount currencyCode } }
                   images(first: 1) { edges { node { url altText } } }
+                  collections(first: 50) { edges { node { handle } } }
                 }
               }
             }
+            ${LINE_PRICING_FIELDS}
           }
         }
       }
@@ -398,6 +446,7 @@ function itemsFromRemote(cart: any): CartItem[] {
         quantity: n.quantity,
         selectedOptions: m.selectedOptions ?? [],
         image: resolveLineImage(m.image, p),
+        ...extractLinePricing(n),
         product: {
           node: {
             ...p,
@@ -482,6 +531,175 @@ export async function previewCouponForLine(args: { code: string; variantId: stri
   }
 }
 
+const CODES_PREVIEW_MUTATION = `
+  mutation couponCartPreview($input: CartInput!) {
+    cartCreate(input: $input) {
+      cart {
+        discountCodes { code applicable }
+        lines(first: 100) {
+          edges {
+            node {
+              quantity
+              merchandise { ... on ProductVariant { id } }
+              ${LINE_PRICING_FIELDS}
+            }
+          }
+        }
+      }
+      userErrors { field message code }
+    }
+  }
+`;
+
+/**
+ * Asks Shopify what the given code(s) would do to the given lines, WITHOUT
+ * touching the shopper's real cart: a throwaway preview cart under the
+ * shopper's current buyer identity (so B2B/B2C pricing and customer-specific
+ * limits match). Read-only from the store's point of view -- the preview
+ * cart's id is never stored, saved or checked out, and it expires on
+ * Shopify's side, exactly like previewCouponForLine's.
+ */
+export async function previewCodesOnLines(codes: string[], lines: PreviewLine[]): Promise<CodesPreview> {
+  if (lines.length === 0) return { status: "ok", codes: codes.map((code) => ({ code, applicable: false })), lines: [], currencyCode: "INR" };
+  try {
+    const buyerIdentity = currentBuyerIdentity();
+    const data = await storefrontApiRequest(CODES_PREVIEW_MUTATION, {
+      input: {
+        lines: lines.map((l) => ({ merchandiseId: l.variantId, quantity: l.quantity })),
+        discountCodes: codes,
+        ...(buyerIdentity ? { buyerIdentity } : {}),
+      },
+    });
+    return interpretCodesPreview(data?.data?.cartCreate);
+  } catch (error) {
+    console.error("Coupon cart preview failed:", error);
+    return { status: "error", message: "Couldn't check offers right now." };
+  }
+}
+
+/** Short non-reversible fingerprint (FNV-1a) -- used only to tell buyer
+ * identities apart in a cache key; never sent anywhere. */
+function fingerprint(value: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < value.length; i++) {
+    h ^= value.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(16);
+}
+
+/** Identifies the buyer whose Shopify answers a preview reflects: guest,
+ * signed-in customer, and the EFFECTIVE B2B company location (Business mode
+ * only). Any change -- sign in/out, account switch, Personal <-> Business --
+ * yields a different scope and therefore a fresh preview cache. */
+export function couponPreviewScope(): string {
+  const token = getCustomerToken();
+  const location = getEffectiveCompanyLocationId(useB2BStore.getState());
+  return `${token ? `c:${fingerprint(token)}` : "guest"}|${location ?? "personal"}`;
+}
+
+/**
+ * Subtotal / discount / total for the cart summary, from Shopify's own
+ * per-line data whenever every line has it: subtotal = sum of line costs
+ * before discounts, discount = sum of Shopify's line allocations, total =
+ * Shopify's cart total. While per-line pricing hasn't been fetched yet (e.g.
+ * a bag saved before this field existed), it shows Shopify's cart subtotal
+ * (or the catalogue sum if even that is missing) and NO discount -- a
+ * discount is never derived client-side.
+ */
+export function summarizeCartPricing(items: CartItem[], cost: CartCost): {
+  subtotal: number;
+  discount: number;
+  total: number;
+  currency: string;
+  fromShopifyLines: boolean;
+} {
+  const currency = cost.subtotal?.currencyCode ?? items[0]?.lineCost?.subtotal?.currencyCode ?? items[0]?.price.currencyCode ?? "INR";
+  const allHavePricing = items.length > 0 && items.every((i) => i.lineCost?.subtotal);
+  if (allHavePricing) {
+    const subtotal = items.reduce((sum, i) => sum + (parseFloat(i.lineCost!.subtotal!.amount) || 0), 0);
+    const discount = items.reduce((sum, i) => sum + lineDiscountTotal(i), 0);
+    const total = cost.total ? parseFloat(cost.total.amount) : cost.subtotal ? parseFloat(cost.subtotal.amount) : subtotal - discount;
+    return { subtotal: round2(subtotal), discount: round2(discount), total: round2(total), currency, fromShopifyLines: true };
+  }
+  // Shopify's per-line data isn't here yet: show Shopify's cart subtotal if
+  // known (else the catalogue sum) and NO discount line. Deriving a
+  // "discount" from catalogue-vs-Shopify prices would show B2B pricing
+  // differences as a fake discount.
+  const itemSubtotal = items.reduce((sum, i) => sum + parseFloat(i.price.amount) * i.quantity, 0);
+  const subtotal = cost.subtotal ? parseFloat(cost.subtotal.amount) : itemSubtotal;
+  const total = cost.total ? parseFloat(cost.total.amount) : subtotal;
+  return { subtotal: round2(subtotal), discount: 0, total: round2(total), currency, fromShopifyLines: false };
+}
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+/**
+ * What a cart row shows, straight from Shopify's own line cost (Storefront
+ * API CartLineCost): `totalAmount` is the line AFTER line-level discounts
+ * (what the shopper pays for it), `subtotalAmount` is BEFORE them, and
+ * `amountPerQuantity` is the unit price (B2B/catalog price, before line
+ * discounts). Nothing is subtracted or multiplied here, so a discount can
+ * never be applied twice. Until Shopify's line cost has been fetched (a bag
+ * saved before this field existed), the catalogue price x quantity is shown
+ * with NO discount -- never a client-derived one.
+ */
+export function getLineDisplay(item: CartItem): {
+  total: LineMoney;
+  original: LineMoney | null;
+  each: LineMoney | null;
+  discount: number;
+  codes: string[];
+  fromShopify: boolean;
+} {
+  const discount = lineDiscountTotal(item);
+  const codes = [...new Set((item.lineDiscounts ?? []).map((d) => d.code).filter((c): c is string => !!c))];
+  const cost = item.lineCost;
+  if (cost?.total && cost?.subtotal) {
+    return {
+      total: cost.total,
+      original: discount > 0 ? cost.subtotal : null,
+      each: item.quantity > 1 ? cost.perQuantity ?? null : null,
+      discount,
+      codes,
+      fromShopify: true,
+    };
+  }
+  return {
+    total: { amount: (parseFloat(item.price.amount) * item.quantity).toFixed(2), currencyCode: item.price.currencyCode },
+    original: null,
+    each: item.quantity > 1 ? item.price : null,
+    discount: 0,
+    codes: [],
+    fromShopify: false,
+  };
+}
+
+export type DiscountApplyResult =
+  | { status: "applied"; code: string; message: string }
+  | { status: "already-applied"; code: string; message: string }
+  | { status: "not-applicable"; code: string; message: string }
+  | {
+      status: "conflict";
+      code: string;
+      /** Codes currently on the cart that would be replaced, with Shopify's current savings for each. */
+      existing: Array<{ code: string; applicable: boolean; savings: number }>;
+      /** Shopify-calculated savings if `code` replaced them (null if it couldn't be priced). */
+      candidateSavings: number | null;
+      currencyCode: string;
+    }
+  | { status: "error"; code: string; message: string };
+
+function notApplicableMessage(code: string): string {
+  const promo = getPromotionByCode(code);
+  if (promo?.terms) {
+    return `${promo.code} doesn't apply to the items in your bag, or it may have already been used on your account.`;
+  }
+  return "This code isn't valid for the items in your bag.";
+}
+
 function formatCheckoutUrl(checkoutUrl: string): string {
   try {
     const url = new URL(checkoutUrl);
@@ -498,8 +716,31 @@ function attributionAttributes(): Array<{ key: string; value: string }> {
 
 type UserError = { field: string[] | null; message: string; code?: string | null };
 type CartWarning = { code: string; message: string; target?: string };
-type ShopifyLine = { id: string; quantity: number; merchandise: { id: string; image?: ShopifyImage | null } | null };
-type ValidLine = { id: string; quantity: number; merchandise: { id: string; image?: ShopifyImage | null } };
+type RawLinePricing = {
+  cost?: { amountPerQuantity?: LineMoney | null; subtotalAmount?: LineMoney | null; totalAmount?: LineMoney | null } | null;
+  discountAllocations?: Array<{ code?: string | null; discountedAmount?: LineMoney | null }> | null;
+};
+type ShopifyLine = { id: string; quantity: number; merchandise: { id: string; image?: ShopifyImage | null } | null } & RawLinePricing;
+type ValidLine = { id: string; quantity: number; merchandise: { id: string; image?: ShopifyImage | null } } & RawLinePricing;
+
+/** Shopify's per-line cost + allocations, copied as-is (never calculated).
+ * Returns {} when the response didn't include pricing, so a partial cart
+ * read never wipes previously known values to "no discount". */
+function extractLinePricing(line: RawLinePricing): Pick<CartItem, "lineCost" | "lineDiscounts"> {
+  if (!line?.cost && !line?.discountAllocations) return {};
+  const lineDiscounts: LineDiscount[] = [];
+  for (const a of line.discountAllocations ?? []) {
+    if (!a?.discountedAmount) continue;
+    if (!(parseFloat(a.discountedAmount.amount) > 0)) continue;
+    lineDiscounts.push({ code: a.code ?? null, amount: a.discountedAmount });
+  }
+  return {
+    lineCost: line.cost
+      ? { subtotal: line.cost.subtotalAmount ?? null, total: line.cost.totalAmount ?? null, perQuantity: line.cost.amountPerQuantity ?? null }
+      : null,
+    lineDiscounts,
+  };
+}
 
 function isCartNotFoundError(userErrors: UserError[]): boolean {
   return userErrors.some(
@@ -599,7 +840,7 @@ function reconcileItems(localItems: CartItem[], shopifyLines: ValidLine[]): Cart
     .filter((item) => item && item.variantId && lineMap.has(item.variantId))
     .map((item) => {
       const sl = lineMap.get(item.variantId)!;
-      return { ...item, lineId: sl.id, quantity: sl.quantity, image: resolveLineImage(sl.merchandise.image, item.product?.node) };
+      return { ...item, lineId: sl.id, quantity: sl.quantity, image: resolveLineImage(sl.merchandise.image, item.product?.node), ...extractLinePricing(sl) };
     });
 }
 
@@ -631,6 +872,9 @@ interface CartStore {
    * page load re-derives it the same way if the mutation is attempted
    * again, and it only ever grows more accurate, never stale-wrong. */
   quantityRuleOverrides: QuantityRuleOverrides;
+  /** True while a discount change (apply/replace/remove) is running. Every
+   * discount change goes through one queue, so they never race. */
+  discountBusy: boolean;
   addItem: (item: Omit<CartItem, "lineId">) => Promise<void>;
   updateQuantity: (variantId: string, quantity: number) => Promise<void>;
   removeItem: (variantId: string) => Promise<void>;
@@ -639,8 +883,21 @@ interface CartStore {
   /** On sign-in: load the account's saved bag (merging local items) or save this bag to the account. */
   syncCustomerCart: (token: string) => Promise<void>;
   getCheckoutUrl: () => string | null;
-  applyDiscountCode: (code: string) => Promise<{ ok: boolean; message: string }>;
+  /** Removes a code the shopper chose to remove (also forgets a matching
+   * product-page "selected" coupon, so it isn't re-applied on the next Add
+   * to Cart or carried into Buy Now). */
   removeDiscountCode: (code: string) => Promise<void>;
+  /** The entry point for every shopper-initiated code (coupon card, manual
+   * input, product page): never stacks or replaces silently. If another code
+   * is already on the cart and Shopify says the two can't apply together,
+   * returns `conflict` (with Shopify's savings for each) WITHOUT changing the
+   * cart -- the caller asks the shopper and calls replaceDiscountCode. */
+  applyDiscountCodeChecked: (code: string) => Promise<DiscountApplyResult>;
+  /** Replaces every code on the cart with `code` -- only ever called after
+   * the shopper explicitly confirmed. If Shopify then reports `code` not
+   * applicable, the previous codes are restored, so the shopper never ends
+   * up with less than they had. */
+  replaceDiscountCode: (code: string) => Promise<Exclude<DiscountApplyResult, { status: "conflict" }>>;
   /** Attach the signed-in customer to the cart, then return a fresh checkout
    * URL -- or, on failure, WHY, so callers can show an honest message
    * instead of failing silently. `reason` is never shown to the shopper
@@ -710,6 +967,9 @@ export const useCartStore = create<CartStore>()(
     (set, get) => {
       /** Apply a Shopify cart payload to local state. */
       const applyCart = (cart: any) => {
+        // Never let an out-of-date Shopify answer overwrite newer data (see
+        // isIgnoredCartPayload: other cart, older request, older stamp).
+        if (isIgnoredCartPayload(cart)) return { orphaned: [] as string[], dropped: 0 };
         const { valid, orphaned } = extractLines(cart);
         const before = get().items.length;
         const items = reconcileItems(get().items, valid);
@@ -745,7 +1005,7 @@ export const useCartStore = create<CartStore>()(
       const removeOrphans = async (cartId: string, orphaned: string[]) => {
         if (orphaned.length === 0) return;
         try {
-          const data = await storefrontApiRequest(CART_LINES_REMOVE_MUTATION, {
+          const data = await cartRequest(CART_LINES_REMOVE_MUTATION, {
             cartId,
             lineIds: orphaned,
           });
@@ -780,7 +1040,7 @@ export const useCartStore = create<CartStore>()(
           ...(item.lineAttributes?.length ? { attributes: toCheckoutLineAttributes(item.lineAttributes) } : {}),
         }));
         try {
-          const data = await storefrontApiRequest(CART_CREATE_MUTATION, {
+          const data = await cartRequest(CART_CREATE_MUTATION, {
             input: {
               lines,
               ...(discountCodes.length ? { discountCodes: discountCodes.map((d) => d.code) } : {}),
@@ -808,6 +1068,215 @@ export const useCartStore = create<CartStore>()(
         }
       };
 
+      // --- Out-of-order protection -----------------------------------------
+      // Every cart request is numbered when it is SENT (cartRequest). Only the
+      // response to the latest-sent request may update the bag: an older
+      // request's response that arrives later is ignored -- this works within
+      // the same second, which Shopify's updatedAt (whole seconds) can't. As
+      // a second check, a response stamped older than one already applied is
+      // also ignored. Responses for a cart that is no longer this shopper's
+      // cart (sign-in adoption, sign-out, rebuild) are always ignored.
+      // Whenever a response is ignored, one fresh cart read is scheduled, so
+      // the bag always converges to Shopify's actual cart (covers the rare
+      // case where Shopify processed two requests in the opposite order).
+      let sentSeq = 0;
+      let appliedSeq = 0;
+      let lastCartStamp: { id: string; at: number } | null = null;
+      let resyncTimer: ReturnType<typeof setTimeout> | null = null;
+      const CART_SEQ = "__officeneedSeq";
+
+      const cartRequest = async (query: string, variables: Record<string, unknown>) => {
+        const seq = ++sentSeq;
+        const data = await storefrontApiRequest(query, variables);
+        // Tag every cart object in the response with its send order
+        // (non-enumerable: never persisted, never sent anywhere).
+        const root = data?.data;
+        if (root && typeof root === "object") {
+          for (const value of Object.values(root as Record<string, any>)) {
+            const target = value?.cart && typeof value.cart === "object" ? value.cart : value?.id && value?.lines ? value : null;
+            if (target) Object.defineProperty(target, CART_SEQ, { value: seq, enumerable: false, configurable: true });
+          }
+        }
+        return data;
+      };
+
+      const scheduleResync = () => {
+        if (resyncTimer) clearTimeout(resyncTimer);
+        resyncTimer = setTimeout(() => {
+          resyncTimer = null;
+          void get().syncCart();
+        }, 400);
+      };
+
+      const isIgnoredCartPayload = (cart: any): boolean => {
+        // 1. Not this shopper's current cart any more.
+        if (cart?.id && cart.id !== get().cartId) return true;
+        // 2. An older-sent request's response, after a newer one was applied.
+        const seq: unknown = cart?.[CART_SEQ];
+        if (typeof seq === "number" && seq < appliedSeq) { scheduleResync(); return true; }
+        // 3. Stamped older than what's already shown.
+        const at = cart?.updatedAt ? Date.parse(cart.updatedAt) : NaN;
+        if (cart?.id && Number.isFinite(at) && lastCartStamp && lastCartStamp.id === cart.id && at < lastCartStamp.at) {
+          scheduleResync();
+          return true;
+        }
+        if (typeof seq === "number") appliedSeq = seq;
+        if (cart?.id && Number.isFinite(at)) lastCartStamp = { id: cart.id, at };
+        return false;
+      };
+
+      // --- Discount operations: one at a time --------------------------------
+      let discountChain: Promise<unknown> = Promise.resolve();
+      /** Serializes every discount change (coupon card, manual input, product
+       * page, discount link): the second always starts from the first one's
+       * result. Also waits for any quantity/line change already in flight, so
+       * Shopify's discount answer is for the bag the shopper actually sees. */
+      const runDiscountOp = <T>(fn: () => Promise<T>): Promise<T> => {
+        const run = async () => {
+          set({ discountBusy: true });
+          try {
+            await Promise.allSettled([...mutationQueues.values()]);
+            return await fn();
+          } finally {
+            set({ discountBusy: false });
+          }
+        };
+        const next = discountChain.then(run, run);
+        discountChain = next.catch(() => {});
+        return next;
+      };
+
+      const rawRemoveDiscountCode = async (code: string): Promise<void> => {
+        const { cartId, discountCodes } = get();
+        if (!cartId) return;
+        const remaining = discountCodes.map((d) => d.code).filter((c) => c.toUpperCase() !== code.toUpperCase());
+        set({ isLoading: true });
+        try {
+          const data = await cartRequest(CART_DISCOUNT_CODES_UPDATE_MUTATION, { cartId, discountCodes: remaining });
+          const cart = data?.data?.cartDiscountCodesUpdate?.cart;
+          if (cart) applyCart(cart);
+        } catch (error) {
+          console.error("Failed to remove discount:", error);
+        } finally {
+          set({ isLoading: false });
+        }
+      };
+
+      const rawApplyDiscountCode = async (rawCode: string): Promise<{ ok: boolean; message: string }> => {
+        const code = rawCode.trim();
+        const { cartId, discountCodes, clearCart } = get();
+        if (!code) return { ok: false, message: "Enter a discount code." };
+        if (!cartId) return { ok: false, message: "Add an item to your bag first." };
+        const codes = Array.from(new Set([...discountCodes.map((d) => d.code), code].map((c) => c.toUpperCase())));
+        set({ isLoading: true });
+        try {
+          const data = await cartRequest(CART_DISCOUNT_CODES_UPDATE_MUTATION, { cartId, discountCodes: codes });
+          const payload = data?.data?.cartDiscountCodesUpdate;
+          const errors: UserError[] = payload?.userErrors ?? [];
+          if (isCartNotFoundError(errors)) { clearCart(); return { ok: false, message: "Your bag expired. Please add items again." }; }
+          if (errors.length) return { ok: false, message: "This code isn't valid." };
+          const cart = payload?.cart;
+          if (!cart) return { ok: false, message: "Couldn't apply this code." };
+          applyCart(cart);
+          const applied = (cart.discountCodes as CartDiscountCode[]).find((d) => d.code.toUpperCase() === code.toUpperCase());
+          if (!applied?.applicable) {
+            // Don't leave a non-applicable code sitting on the cart.
+            await rawRemoveDiscountCode(code);
+            return { ok: false, message: "This code isn't valid for the items in your bag." };
+          }
+          return { ok: true, message: `Code ${applied.code} applied.` };
+        } catch (error) {
+          console.error("Failed to apply discount:", error);
+          return { ok: false, message: "Couldn't apply this code. Please try again." };
+        } finally {
+          set({ isLoading: false });
+        }
+      };
+
+      const rawApplyDiscountCodeChecked = async (rawCode: string): Promise<DiscountApplyResult> => {
+        const code = rawCode.trim().toUpperCase();
+        const { cartId, discountCodes, items } = get();
+        if (!code) return { status: "error", code, message: "Enter a discount code." };
+        if (!cartId || items.length === 0) return { status: "error", code, message: "Add an item to your bag first." };
+
+        const same = discountCodes.find((d) => d.code.toUpperCase() === code);
+        if (same?.applicable) return { status: "already-applied", code, message: `${code} is already applied.` };
+        if (same) return { status: "not-applicable", code, message: notApplicableMessage(code) };
+
+        const others = discountCodes.filter((d) => d.code.toUpperCase() !== code);
+        if (others.length === 0) {
+          const r = await rawApplyDiscountCode(code);
+          return r.ok
+            ? { status: "applied", code, message: r.message }
+            : { status: "not-applicable", code, message: r.message === "This code isn't valid for the items in your bag." ? notApplicableMessage(code) : r.message };
+        }
+
+        const lines: PreviewLine[] = items.map((i) => ({ variantId: i.variantId, quantity: i.quantity }));
+        // Both codes are configured promotions whose Shopify setting is
+        // "Combinations: disabled": they can't apply together, so skip the
+        // "together" preview and go straight to asking the shopper. For any
+        // other code, ask Shopify (on a preview cart) whether both apply.
+        const knownNonCombinable = [code, ...others.map((d) => d.code)].every(
+          (c) => getPromotionByCode(c)?.combinesWithOtherDiscounts === false,
+        );
+        if (!knownNonCombinable) {
+          const together = await previewCodesOnLines([...others.map((d) => d.code), code], lines);
+          if (together.status !== "ok") {
+            return { status: "error", code, message: "Couldn't check this code against your current discount. Please try again." };
+          }
+          const allApply = isCodeApplicable(together, code) && others.every((d) => isCodeApplicable(together, d.code));
+          if (allApply) {
+            const r = await rawApplyDiscountCode(code);
+            return r.ok ? { status: "applied", code, message: r.message } : { status: "not-applicable", code, message: r.message };
+          }
+        }
+
+        // Not combinable: Shopify's savings for the candidate alone (reuses
+        // the coupon card's cached comparison when the bag hasn't changed).
+        const alone = await resolveSavings(code, couponPreviewScope(), lines, previewCodesOnLines);
+        if (alone.status !== "ok") return { status: "error", code, message: "Couldn't check this code right now. Please try again." };
+        if (!alone.applicable) return { status: "not-applicable", code, message: notApplicableMessage(code) };
+        const currentItems = get().items;
+        return {
+          status: "conflict",
+          code,
+          existing: others.map((d) => ({ code: d.code.toUpperCase(), applicable: d.applicable, savings: codeSavings(currentItems, d.code) })),
+          candidateSavings: alone.savings,
+          currencyCode: alone.currencyCode,
+        };
+      };
+
+      const rawReplaceDiscountCode = async (rawCode: string): Promise<Exclude<DiscountApplyResult, { status: "conflict" }>> => {
+        const code = rawCode.trim().toUpperCase();
+        const { cartId, discountCodes, clearCart } = get();
+        if (!cartId) return { status: "error", code, message: "Add an item to your bag first." };
+        const previous = discountCodes.map((d) => d.code);
+        set({ isLoading: true });
+        try {
+          const data = await cartRequest(CART_DISCOUNT_CODES_UPDATE_MUTATION, { cartId, discountCodes: [code] });
+          const payload = data?.data?.cartDiscountCodesUpdate;
+          const errors: UserError[] = payload?.userErrors ?? [];
+          if (isCartNotFoundError(errors)) { clearCart(); return { status: "error", code, message: "Your bag expired. Please add items again." }; }
+          const cart = payload?.cart;
+          if (errors.length || !cart) return { status: "error", code, message: "Couldn't apply this code. Your current discount is unchanged." };
+          const applied = (cart.discountCodes as CartDiscountCode[]).find((d) => d.code.toUpperCase() === code);
+          if (!applied?.applicable) {
+            // Never leave the shopper worse off: put the previous codes back.
+            const restore = await cartRequest(CART_DISCOUNT_CODES_UPDATE_MUTATION, { cartId, discountCodes: previous });
+            const restored = restore?.data?.cartDiscountCodesUpdate?.cart;
+            applyCart(restored ?? cart);
+            return { status: "not-applicable", code, message: `${notApplicableMessage(code)} Your previous discount was kept.` };
+          }
+          applyCart(cart);
+          return { status: "applied", code, message: `Code ${applied.code} applied.` };
+        } catch (error) {
+          console.error("Failed to replace discount:", error);
+          return { status: "error", code, message: "Couldn't apply this code. Please try again." };
+        } finally {
+          set({ isLoading: false });
+        }
+      };
+
       return {
         items: [],
         cartId: null,
@@ -818,6 +1287,7 @@ export const useCartStore = create<CartStore>()(
         isLoading: false,
         isSyncing: false,
         quantityRuleOverrides: {},
+        discountBusy: false,
 
         addItem: async (item) => {
           // Not just a UI concern -- every caller's own stepper already
@@ -849,7 +1319,7 @@ export const useCartStore = create<CartStore>()(
                 item.variantId,
                 item.quantity,
                 async (quantity) => {
-                  const data = await storefrontApiRequest(CART_CREATE_MUTATION, {
+                  const data = await cartRequest(CART_CREATE_MUTATION, {
                     input: {
                       lines: [{ ...lineInputBase, quantity }],
                       ...(buyerIdentity ? { buyerIdentity } : {}),
@@ -872,7 +1342,7 @@ export const useCartStore = create<CartStore>()(
               set({
                 cartId: cart.id,
                 checkoutUrl: formatCheckoutUrl(cart.checkoutUrl),
-                items: [{ ...item, lineId: line.id, quantity: line.quantity, image: resolveLineImage(line.merchandise.image, item.product?.node) }],
+                items: [{ ...item, lineId: line.id, quantity: line.quantity, image: resolveLineImage(line.merchandise.image, item.product?.node), ...extractLinePricing(line) }],
                 discountCodes: cart.discountCodes ?? [],
                 cost: extractCost(cart),
               });
@@ -888,7 +1358,7 @@ export const useCartStore = create<CartStore>()(
                 item.variantId,
                 existing.quantity + item.quantity,
                 async (quantity) => {
-                  const data = await storefrontApiRequest(CART_LINES_UPDATE_MUTATION, {
+                  const data = await cartRequest(CART_LINES_UPDATE_MUTATION, {
                     cartId,
                     lines: [{ id: existingLineId, quantity }],
                   });
@@ -905,7 +1375,7 @@ export const useCartStore = create<CartStore>()(
                 item.variantId,
                 item.quantity,
                 async (quantity) => {
-                  const data = await storefrontApiRequest(CART_LINES_ADD_MUTATION, {
+                  const data = await cartRequest(CART_LINES_ADD_MUTATION, {
                     cartId,
                     lines: [{ ...lineInputBase, quantity }],
                   });
@@ -990,7 +1460,7 @@ export const useCartStore = create<CartStore>()(
                 variantId,
                 item.quantity,
                 async (qty) => {
-                  const data = await storefrontApiRequest(CART_LINES_UPDATE_MUTATION, {
+                  const data = await cartRequest(CART_LINES_UPDATE_MUTATION, {
                     cartId,
                     lines: [{ id: lineId, quantity: qty }],
                   });
@@ -1025,7 +1495,7 @@ export const useCartStore = create<CartStore>()(
           }
           set({ isLoading: true, items: items.filter((i) => i.variantId !== variantId) });
           try {
-            const data = await storefrontApiRequest(CART_LINES_REMOVE_MUTATION, {
+            const data = await cartRequest(CART_LINES_REMOVE_MUTATION, {
               cartId,
               lineIds: [item.lineId],
             });
@@ -1052,7 +1522,9 @@ export const useCartStore = create<CartStore>()(
           }
         },
 
-        clearCart: () =>
+        clearCart: () => {
+          lastCartStamp = null;
+          appliedSeq = sentSeq; // anything already in flight is now out of date
           set({
             items: [],
             cartId: null,
@@ -1060,67 +1532,23 @@ export const useCartStore = create<CartStore>()(
             discountCodes: [],
             cost: { subtotal: null, total: null },
             deliveryAddress: null,
-          }),
+          });
+        },
         getCheckoutUrl: () => get().checkoutUrl,
 
-        applyDiscountCode: async (rawCode) => {
-          const code = rawCode.trim();
-          const { cartId, discountCodes, clearCart } = get();
-          if (!code) return { ok: false, message: "Enter a discount code." };
-          if (!cartId) return { ok: false, message: "Add an item to your bag first." };
-          const codes = Array.from(
-            new Set([...discountCodes.map((d) => d.code), code].map((c) => c.toUpperCase())),
-          );
-          set({ isLoading: true });
-          try {
-            const data = await storefrontApiRequest(CART_DISCOUNT_CODES_UPDATE_MUTATION, {
-              cartId,
-              discountCodes: codes,
-            });
-            const payload = data?.data?.cartDiscountCodesUpdate;
-            const errors: UserError[] = payload?.userErrors ?? [];
-            if (isCartNotFoundError(errors)) { clearCart(); return { ok: false, message: "Your bag expired. Please add items again." }; }
-            if (errors.length) return { ok: false, message: "This code isn't valid." };
-            const cart = payload?.cart;
-            if (!cart) return { ok: false, message: "Couldn't apply this code." };
-            applyCart(cart);
-            const applied = (cart.discountCodes as CartDiscountCode[]).find(
-              (d) => d.code.toUpperCase() === code.toUpperCase(),
-            );
-            if (!applied?.applicable) {
-              // Don't leave a non-applicable code sitting on the cart.
-              await get().removeDiscountCode(code);
-              return { ok: false, message: "This code isn't valid for the items in your bag." };
-            }
-            return { ok: true, message: `Code ${applied.code} applied.` };
-          } catch (error) {
-            console.error("Failed to apply discount:", error);
-            return { ok: false, message: "Couldn't apply this code. Please try again." };
-          } finally {
-            set({ isLoading: false });
-          }
-        },
-
-        removeDiscountCode: async (code) => {
-          const { cartId, discountCodes } = get();
-          if (!cartId) return;
-          const remaining = discountCodes
-            .map((d) => d.code)
-            .filter((c) => c.toUpperCase() !== code.toUpperCase());
-          set({ isLoading: true });
-          try {
-            const data = await storefrontApiRequest(CART_DISCOUNT_CODES_UPDATE_MUTATION, {
-              cartId,
-              discountCodes: remaining,
-            });
-            const cart = data?.data?.cartDiscountCodesUpdate?.cart;
-            if (cart) applyCart(cart);
-          } catch (error) {
-            console.error("Failed to remove discount:", error);
-          } finally {
-            set({ isLoading: false });
-          }
-        },
+        removeDiscountCode: (code) =>
+          runDiscountOp(async () => {
+            await rawRemoveDiscountCode(code);
+            // Bug J: the shopper explicitly removed it -- forget a matching
+            // product-page selection too, or the next Add to Cart / Buy Now
+            // of that promotion's product would bring it straight back. Only
+            // once Shopify confirms it's gone from the bag.
+            const gone = !get().discountCodes.some((d) => d.code.toUpperCase() === code.toUpperCase());
+            const coupons = useCouponStore.getState();
+            if (gone && coupons.selectedCode === code.toUpperCase()) coupons.clear();
+          }),
+        applyDiscountCodeChecked: (code) => runDiscountOp(() => rawApplyDiscountCodeChecked(code)),
+        replaceDiscountCode: (code) => runDiscountOp(() => rawReplaceDiscountCode(code)),
 
         prepareCheckout: async () => {
           const { cartId, checkoutUrl, clearCart } = get();
@@ -1128,7 +1556,7 @@ export const useCartStore = create<CartStore>()(
           // Record attribution on the cart so it shows on the Shopify order.
           const attributes = attributionAttributes();
           if (attributes.length) {
-            storefrontApiRequest(CART_ATTRIBUTES_UPDATE_MUTATION, { cartId, attributes }).catch(() => {});
+            cartRequest(CART_ATTRIBUTES_UPDATE_MUTATION, { cartId, attributes }).catch(() => {});
           }
           const buyerIdentity = currentBuyerIdentity();
           if (!buyerIdentity) {
@@ -1139,7 +1567,7 @@ export const useCartStore = create<CartStore>()(
             return checkoutUrl ? { url: formatCheckoutUrl(checkoutUrl) } : { url: null, reason: "no-checkout-url" as const };
           }
           try {
-            const data = await storefrontApiRequest(CART_BUYER_IDENTITY_UPDATE_MUTATION, {
+            const data = await cartRequest(CART_BUYER_IDENTITY_UPDATE_MUTATION, {
               cartId,
               buyerIdentity,
             });
@@ -1186,7 +1614,7 @@ export const useCartStore = create<CartStore>()(
           const buyerIdentity = currentBuyerIdentity();
           if (!buyerIdentity) return true; // anonymous -- nothing to attach
           try {
-            const data = await storefrontApiRequest(CART_BUYER_IDENTITY_UPDATE_MUTATION, {
+            const data = await cartRequest(CART_BUYER_IDENTITY_UPDATE_MUTATION, {
               cartId,
               buyerIdentity,
             });
@@ -1240,7 +1668,7 @@ export const useCartStore = create<CartStore>()(
               item.variantId,
               item.quantity,
               async (quantity) => {
-                const createData = await storefrontApiRequest(CART_CREATE_MUTATION, {
+                const createData = await cartRequest(CART_CREATE_MUTATION, {
                   input: {
                     lines: [{ ...lineInputBase, quantity }],
                     ...(buyerIdentity ? { buyerIdentity } : {}),
@@ -1274,7 +1702,7 @@ export const useCartStore = create<CartStore>()(
             // on this brand-new cart too rather than trusting cartCreate's
             // own buyerIdentity input alone to have already repriced it.
             if (buyerIdentity) {
-              const updateData = await storefrontApiRequest(CART_BUYER_IDENTITY_UPDATE_MUTATION, {
+              const updateData = await cartRequest(CART_BUYER_IDENTITY_UPDATE_MUTATION, {
                 cartId: cart.id,
                 buyerIdentity,
               });
@@ -1308,7 +1736,7 @@ export const useCartStore = create<CartStore>()(
           if (!cartId) return false;
           set({ isLoading: true });
           try {
-            const data = await storefrontApiRequest(CART_DELIVERY_ADDRESSES_REPLACE_MUTATION, {
+            const data = await cartRequest(CART_DELIVERY_ADDRESSES_REPLACE_MUTATION, {
               cartId,
               addresses: [
                 {
@@ -1355,7 +1783,7 @@ export const useCartStore = create<CartStore>()(
           if (!cartId) return false;
           set({ isLoading: true });
           try {
-            const data = await storefrontApiRequest(CART_DELIVERY_ADDRESSES_REPLACE_MUTATION, {
+            const data = await cartRequest(CART_DELIVERY_ADDRESSES_REPLACE_MUTATION, {
               cartId,
               addresses: [
                 {
@@ -1414,7 +1842,7 @@ export const useCartStore = create<CartStore>()(
             if (isStale()) return;
             const local = get();
             if (remoteId && remoteId !== local.cartId) {
-              const data = await storefrontApiRequest(ADOPT_CART_QUERY, { id: remoteId });
+              const data = await cartRequest(ADOPT_CART_QUERY, { id: remoteId });
               if (isStale()) return;
               let remote = data?.data?.cart;
               const remoteHasItems = !!remote && extractLines(remote).valid.length > 0;
@@ -1427,13 +1855,29 @@ export const useCartStore = create<CartStore>()(
                   .filter((i) => !remoteVariants.has(i.variantId))
                   .map((i) => ({ quantity: i.quantity, merchandiseId: i.variantId }));
                 if (extra.length) {
-                  await storefrontApiRequest(CART_LINES_ADD_MUTATION, { cartId: remoteId, lines: extra });
+                  await cartRequest(CART_LINES_ADD_MUTATION, { cartId: remoteId, lines: extra });
                   if (isStale()) return;
-                  const again = await storefrontApiRequest(ADOPT_CART_QUERY, { id: remoteId });
+                  const again = await cartRequest(ADOPT_CART_QUERY, { id: remoteId });
                   if (isStale()) return;
                   remote = again?.data?.cart ?? remote;
                 }
-                storefrontApiRequest(CART_BUYER_IDENTITY_UPDATE_MUTATION, {
+                // Discount codes applied on this device before signing in:
+                // carried over only when the saved bag has none (never
+                // replacing the account's own code -- the shopper is told
+                // and can compare in their bag instead).
+                const localCodes = local.discountCodes.filter((d) => d.applicable).map((d) => d.code.toUpperCase());
+                const remoteCodes = ((remote.discountCodes ?? []) as CartDiscountCode[]).map((d) => d.code.toUpperCase());
+                if (localCodes.length > 0 && remoteCodes.length === 0) {
+                  await cartRequest(CART_DISCOUNT_CODES_UPDATE_MUTATION, { cartId: remoteId, discountCodes: localCodes });
+                  if (isStale()) return;
+                  const withCodes = await cartRequest(ADOPT_CART_QUERY, { id: remoteId });
+                  if (isStale()) return;
+                  remote = withCodes?.data?.cart ?? remote;
+                } else if (localCodes.some((c) => !remoteCodes.includes(c))) {
+                  const notCarried = localCodes.filter((c) => !remoteCodes.includes(c)).join(" + ");
+                  toast.info(`Your saved bag already has ${remoteCodes.join(" + ")}, so ${notCarried} wasn't applied. Open your bag to compare offers.`);
+                }
+                cartRequest(CART_BUYER_IDENTITY_UPDATE_MUTATION, {
                   cartId: remoteId,
                   buyerIdentity: currentBuyerIdentity() ?? { customerAccessToken: token, countryCode: "IN" },
                 }).catch(() => {});
@@ -1453,7 +1897,7 @@ export const useCartStore = create<CartStore>()(
             const { cartId } = get();
             if (cartId && cartId !== remoteId) {
               saveCustomerCart({ data: { token, cartId } }).catch(() => {});
-              storefrontApiRequest(CART_BUYER_IDENTITY_UPDATE_MUTATION, {
+              cartRequest(CART_BUYER_IDENTITY_UPDATE_MUTATION, {
                 cartId,
                 buyerIdentity: currentBuyerIdentity() ?? { customerAccessToken: token, countryCode: "IN" },
               }).catch(() => {});
@@ -1473,7 +1917,7 @@ export const useCartStore = create<CartStore>()(
           if (!cartId || isSyncing) return;
           set({ isSyncing: true });
           try {
-            const data = await storefrontApiRequest(CART_QUERY, { id: cartId });
+            const data = await cartRequest(CART_QUERY, { id: cartId });
             if (!data) return;
             const cart = data?.data?.cart;
             if (!cart) {

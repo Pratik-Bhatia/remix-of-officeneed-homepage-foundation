@@ -22,6 +22,7 @@ const CHAT_EVENTS = [
   "officeneed:customizer-toggle",
   "officeneed:image-viewer-toggle",
   "officeneed:cta-widget-overlap-toggle",
+  "officeneed:cart-drawer-toggle",
 ] as const;
 
 /** Rendered right after ChatWidget, so ChatWidget's own listeners exist when this replays. */

@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { ShoppingBag, Minus, Plus } from "lucide-react";
-import { useCartStore, quantityRuleScopeKey, type CartItem } from "@/stores/cartStore";
+import { getLineDisplay, useCartStore, quantityRuleScopeKey, type CartItem } from "@/stores/cartStore";
 import { useB2BStore, getEffectiveCompanyLocationId } from "@/stores/b2bStore";
 import { formatMoney } from "@/lib/shopify";
 import { shopifyImageUrl } from "@/lib/shopify-image";
@@ -40,6 +40,10 @@ export function CartLineItem({
   // image, e.g. Brown, instead of the Black the shopper actually picked).
   const image = item.image ?? item.product?.node?.featuredImage ?? item.product?.node?.images?.edges?.[0]?.node ?? null;
   const title = item.product?.node?.title ?? "Product";
+  // Shopify's own line cost and discount allocations (see getLineDisplay):
+  // the row total, the struck-through original and the per-unit price all
+  // come from Shopify -- correct for B2B catalog / quantity pricing too.
+  const display = getLineDisplay(item);
   // Shopify's own canonical product handle, carried on every cart line's
   // product node (both the PDP's addItem() call and the cross-device
   // adoptCart sync populate it, same as .title/.featuredImage above) --
@@ -143,8 +147,15 @@ export function CartLineItem({
             {meaningfulOptions.map((o) => o.value).join(" | ")}
           </p>
         ) : null}
+        {display.discount > 0 ? (
+          // Which code discounted this line, and by how much (Shopify's
+          // allocation). Kept in this column so the price column stays narrow.
+          <p className="mt-1 text-[11px] font-medium text-green-800 tabular-nums">
+            {display.codes.length ? `${display.codes.join(" + ")} ` : ""}−{formatMoney(display.discount, display.total.currencyCode)}
+          </p>
+        ) : null}
 
-        <div className="mt-3 flex items-center gap-4">
+        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
           <div className="flex items-center gap-3 rounded-full border border-border px-3 py-1.5">
             <button
               aria-label="Decrease quantity"
@@ -170,13 +181,18 @@ export function CartLineItem({
       </div>
       <div className="flex shrink-0 flex-col items-end justify-center gap-0.5">
         <p className="text-[14px] md:text-[15px] font-medium tabular-nums text-foreground">
-          {formatMoney(parseFloat(item.price.amount) * item.quantity, item.price.currencyCode)}
+          {formatMoney(display.total.amount, display.total.currencyCode)}
         </p>
-        {item.quantity > 1 && (
-          <p className="text-[11px] text-muted-foreground tabular-nums">
-            {formatMoney(item.price.amount, item.price.currencyCode)} each
+        {display.original ? (
+          <p className="text-[11px] text-muted-foreground tabular-nums line-through">
+            {formatMoney(display.original.amount, display.original.currencyCode)}
           </p>
-        )}
+        ) : null}
+        {display.each ? (
+          <p className="text-[11px] text-muted-foreground tabular-nums">
+            {formatMoney(display.each.amount, display.each.currencyCode)} each
+          </p>
+        ) : null}
       </div>
     </div>
   );

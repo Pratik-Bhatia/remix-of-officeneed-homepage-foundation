@@ -347,6 +347,21 @@ export function ChatWidget() {
     return () => window.removeEventListener("officeneed:cta-widget-overlap-toggle", onCtaOverlapToggle);
   }, []);
 
+  // Seventh independent source: the cart drawer (CartDrawer.tsx). On phones
+  // the launcher otherwise covers the bag's coupon card and line controls.
+  const [cartDrawerOpen, setCartDrawerOpen] = useState(false);
+  useEffect(() => {
+    const onCartDrawerToggle = (e: Event) => {
+      setCartDrawerOpen(Boolean((e as CustomEvent<{ open: boolean }>).detail?.open));
+    };
+    window.addEventListener("officeneed:cart-drawer-toggle", onCartDrawerToggle);
+    return () => window.removeEventListener("officeneed:cart-drawer-toggle", onCartDrawerToggle);
+  }, []);
+  // Eighth source: the full /cart page itself -- same reason as the drawer
+  // (the launcher covered the coupon card's Remove link while scrolling).
+  // Route-derived, so it comes back as soon as the shopper navigates away.
+  const onCartPage = /^\/cart\/?$/.test(pathname);
+
   // Sixth independent source: the PDP's full-screen image zoom viewer (products.$slug.tsx), which would
   // otherwise sit under this launcher's z-[100] and collide with its image, arrows and close button.
   const [imageViewerOpen, setImageViewerOpen] = useState(false);
@@ -945,7 +960,7 @@ export function ChatWidget() {
       {/* Floating Launcher Button -- the single OfficeGPT entry point */}
       <div className={cn(
         "fixed bottom-6 right-6 z-[100] transition-all duration-300",
-        open || navOverlayOpen || stickyBarOpen || customizerOpen || footerVisible || ctaOverlapOpen || imageViewerOpen ? "opacity-0 pointer-events-none translate-y-4 scale-95" : "opacity-100 translate-y-0 scale-100"
+        open || navOverlayOpen || stickyBarOpen || customizerOpen || footerVisible || ctaOverlapOpen || imageViewerOpen || cartDrawerOpen || onCartPage ? "opacity-0 pointer-events-none translate-y-4 scale-95" : "opacity-100 translate-y-0 scale-100"
       )}>
         <button
           onClick={openLauncher}

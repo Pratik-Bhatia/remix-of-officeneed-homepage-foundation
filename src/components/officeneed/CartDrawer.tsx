@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { Link } from "@tanstack/react-router";
 import { Loader2, ShoppingBag, X } from "lucide-react";
 import { toast } from "sonner";
-import { useCartStore, checkoutFailureMessage } from "@/stores/cartStore";
+import { useCartStore, checkoutFailureMessage, summarizeCartPricing } from "@/stores/cartStore";
 import { trackInitiateCheckout } from "@/lib/meta-pixel";
 import { trackGoogleViewCart, trackGoogleBeginCheckout } from "@/lib/google-analytics";
 import { cn } from "@/lib/utils";
@@ -12,6 +12,7 @@ import { lockScroll, unlockScroll } from "@/lib/scroll-lock";
 import { CartLineItem } from "@/components/officeneed/CartLineItem";
 import { CartProfileLinks } from "@/components/officeneed/CartProfileLinks";
 import { DiscountCodeInput } from "@/components/officeneed/DiscountCodeInput";
+import { CartCouponOffer } from "@/components/officeneed/CartCouponOffer";
 
 export function CartDrawer({
   triggerClassName,
@@ -47,10 +48,12 @@ export function CartDrawer({
     (sum, item) => sum + parseFloat(item.price.amount) * item.quantity,
     0,
   );
-  const currency = cost.subtotal?.currencyCode ?? items[0]?.price.currencyCode ?? "INR";
+  // Analytics value: Shopify's discounted cart subtotal (unchanged).
   const discountedSubtotal = cost.subtotal ? parseFloat(cost.subtotal.amount) : itemSubtotal;
-  const discount = Math.max(0, itemSubtotal - discountedSubtotal);
-  const finalTotal = cost.total ? parseFloat(cost.total.amount) : discountedSubtotal;
+  // Displayed summary: Shopify's per-line costs and discount allocations.
+  const pricing = summarizeCartPricing(items, cost);
+  const { currency, discount } = pricing;
+  const finalTotal = pricing.total;
 
   const handleCheckout = async () => {
     // No delivery-address requirement here, for B2B or B2C: Shopify's own
@@ -109,6 +112,17 @@ export function CartDrawer({
     window.addEventListener("resize", measure);
     return () => window.removeEventListener("resize", measure);
   }, [isOpen, anchorRef]);
+
+  // Hide the floating chat launcher while the bag is open (it sits in the
+  // bottom-right corner and covered the bag's coupon card / controls on
+  // phones). Own event name, same pattern as the other launcher sources in
+  // ChatWidget.tsx, so it can't race with Navbar's overlay-toggle.
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent("officeneed:cart-drawer-toggle", { detail: { open: isOpen } }));
+    return () => {
+      if (isOpen) window.dispatchEvent(new CustomEvent("officeneed:cart-drawer-toggle", { detail: { open: false } }));
+    };
+  }, [isOpen]);
 
   const wasOpenRef = useRef(false);
   useEffect(() => {
@@ -275,7 +289,8 @@ export function CartDrawer({
                     ))}
                   </div>
 
-                  <div className="mt-6">
+                  <div className="mt-6 space-y-4">
+                    <CartCouponOffer />
                     <DiscountCodeInput />
                   </div>
 
@@ -283,7 +298,7 @@ export function CartDrawer({
                     <div className="flex items-center justify-between">
                       <span className="text-[15px] font-medium text-foreground">Subtotal</span>
                       <span className="text-[17px] font-medium tabular-nums text-foreground">
-                        {formatMoney(itemSubtotal, currency)}
+                        {formatMoney(pricing.subtotal, currency)}
                       </span>
                     </div>
                     {discount > 0.009 ? (
